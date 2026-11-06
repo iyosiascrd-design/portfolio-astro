@@ -91,7 +91,7 @@ const SERVICES_DATA = [
         id: "04",
         title: "3D Visuals",
         keywords: "Product visualization,\narch visualization and motion",
-        image: "/3d-visuals.jpeg",
+        image: "/3d-visuals.jpg",
         captionTitle: "Make products feel\npremium before launch",
         captionText:
             "High-fidelity renders that build desire and make the future instantly tangible",
