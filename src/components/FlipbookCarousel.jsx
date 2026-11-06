@@ -122,8 +122,7 @@ const DrumCard = ({ project, index, count, pos, onActivate }) => {
                     style={{ opacity: loaded ? 1 : 0 }}
                     className="absolute inset-0 object-cover w-full h-full pointer-events-none select-none transition-opacity duration-500 ease-out"
                 />
-                <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-                
+                {/* Dims only the tucked-away side cards (shade is 0 on the front card) */}
                 <motion.div
                     style={{ opacity: shade }}
                     className="absolute inset-0 bg-black rounded-[inherit] pointer-events-none"
@@ -386,5 +385,6 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
         </div>
     )
 })
+
 
 export default FlipbookCarousel

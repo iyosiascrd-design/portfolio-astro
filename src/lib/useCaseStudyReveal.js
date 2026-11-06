@@ -3,10 +3,12 @@
 import { useLayoutEffect } from "react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
+import { waitForMedia } from "./mediaPreload"
 
 gsap.registerPlugin(ScrollTrigger)
 
 export const REVEAL = {
+  imageWait: 700,         // ms: max time a reveal waits for its image before playing anyway
   rise: 72,               // Enough vertical travel to clearly read as a slide-up against scroll
   duration: 0.95,         // Snappy total time, zero sluggish tail
   opacityDuration: 0.45,  // Hits full opacity fast so you see the majority of the upward slide
@@ -26,6 +28,7 @@ export function useCaseStudyReveal(rootRef, lenisRef) {
     if (prefersReducedMotion() || !rootRef.current) return
 
     let revealIO = null
+    let dead = false
     const ctx = gsap.context(() => {
       const items = gsap.utils.toArray("[data-reveal]")
 
@@ -43,6 +46,14 @@ export function useCaseStudyReveal(rootRef, lenisRef) {
         })
         pending = []
 
+        // Hold the batch until its images have arrived (capped), so the slide-up
+        // plays on a finished picture instead of an empty box.
+        Promise.all(batch.map((el) => waitForMedia(el, REVEAL.imageWait))).then(() => {
+          if (!dead) play(batch)
+        })
+      }
+
+      const play = (batch) => {
         let rowIdx = -1
         let colIdx = 0
         let rowTop = null
@@ -133,6 +144,7 @@ export function useCaseStudyReveal(rootRef, lenisRef) {
     return () => {
       window.removeEventListener("load", onLoad)
       lenis?.off("scroll", ScrollTrigger.update)
+      dead = true
       revealIO?.disconnect()
       ctx.revert()
     }

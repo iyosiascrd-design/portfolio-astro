@@ -7,6 +7,25 @@ import "../index.css"
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Iyosias</title>
+
+    <script is:inline>
+      (function () {
+        var H = {
+          "/work/weyra": "/weyra-hero.jpg",
+          "/work/yimaj": "/yimaj-hero.jpg",
+          "/work/origen": "/origen-hero.jpg",
+          "/work/zhongshan": "/zhongshan-house.jpg",
+        };
+        var s = H[location.pathname.replace(/\/+$/, "")];
+        if (!s) return;
+        var l = document.createElement("link");
+        l.rel = "preload";
+        l.as = "image";
+        l.href = s;
+        l.setAttribute("fetchpriority", "high");
+        document.head.appendChild(l);
+      })();
+    </script>
   </head>
   <body>
     <slot />

@@ -12,6 +12,7 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import { Img as BaseImg, SceneVideo, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
+import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
 gsap.registerPlugin(ScrollTrigger)
@@ -54,6 +55,8 @@ const ASSETS = {
   kitchen: "/zhongshan-kitchen.jpg",
   living: "/zhongshan-living.jpg",
 }
+
+const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
 
 const HERO_TEXT =
   "Zhongshan needed an identity that made sourcing from China feel like a confident investment."
@@ -162,6 +165,7 @@ export default function ZhongshanCaseStudy() {
     return () => t.kill()
   }, [ready])
 
+  useIdlePreload(PRELOAD_SRCS, ready)
   useCaseStudyReveal(rootRef, lenisRef)
 
   return (

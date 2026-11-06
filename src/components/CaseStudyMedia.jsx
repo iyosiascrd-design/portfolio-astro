@@ -18,6 +18,7 @@ gsap.registerPlugin(ScrollTrigger)
 
 // Loading-hint helpers live in lib/loadingHints.js (shared with Home).
 export { FETCH_PRIORITY_KEY, fetchPriorityProp, HERO_IMG_PROPS } from "../lib/loadingHints"
+export { useIdlePreload, preloadImage } from "../lib/mediaPreload"
 
 /* -------------------------------------------------------------------------- */
 /* Layout refresh for images that define their own height                     */
@@ -199,7 +200,7 @@ function useVideoPlayback(videoRef, src, name, getTrigger) {
             warmIo.disconnect()
           }
         },
-        { rootMargin: "100% 0px", threshold: 0 }
+        { rootMargin: "200% 0px", threshold: 0 }
       )
       warmIo.observe(trigger)
 

@@ -12,6 +12,7 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import { Img, Media, isVideo, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
+import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
 gsap.registerPlugin(ScrollTrigger)
@@ -49,6 +50,8 @@ const ASSETS = {
   mountain: "/origen-mountain.jpg",
   billboard: "/origen-billboard.jpg",
 }
+
+const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
 
 const HERO_TEXT =
   "Designing Origen’s brand identity and packaging to stand out with a distinctive, premium look in Spain’s sea of minimalist coffee brands."
@@ -198,6 +201,7 @@ export default function OrigenCaseStudy() {
     return () => t.kill()
   }, [ready])
 
+  useIdlePreload(PRELOAD_SRCS, ready)
   useCaseStudyReveal(rootRef, lenisRef)
 
   return (

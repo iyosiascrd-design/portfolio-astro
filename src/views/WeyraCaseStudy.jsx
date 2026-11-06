@@ -12,6 +12,7 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import { Img, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
+import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
 gsap.registerPlugin(ScrollTrigger)
@@ -24,6 +25,23 @@ const CS_PARA =
   "[font-family:var(--font-heading)] font-normal text-[var(--text-light-body)] text-[18px] lg:text-[clamp(15px,1.19vw,22px)] leading-[1.265] tracking-[-0.01em] [text-wrap:pretty]"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
+
+const PRELOAD_SRCS = [
+  "/weyra-story.jpg",
+  "/weyra-pin.jpg",
+  "/weyra-clothing.jpg",
+  "/weyra-type.jpg",
+  "/weyra-wristbands.jpg",
+  "/weyra-badge.jpg",
+  "/weyra-tote.jpg",
+  "/weyra-banner.jpg",
+  "/weyra-magazine.jpg",
+  "/weyra-profile.jpg",
+  "/weyra-phones.jpg",
+  "/weyra-poster.jpg",
+  "/weyra-board.jpg",
+  "/weyra-flags.jpg",
+]
 
 const FRAME3_STORY_SRC = "/weyra-story.jpg"
 const FRAME3_PIN_SRC = "/weyra-pin.jpg"
@@ -124,6 +142,7 @@ export default function WeyraCaseStudy() {
     return () => t.kill()
   }, [ready])
 
+  useIdlePreload(PRELOAD_SRCS, ready)
   useCaseStudyReveal(rootRef, lenisRef)
 
   return (

@@ -12,6 +12,7 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import { Img as BaseImg, SceneVideo, LazyImg, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
+import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
 gsap.registerPlugin(ScrollTrigger)
@@ -57,6 +58,8 @@ const ASSETS = {
   pool: "/yimaj-swimming.jpg",
   floorplan: "/yimaj-floorplan.jpg",
 }
+
+const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
 
 const HERO_TEXT =
   "Designing the brand identity and 3D visuals that resulted in 62 Million in sales before a single brick was laid."
@@ -166,6 +169,7 @@ export default function YimajCaseStudy() {
     return () => t.kill()
   }, [ready])
 
+  useIdlePreload(PRELOAD_SRCS, ready)
   useCaseStudyReveal(rootRef, lenisRef)
 
   return (
@@ -327,12 +331,11 @@ export default function YimajCaseStudy() {
                 />
               </div>
               <div className="lg:row-start-3 lg:col-start-3 lg:h-[462px] flex flex-col tablet-hide">
-                <Img
+                <Video
                   src={ASSETS.socials}
-                  alt="Yimaj Heights social media stories"
+                  label="Yimaj Heights social media stories"
                   ratio="aspect-square"
-                  parallax={false}
-                  className="bg-[#f0e6da] w-full h-full object-cover"
+                  className="bg-[#f0e6da] w-full h-full"
                 />
               </div>
             </div>

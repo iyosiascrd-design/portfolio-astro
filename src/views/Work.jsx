@@ -67,7 +67,7 @@ const REDUCED_GLIDE_SMOOTH = 0.18
 const FLICK_SECONDS = 0.35 // a flick travels (pointer speed x this) before settling
 const MAX_THROW = 4 // max cards a single flick can travel
 const STACK_SCALE = 0.15 // how much a card shrinks while it stacks (0 for reduced motion)
-const SHADE_MAX = 0.3 // max darkness of the depth overlay
+const SHADE_MAX = 0.4 // max strength of the stacking gradient (0 = none, 1 = solid black at the dark edge)
 const WHEEL_SNAP_DELAY = 140 // ms after the last wheel/trackpad event before settling on a card
 // Intro animation (carousel). Times in ms.
 const INTRO_DELAY = 250 // wait before the first card starts (raise this if a page-transition overlay is still covering the page)
@@ -833,8 +833,9 @@ export default function Work() {
                       ) : (
                         img
                       ))}
-                    {/* depth shading: cheap opacity overlay instead of a per-frame CSS filter */}
-                    <div className="card-shade pointer-events-none absolute inset-0 bg-black opacity-0" />
+                    {/* depth shading: light-to-dark gradient (left clear, right dark). Invisible at rest (opacity 0);
+                        paint() fades it in only while the card stacks behind the next one. */}
+                    <div className="card-shade pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent to-black opacity-0" />
                   </div>
                   <div className="card-meta mt-2 flex items-start justify-between gap-4 text-black">
                     <h3 className="Caption !text-[14px] uppercase !font-medium leading-[1.2]">{card.name}</h3>
