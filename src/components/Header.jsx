@@ -599,10 +599,10 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                     >
                         <span ref={closePillRef} aria-hidden="true" className="absolute inset-0 rounded-full bg-white" />
                         <span className="relative block w-full h-[16px] overflow-hidden">
-                            <span ref={closeLblMenuRef} className="absolute inset-0 flex items-center justify-center">
+                            <span ref={closeLblMenuRef} className="absolute inset-0 flex items-center justify-center pt-[2px]">
                                 <span className="Nav !text-[16px] !leading-none uppercase">Menu</span>
                             </span>
-                            <span ref={closeLblCloseRef} className="absolute inset-0 flex items-center justify-center">
+                            <span ref={closeLblCloseRef} className="absolute inset-0 flex items-center justify-center pt-[2px]">
                                 <Roll hover={false} className={NAV_TEXT}>Close</Roll>
                             </span>
                         </span>
