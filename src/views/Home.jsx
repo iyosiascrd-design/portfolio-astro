@@ -989,7 +989,7 @@ export default function Home() {
                                 active={pageReady}
                                 delay={0.1}
                                 stagger={0.08}
-                                className="H2 hero-title rwd-balance max-md:!text-[36px] max-md:!leading-[1.1] sm:max-md:portrait:text-left sm:max-md:portrait:!text-[44px] !text-white m-0 p-0 uppercase"
+                                className="H2 hero-title rwd-balance max-md:![text-wrap:pretty] max-md:!text-[40px] max-md:!leading-[1.1] sm:max-md:portrait:text-left sm:max-md:portrait:!text-[56px] !text-white m-0 p-0 uppercase"
                             >
                                 {"What if your brand\nmatched what you\nhave built?"}
                             </MaskRevealText>
@@ -1155,7 +1155,7 @@ export default function Home() {
                                                                     y: 0,
                                                                 }}
                                                                 transition={{ duration: 0.25, ease: taylorEase }}
-                                                                className="H2 block tracking-[-0.02em] group-hover:text-white uppercase lg:!text-[44px] lg:!leading-[1.05]"
+                                                                className="H2 rwd-balance block tracking-[-0.02em] group-hover:text-white uppercase lg:!text-[44px] lg:!leading-[1.05]"
                                                             >
                                                                 {service.title}
                                                             </motion.span>
@@ -1170,7 +1170,7 @@ export default function Home() {
                                                                 y: isActive ? 0 : 4,
                                                             }}
                                                             transition={{ duration: 0.25, ease: taylorEase }}
-                                                            className="Body sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] whitespace-pre-line"
+                                                            className="Body rwd-pretty sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] whitespace-pre-line"
                                                         >
                                                             {service.keywords}
                                                         </motion.div>
@@ -1251,7 +1251,7 @@ export default function Home() {
                                             transition={{ duration: 0.4, ease: "easeOut" }}
                                             className="flex flex-col w-full m-0"
                                         >
-                                            <h4 className="Body sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-white mb-6 whitespace-pre-line !font-semibold">
+                                            <h4 className="Body rwd-balance sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-white mb-6 whitespace-pre-line !font-semibold">
                                                 {SERVICES_DATA[activeIndex].captionTitle}
                                             </h4>
                                             <p className="Body sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-[var(--text-dark-muted)] rwd-pretty m-0">
@@ -1381,11 +1381,11 @@ export default function Home() {
                                                         className="flex flex-col justify-between h-full pr-[120px] md:pr-0"
                                                         style={vp.isDesktop ? { paddingRight: EXPERTISE_SHIFT } : undefined}
                                                     >
-                                                        <p data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H6 rwd-balance whitespace-pre-line m-0 lg:transition-colors lg:duration-500">
+                                                        <p data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H6 ![font-family:var(--font-body)] rwd-balance whitespace-pre-line m-0 lg:transition-colors lg:duration-500">
                                                             {glueLastWords(item.description)}
                                                         </p>
 
-                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="H6 flex flex-col m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px]">
+                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="H6 ![font-family:var(--font-body)] flex flex-col m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px]">
                                                             {item.tools.map((tool, i) => (
                                                                 <li key={tool}>
                                                                     {tool}

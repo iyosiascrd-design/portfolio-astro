@@ -13,7 +13,7 @@ import { usePageTransition } from "./PageTransitionOverlay"
    - Full desktop header from 1024px and up (lg:): logo left, then
      WORK / SERVICE / ABOUT ME / GET IN TOUCH as plain text links,
      spread evenly from column 7 to the right edge
-   - Below 1024px: plain MENU text with the same rolling hover. Pressing it
+   - Below 1024px: plain MENU text (no hover animation). Pressing it
      makes the black menu expand out of the word itself (and shrink back on close)
    - No blur. The header uses mix-blend-mode: difference, so the white
      logo + nav + label invert against whatever is behind them (black on
@@ -59,16 +59,21 @@ const MENU_BOX = "w-[77px] h-[26px] justify-center"
    Hover is read from the closest <a> / <button>, so the whole pill or
    link is the hover target. Put the font classes on <Roll className>
    so both copies match. Pass `text` when children is not a plain string.
+
+   Pass hover={false} to render plain static text (no duplicate copy,
+   no listeners). Used for the Menu and Close buttons.
 ------------------------------------------------------------------- */
 
 const ROLL = { duration: 0.6, ease: "power3.inOut", padY: 0.12, offset: 128 }
 
-function Roll({ children, text, className = "" }) {
+function Roll({ children, text, className = "", hover = true }) {
     const wrapRef = useRef(null)
     const topRef = useRef(null)
     const bottomRef = useRef(null)
 
     useEffect(() => {
+        if (!hover) return
+
         const wrap = wrapRef.current
         const top = topRef.current
         const bottom = bottomRef.current
@@ -104,7 +109,12 @@ function Roll({ children, text, className = "" }) {
             host.removeEventListener("blur", onLeave)
             gsap.killTweensOf([top, bottom])
         }
-    }, [])
+    }, [hover])
+
+    // Static version: plain text, no rolling copy
+    if (!hover) {
+        return <span className={`inline-block whitespace-nowrap ${className}`}>{children}</span>
+    }
 
     return (
         <span
@@ -192,6 +202,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
     const closeBtnRef = useRef(null)
     const closeLblMenuRef = useRef(null)
     const closeLblCloseRef = useRef(null)
+    const closePillRef = useRef(null)
 
     /* ---------- phone: hide on scroll down, show on scroll up ---------- */
 
@@ -292,6 +303,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         const closeEl = closeBtnRef.current
         const lblMenu = closeLblMenuRef.current
         const lblClose = closeLblCloseRef.current
+        const pill = closePillRef.current
         const menuBtn = menuBtnRef.current
         if (!menuEl || !menuBtn) return
 
@@ -329,7 +341,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         }
 
         gsap.killTweensOf(menuEl)
-        if (closeEl) gsap.killTweensOf([closeEl, lblMenu, lblClose])
+        if (closeEl) gsap.killTweensOf([closeEl, lblMenu, lblClose, pill])
 
         /* ----- open ----- */
         if (menuOpen) {
@@ -352,17 +364,22 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             gsap.set(menuBtn, { autoAlpha: 0 })
 
             /* MENU morphs into CLOSE: the in-card button starts exactly on the MENU box
-               (same size, same colour, offset back to the card's top-right corner), then
-               settles into its place (phone: the very same spot, so it never moves; tablet: 12px inset), turns white and its label rolls MENU -> CLOSE. */
+               (same colour, offset back to the card's top-right corner) and settles into its place
+               (phone: the very same spot, so it never moves; tablet: 12px inset). A white pill grows
+               from the centre of the MENU word behind the label, the text turns black and
+               MENU crossfades into CLOSE. */
             if (closeEl) {
                 const startColor = getComputedStyle(menuBtn).color
                 const cs = getComputedStyle(closeEl)
                 gsap.set(closeEl, { autoAlpha: 1, x: parseFloat(cs.right), y: -parseFloat(cs.top), color: startColor })
-                gsap.set(lblMenu, { yPercent: 0 })
-                gsap.set(lblClose, { yPercent: 100 })
-                gsap.to(closeEl, { x: 0, y: 0, color: "#ffffff", ...opts })
-                gsap.to(lblMenu, { yPercent: -100, duration: 0.5, ease: "power3.inOut" })
-                gsap.to(lblClose, { yPercent: 0, duration: 0.5, ease: "power3.inOut" })
+                gsap.set(pill, { scale: 0 })
+                gsap.set(lblMenu, { autoAlpha: 1 })
+                gsap.set(lblClose, { autoAlpha: 0 })
+                gsap.to(closeEl, { x: 0, y: 0, ...opts })
+                gsap.to(closeEl, { color: "#000000", duration: 0.35, delay: 0.1, ease: "power2.out" })
+                gsap.to(pill, { scale: 1, duration: 0.6, ease: "power3.inOut" })
+                gsap.to(lblMenu, { autoAlpha: 0, duration: 0.2, delay: 0.2, ease: "none" })
+                gsap.to(lblClose, { autoAlpha: 1, duration: 0.25, delay: 0.3, ease: "none" })
             }
 
             gsap.to(menuEl, {
@@ -387,7 +404,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             gsap.set(menuEl, { display: "none" })
             gsap.set(menuEl, { clearProps: clear })
             gsap.set(menuBtn, { clearProps: "opacity,visibility" })
-            if (closeEl) gsap.set([closeEl, lblMenu, lblClose], { clearProps: "opacity,visibility,transform,color" })
+            if (closeEl) gsap.set([closeEl, lblMenu, lblClose, pill], { clearProps: "opacity,visibility,transform,color" })
             setRevealActive(false) // reset text only after the card has closed
         }
 
@@ -404,11 +421,14 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         gsap.set(menuEl, { left: "auto", bottom: "auto", ...(isTablet ? {} : full) })
         gsap.to(menuEl, { ...wordBox(), backgroundColor: CLEAR, ...opts, onComplete: finish })
         if (closeEl) {
-            // Reverse morph: CLOSE glides back onto the MENU box, recolours and rolls back to MENU
+            // Reverse morph: CLOSE glides back onto the MENU box while the pill shrinks into
+            // the centre of the word, CLOSE crossfades back to MENU and the text recolours
             const cs = getComputedStyle(closeEl)
-            gsap.to(closeEl, { x: parseFloat(cs.right), y: -parseFloat(cs.top), color: endColor, ...opts })
-            gsap.to(lblMenu, { yPercent: 0, duration: 0.45, ease: "power3.inOut" })
-            gsap.to(lblClose, { yPercent: 100, duration: 0.45, ease: "power3.inOut" })
+            gsap.to(closeEl, { x: parseFloat(cs.right), y: -parseFloat(cs.top), ...opts })
+            gsap.to(closeEl, { color: endColor, duration: 0.3, delay: 0.2, ease: "power2.in" })
+            gsap.to(pill, { scale: 0, duration: 0.5, delay: 0.05, ease: "power3.inOut" })
+            gsap.to(lblClose, { autoAlpha: 0, duration: 0.2, ease: "none" })
+            gsap.to(lblMenu, { autoAlpha: 1, duration: 0.25, delay: 0.2, ease: "none" })
         }
     }, [menuOpen, lenisRef])
 
@@ -526,7 +546,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                         </a>
                     </nav>
 
-                    {/* Mobile + tablet Menu label (below 1024px) */}
+                    {/* Mobile + tablet Menu label (below 1024px), no hover animation */}
                     <div className="lg:hidden col-span-6 flex justify-end pointer-events-auto">
                         <button
                             ref={menuBtnRef}
@@ -536,7 +556,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                             aria-controls="mobile-menu"
                             className={`${MENU_BTN} ${MENU_BOX} ${textColorClass}`}
                         >
-                            <Roll className={NAV_TEXT}>Menu</Roll>
+                            <Roll hover={false} className={NAV_TEXT}>Menu</Roll>
                         </button>
                     </div>
                 </div>
@@ -568,7 +588,8 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                     </div>
 
                     {/* Close: box in the card's top-right corner (phone and tablet).
-                        Same box as the header Menu button; the two labels roll over each other. */}
+                        Same box as the header Menu button. A white pill grows from the centre of the
+                        MENU word behind the label, and MENU crossfades into CLOSE. No hover animation. */}
                     <button
                         ref={closeBtnRef}
                         type="button"
@@ -576,45 +597,45 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                         aria-label="Close menu"
                         className={`${MENU_BTN} ${MENU_BOX} absolute z-10 top-[27px] right-[20px] md:top-[12px] md:right-[12px] text-white`}
                     >
+                        <span ref={closePillRef} aria-hidden="true" className="absolute inset-0 rounded-full bg-white" />
                         <span className="relative block w-full h-[16px] overflow-hidden">
                             <span ref={closeLblMenuRef} className="absolute inset-0 flex items-center justify-center">
                                 <span className="Nav !text-[16px] !leading-none uppercase">Menu</span>
                             </span>
                             <span ref={closeLblCloseRef} className="absolute inset-0 flex items-center justify-center">
-                                <Roll className={NAV_TEXT}>Close</Roll>
+                                <Roll hover={false} className={NAV_TEXT}>Close</Roll>
                             </span>
                         </span>
                     </button>
 
-                        {/* Main links: start 22% down the card (matches the Figma frame) */}
-                        <nav className="absolute left-0 right-0 top-[22%] flex flex-col px-[20px] md:px-[40px]">
-                            {NAV.map(({ label, target }, idx) => (
-                                <a
-                                    key={label}
-                                    href={hrefFor(target)}
-                                    onClick={(e) => handleNavClick(e, target)}
-                                    className="block w-fit cursor-pointer"
-                                >
-                                    <Roll text={label} className="H3 !leading-[1.12] uppercase !whitespace-nowrap max-md:!text-[clamp(32px,10.9vw,48px)]">
-                                        <MaskRevealText
-                                            as="span"
-                                            mode="words"
-                                            active={revealActive}
-                                            delay={0.45 + idx * 0.12}
-                                            stagger={0.06}
-                                            className="block"
-                                        >
-                                            {label}
-                                        </MaskRevealText>
-                                    </Roll>
-                                </a>
-                            ))}
-                        </nav>
-
+                    {/* Main links. Phone: sit 24px above the divider over the socials. Tablet: start 22% down the card (matches the Figma frame) */}
+                    <nav className="flex flex-col mt-auto mb-[24px] md:mt-0 md:mb-0 md:absolute md:left-0 md:right-0 md:top-[22%] md:px-[40px]">
+                        {NAV.map(({ label, target }, idx) => (
+                            <a
+                                key={label}
+                                href={hrefFor(target)}
+                                onClick={(e) => handleNavClick(e, target)}
+                                className="block w-fit cursor-pointer"
+                            >
+                                <Roll text={label} className="H3 !leading-[1.12] uppercase !whitespace-nowrap max-md:!text-[clamp(28px,8.2vw,36px)]">
+                                    <MaskRevealText
+                                        as="span"
+                                        mode="words"
+                                        active={revealActive}
+                                        delay={0.45 + idx * 0.12}
+                                        stagger={0.06}
+                                        className="block"
+                                    >
+                                        {label}
+                                    </MaskRevealText>
+                                </Roll>
+                            </a>
+                        ))}
+                    </nav>
 
                     {/* Bottom block pinned to the card bottom: divider, socials, divider, Get In Touch */}
-                    <div className="mt-auto flex flex-col md:px-[20px] md:pb-[28px]">
-                        <div className="h-px w-full bg-white/30 mb-[20px]" />
+                    <div className="md:mt-auto flex flex-col md:px-[20px] md:pb-[28px]">
+                        <div className="h-px w-full bg-white/15 mb-[20px]" />
 
                         {/* Socials */}
                         <div className="flex items-start justify-between">
@@ -638,28 +659,28 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                             </div>
                         </div>
 
-                        <div className="h-px w-full bg-white/30 mt-[16px]" />
+                        <div className="h-px w-full bg-white/15 mt-[16px]" />
 
                         {/* Get In Touch */}
                         <FitWidth className="mt-[16px]">
-                        <a
-                            href={GET_IN_TOUCH.href}
-                            onClick={() => setMenuOpen(false)}
-                            className="block w-fit cursor-pointer"
-                        >
-                            <Roll text="GET IN TOUCH" className="H3 !text-[1em] !leading-[1.05] uppercase block">
-                                <MaskRevealText
-                                    as="span"
-                                    mode="words"
-                                    active={revealActive}
-                                    delay={0.45 + NAV.length * 0.12}
-                                    stagger={0.06}
-                                    className="block"
-                                >
-                                    GET IN TOUCH
-                                </MaskRevealText>
-                            </Roll>
-                        </a>
+                            <a
+                                href={GET_IN_TOUCH.href}
+                                onClick={() => setMenuOpen(false)}
+                                className="block w-fit cursor-pointer"
+                            >
+                                <Roll text="GET IN TOUCH" className="H3 !text-[1em] !leading-[1.05] uppercase block">
+                                    <MaskRevealText
+                                        as="span"
+                                        mode="words"
+                                        active={revealActive}
+                                        delay={0.45 + NAV.length * 0.12}
+                                        stagger={0.06}
+                                        className="block"
+                                    >
+                                        GET IN TOUCH
+                                    </MaskRevealText>
+                                </Roll>
+                            </a>
                         </FitWidth>
                     </div>
                 </div>

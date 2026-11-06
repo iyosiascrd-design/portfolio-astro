@@ -452,7 +452,7 @@ export default function YimajCaseStudy() {
             src={ASSETS.exterior}
             alt="Yimaj Heights towers exterior render"
             ratio="aspect-[1472/867]"
-            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:!aspect-[3/2] lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
         {/* Frame 14 */}
@@ -494,7 +494,7 @@ export default function YimajCaseStudy() {
             src={ASSETS.floorplan}
             alt="Yimaj Heights isometric apartment floor plan"
             ratio="aspect-[1476/798]"
-            className="max-md:!aspect-square lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:!aspect-[3/2] lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
         {/* Closing frame: preview of the next project */}

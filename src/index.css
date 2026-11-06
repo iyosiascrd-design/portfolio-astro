@@ -417,6 +417,27 @@ img {
 }
 
 /* ============================================================
+   TEXT WRAPPING
+   In @layer base so any Tailwind utility (e.g. md:[text-wrap:wrap]) still wins.
+   rwd-pretty / rwd-balance are used across the JSX; opt in per element.
+   ============================================================ */
+@layer base {
+  .rwd-pretty,
+  .Body,
+  .body,
+  .P1,
+  .P2,
+  .HeroText,
+  .Caption {
+    text-wrap: pretty;
+  }
+
+  .rwd-balance {
+    text-wrap: balance;
+  }
+}
+
+/* ============================================================
    LAYOUT FIXES
    ============================================================ */
 

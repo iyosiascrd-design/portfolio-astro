@@ -387,7 +387,7 @@ export default function ZhongshanCaseStudy() {
             src={ASSETS.screen}
             alt="Seamless Sourcing exhibition screen with a glass shipping container"
             ratio="aspect-[1472/867]"
-            className="bg-black max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="bg-black max-md:!aspect-[3/2] lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
         {/* Frame 7b — poster + signage */}
@@ -402,7 +402,7 @@ export default function ZhongshanCaseStudy() {
             src={ASSETS.folder}
             alt="Zhongshan One Stop Sourcing brochure and 2026 Collection catalogue"
             ratio="aspect-[1472/867]"
-            className="bg-black max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="bg-black max-md:!aspect-[3/2] lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
         {/* Frame 9 */}
@@ -476,7 +476,7 @@ export default function ZhongshanCaseStudy() {
             src={ASSETS.living}
             alt="Furniture vignette with a curved sofa, lounge chairs and timber screens on a navy stage"
             ratio="aspect-[1476/798]"
-            className="max-md:!aspect-[4/3] lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:!aspect-[3/2] lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
         {/* Closing frame: preview of the next project */}

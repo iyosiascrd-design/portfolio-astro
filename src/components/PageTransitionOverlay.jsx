@@ -45,7 +45,6 @@ export const PRELOAD_KEY = "iyosias-preloaded"
 /**
  * true when the preloader should play on this page load.
  * - once per browser tab session (sessionStorage)
- * - never for reduced-motion users
  * - add ?preload to the URL to force it (handy for testing on a phone)
  */
 export function shouldPreload() {
@@ -53,7 +52,6 @@ export function shouldPreload() {
     try {
         if (new URLSearchParams(window.location.search).has("preload")) return true
     } catch {}
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return false
     try {
         if (window.sessionStorage.getItem(PRELOAD_KEY)) return false
     } catch {
