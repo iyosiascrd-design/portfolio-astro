@@ -48,7 +48,10 @@ const SOCIALS_LEFT = [
 // Desktop nav link text
 const NAV_TEXT = "Nav !text-[16px] !leading-none uppercase"
 
-// Menu + Close buttons. Text style comes from NAV_TEXT on the <Roll>.
+// Specific style for Menu/Close buttons to force Borscha and SemiBold weight (600)
+const MENU_BTN_TEXT = "![font-family:'Borscha'] !font-semibold !text-[16px] !leading-none uppercase"
+
+// Menu + Close buttons. 
 const MENU_BTN = "inline-flex shrink-0 items-center whitespace-nowrap cursor-pointer"
 // Menu / Close buttons: no stroke, identical 77 x 26 box so one can morph into the other
 const MENU_BOX = "w-[77px] h-[26px] justify-center"
@@ -367,7 +370,8 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             document.body.style.overflow = "hidden"
             lenisRef?.current?.stop()
 
-            const opts = { duration: 0.8, ease: "power3.inOut" }
+            // Swapped to expo.inOut for an Apple-like smooth expansion and increased duration slightly 
+            const opts = { duration: 0.85, ease: "expo.inOut" }
 
             // Card starts invisible on top of the MENU word, then turns black as it grows
             const wb = wordBox()
@@ -398,9 +402,9 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                 gsap.set(lblClose, { autoAlpha: 0 })
                 gsap.to(closeEl, { x: 0, y: 0, ...opts })
                 gsap.to(closeEl, { color: "#000000", duration: 0.35, delay: 0.1, ease: "power2.out" })
-                gsap.to(pill, { scale: 1, duration: 0.6, ease: "power3.inOut" })
-                gsap.to(lblMenu, { autoAlpha: 0, duration: 0.2, delay: 0.2, ease: "none" })
-                gsap.to(lblClose, { autoAlpha: 1, duration: 0.25, delay: 0.3, ease: "none" })
+                gsap.to(pill, { scale: 1, duration: 0.6, ease: "expo.inOut" })
+                gsap.to(lblMenu, { autoAlpha: 0, duration: 0.15, delay: 0.2, ease: "none" })
+                gsap.to(lblClose, { autoAlpha: 1, duration: 0.15, delay: 0.35, ease: "none" })
             }
 
             gsap.to(menuEl, {
@@ -438,7 +442,9 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         }
 
         const endColor = getComputedStyle(menuBtn).color
-        const opts = { duration: 0.6, ease: "power3.inOut" }
+        
+        // Match the Apple-like feel on the close animation too
+        const opts = { duration: 0.75, ease: "expo.inOut" }
 
         // Restate the card's final box (phone's was handed back to CSS) and its window, then shrink the window into the MENU word
         const wb = wordBox()
@@ -456,9 +462,9 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             const cs = getComputedStyle(closeEl)
             gsap.to(closeEl, { ...closeOffset(cs, wb), ...opts })
             gsap.to(closeEl, { color: endColor, duration: 0.3, delay: 0.2, ease: "power2.in" })
-            gsap.to(pill, { scale: 0, duration: 0.5, delay: 0.05, ease: "power3.inOut" })
-            gsap.to(lblClose, { autoAlpha: 0, duration: 0.2, ease: "none" })
-            gsap.to(lblMenu, { autoAlpha: 1, duration: 0.25, delay: 0.2, ease: "none" })
+            gsap.to(pill, { scale: 0, duration: 0.5, delay: 0.05, ease: "expo.inOut" })
+            gsap.to(lblClose, { autoAlpha: 0, duration: 0.15, delay: 0.05, ease: "none" })
+            gsap.to(lblMenu, { autoAlpha: 1, duration: 0.15, delay: 0.2, ease: "none" })
         }
     }, [menuOpen, lenisRef])
 
@@ -586,7 +592,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                             aria-controls="mobile-menu"
                             className={`${MENU_BTN} ${MENU_BOX} ${textColorClass}`}
                         >
-                            <Roll hover={false} className={NAV_TEXT}>Menu</Roll>
+                            <Roll hover={false} className={MENU_BTN_TEXT}>Menu</Roll>
                         </button>
                     </div>
                 </div>
@@ -630,10 +636,10 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                         <span ref={closePillRef} aria-hidden="true" className="absolute inset-0 rounded-full bg-white" />
                         <span className="relative block w-full h-[16px] overflow-hidden">
                             <span ref={closeLblMenuRef} className="absolute inset-0 flex items-center justify-center pt-[2px]">
-                                <span className="Nav !text-[16px] !leading-none uppercase">Menu</span>
+                                <span className={MENU_BTN_TEXT}>Menu</span>
                             </span>
                             <span ref={closeLblCloseRef} className="absolute inset-0 flex items-center justify-center pt-[2px]">
-                                <Roll hover={false} className={NAV_TEXT}>Close</Roll>
+                                <Roll hover={false} className={MENU_BTN_TEXT}>Close</Roll>
                             </span>
                         </span>
                     </button>

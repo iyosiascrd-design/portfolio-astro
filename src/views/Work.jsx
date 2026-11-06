@@ -204,6 +204,8 @@ export default function Work() {
   const flipRef = useRef(null)
   // Remembers the last service clicked so a repeat click can step to the next matching card
   const lastServiceRef = useRef({ tag: null, idx: -1 })
+  // The service last clicked in the left list: it stays black and shifted right until another is clicked
+  const [activeService, setActiveService] = useState(null)
 
   // Always point at the latest outlet context, so the mount effect below can run exactly once
   const ctxRef = useRef(outletCtx)
@@ -692,6 +694,7 @@ export default function Work() {
   // Left list click: slide to the first card with that service's tag; clicking the same one again
   // steps to the next match (wraps around). Carousel slides the row, mobile flips the flipbook.
   const handleServiceClick = (service) => {
+    setActiveService(service)
     const rule = SERVICE_TAGS[service]
     if (!rule) return
     const matches = CARDS.map((c, i) =>
@@ -738,15 +741,18 @@ export default function Work() {
           {SERVICES.map((s) => (
             <li
               key={s}
-              className="cursor-default transition-transform duration-300 ease-out hover:translate-x-2 hover:text-black"
+              className={`cursor-default transition-[transform,color] duration-300 ease-out hover:translate-x-2 hover:text-black ${
+                activeService === s ? "text-black" : ""
+              }`}
             >
-              {SERVICE_TAGS[s] ? (
-                <button type="button" onClick={() => handleServiceClick(s)} className="cursor-pointer text-left">
-                  {s}
-                </button>
-              ) : (
-                s
-              )}
+              <button
+                type="button"
+                onClick={() => handleServiceClick(s)}
+                aria-pressed={activeService === s}
+                className="cursor-pointer text-left"
+              >
+                {s}
+              </button>
             </li>
           ))}
         </ul>
