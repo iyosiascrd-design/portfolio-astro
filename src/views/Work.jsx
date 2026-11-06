@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { Link, useNavigate, useOutletContext } from "react-router-dom"
+import gsap from "gsap"
 
 import FlipbookCarousel from "../components/FlipbookCarousel"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
@@ -153,6 +154,89 @@ const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
   minute: "2-digit",
   hour12: false,
 })
+
+// One row in the services list. GSAP drives the hover so it stays smooth and interruptible.
+// The <li> never moves (it is the hover target); only the <button> inside slides, so the hover
+// area can't flicker at the edge. Mid-hover reversals simply retarget the tween from where it is.
+const SERVICE_SHIFT = 8 // px the label slides right on hover
+const SERVICE_ACTIVE_COLOR = "#000000"
+
+function ServiceItem({ label, active, onSelect }) {
+  const liRef = useRef(null)
+  const btnRef = useRef(null)
+  const baseColor = useRef("")
+  const hovering = useRef(false)
+  const activeRef = useRef(active)
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
+
+  // Read the resting colour once (inherited from the list), and wire up hover on the stable <li>
+  useEffect(() => {
+    const li = liRef.current
+    const btn = btnRef.current
+    if (!li || !btn) return
+
+    baseColor.current = getComputedStyle(btn).color
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+    const enter = () => {
+      hovering.current = true
+      gsap.to(btn, {
+        x: SERVICE_SHIFT,
+        color: SERVICE_ACTIVE_COLOR,
+        duration: reduce ? 0 : 0.5,
+        ease: "power3.out",
+        overwrite: true,
+      })
+    }
+    const leave = () => {
+      hovering.current = false
+      gsap.to(btn, {
+        x: 0,
+        color: activeRef.current ? SERVICE_ACTIVE_COLOR : baseColor.current,
+        duration: reduce ? 0 : 0.6,
+        ease: "power3.out",
+        overwrite: true,
+      })
+    }
+
+    li.addEventListener("pointerenter", enter)
+    li.addEventListener("pointerleave", leave)
+    return () => {
+      li.removeEventListener("pointerenter", enter)
+      li.removeEventListener("pointerleave", leave)
+      gsap.killTweensOf(btn)
+    }
+  }, [])
+
+  // When this row becomes (or stops being) the selected service, update its colour unless hovered
+  useEffect(() => {
+    const btn = btnRef.current
+    if (!btn || hovering.current) return
+    gsap.to(btn, {
+      color: active ? SERVICE_ACTIVE_COLOR : baseColor.current || "",
+      duration: 0.3,
+      ease: "power2.out",
+      overwrite: "auto",
+    })
+  }, [active])
+
+  return (
+    <li ref={liRef} className="cursor-default">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={onSelect}
+        aria-pressed={active}
+        className="block cursor-pointer text-left will-change-transform"
+      >
+        {label}
+      </button>
+    </li>
+  )
+}
 
 function Availability() {
   const [now, setNow] = useState(() => new Date())
@@ -739,21 +823,12 @@ export default function Work() {
         {/* Services list styled with ultra-compact line height */}
         <ul className="Body !font-normal !leading-[1.2] !text-gray-400 md:text-[20px]">
           {SERVICES.map((s) => (
-            <li
+            <ServiceItem
               key={s}
-              className={`cursor-default transition-[transform,color] duration-300 ease-out hover:translate-x-2 hover:text-black ${
-                activeService === s ? "text-black" : ""
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => handleServiceClick(s)}
-                aria-pressed={activeService === s}
-                className="cursor-pointer text-left"
-              >
-                {s}
-              </button>
-            </li>
+              label={s}
+              active={activeService === s}
+              onSelect={() => handleServiceClick(s)}
+            />
           ))}
         </ul>
       </div>
