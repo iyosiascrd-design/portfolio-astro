@@ -296,7 +296,10 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
 
     /* ---------- menu: the black card grows out of the MENU word and shrinks back into it ----------
        Tablet: card ends as the dropdown, 60vw wide with a 520px minimum. Phone: card ends full screen.
-       The card's content is pinned top-right at its final size, so nothing reflows while it grows. */
+       The card's content is pinned top-right at its final size, so nothing reflows while it grows.
+       The card box itself also stays at its final size the whole time; only a clip-path window grows from
+       the MENU word to the full card (and back). clip-path runs on the compositor with no layout per frame,
+       so it stays smooth, and its rounded corners match the 16px used on the site's images. */
 
     useEffect(() => {
         const menuEl = mobileMenuRef.current
@@ -309,8 +312,11 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
 
         // Tablet = 768px and up (this menu is only used below 1024px)
         const isTablet = window.matchMedia("(min-width: 768px)").matches
-        const clear = "top,right,left,bottom,width,height,backgroundColor,borderRadius,clipPath,opacity"
+        const clear = "top,right,left,bottom,width,height,backgroundColor,borderRadius,clipPath,opacity,willChange"
         const CLEAR = "rgba(0,0,0,0)"
+        const MENU_RADIUS = 16 // px, same rounding as the images
+        const PHONE_END_RADIUS = 0 // phone card ends full screen, so its corners end square
+        const endRadius = isTablet ? MENU_RADIUS : PHONE_END_RADIUS
 
         const full = isTablet
             ? {
@@ -318,14 +324,12 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                   right: 10,
                   width: Math.max(window.innerWidth * 0.6, 520),
                   height: Math.min(640, window.innerHeight - 20),
-                  borderRadius: "8px 8px 8px 8px",
               }
             : {
                   top: 0,
                   right: 0,
                   width: window.innerWidth,
                   height: window.innerHeight,
-                  borderRadius: "0px 0px 0px 0px",
               }
 
         // Exact box of the MENU word
@@ -336,9 +340,24 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                 right: window.innerWidth - r.right,
                 width: r.width,
                 height: r.height,
-                borderRadius: "0px 0px 0px 0px",
             }
         }
+
+        // The card box is always its final size; these describe the visible window inside it
+        const clipFull = (radius) => `inset(0px 0px 0px 0px round ${radius}px)`
+        const clipFor = (box, radius) => {
+            const t = box.top - full.top
+            const r = box.right - full.right
+            const b = full.height - t - box.height
+            const l = full.width - r - box.width
+            return `inset(${t}px ${r}px ${b}px ${l}px round ${radius}px)`
+        }
+        // Offset that puts the in-card CLOSE button exactly on the MENU word's box
+        const closeOffset = (cs, box) => ({
+            x: parseFloat(cs.right) - (box.right - full.right),
+            y: box.top - full.top - parseFloat(cs.top),
+        })
+        const cardBox = { top: full.top, right: full.right, width: full.width, height: full.height }
 
         gsap.killTweensOf(menuEl)
         if (closeEl) gsap.killTweensOf([closeEl, lblMenu, lblClose, pill])
@@ -351,14 +370,16 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             const opts = { duration: 0.8, ease: "power3.inOut" }
 
             // Card starts invisible on top of the MENU word, then turns black as it grows
+            const wb = wordBox()
             gsap.set(menuEl, {
                 display: "block",
-                clipPath: "none",
                 opacity: 1,
                 left: "auto",
                 bottom: "auto",
                 backgroundColor: CLEAR,
-                ...wordBox(),
+                willChange: "clip-path",
+                ...cardBox,
+                clipPath: clipFor(wb, MENU_RADIUS),
             })
             // Hide the header MENU button; the card grows out of its box
             gsap.set(menuBtn, { autoAlpha: 0 })
@@ -371,7 +392,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             if (closeEl) {
                 const startColor = getComputedStyle(menuBtn).color
                 const cs = getComputedStyle(closeEl)
-                gsap.set(closeEl, { autoAlpha: 1, x: parseFloat(cs.right), y: -parseFloat(cs.top), color: startColor })
+                gsap.set(closeEl, { autoAlpha: 1, ...closeOffset(cs, wb), color: startColor })
                 gsap.set(pill, { scale: 0 })
                 gsap.set(lblMenu, { autoAlpha: 1 })
                 gsap.set(lblClose, { autoAlpha: 0 })
@@ -383,10 +404,12 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             }
 
             gsap.to(menuEl, {
-                ...full,
+                clipPath: clipFull(endRadius),
                 backgroundColor: "#000000",
                 ...opts,
                 onComplete: () => {
+                    // Tablet keeps its 16px corners from the md:rounded class; phone is full screen
+                    gsap.set(menuEl, { clipPath: "none", willChange: "auto" })
                     // Phone: hand the full-screen box back to the inset-0 class
                     if (!isTablet) gsap.set(menuEl, { clearProps: "top,right,left,bottom,width,height" })
                 },
@@ -417,14 +440,21 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         const endColor = getComputedStyle(menuBtn).color
         const opts = { duration: 0.6, ease: "power3.inOut" }
 
-        // Phone's full-screen box was handed back to CSS after opening, so restate it
-        gsap.set(menuEl, { left: "auto", bottom: "auto", ...(isTablet ? {} : full) })
-        gsap.to(menuEl, { ...wordBox(), backgroundColor: CLEAR, ...opts, onComplete: finish })
+        // Restate the card's final box (phone's was handed back to CSS) and its window, then shrink the window into the MENU word
+        const wb = wordBox()
+        gsap.set(menuEl, {
+            left: "auto",
+            bottom: "auto",
+            willChange: "clip-path",
+            ...cardBox,
+            clipPath: clipFull(endRadius),
+        })
+        gsap.to(menuEl, { clipPath: clipFor(wb, MENU_RADIUS), backgroundColor: CLEAR, ...opts, onComplete: finish })
         if (closeEl) {
             // Reverse morph: CLOSE glides back onto the MENU box while the pill shrinks into
             // the centre of the word, CLOSE crossfades back to MENU and the text recolours
             const cs = getComputedStyle(closeEl)
-            gsap.to(closeEl, { x: parseFloat(cs.right), y: -parseFloat(cs.top), ...opts })
+            gsap.to(closeEl, { ...closeOffset(cs, wb), ...opts })
             gsap.to(closeEl, { color: endColor, duration: 0.3, delay: 0.2, ease: "power2.in" })
             gsap.to(pill, { scale: 0, duration: 0.5, delay: 0.05, ease: "power3.inOut" })
             gsap.to(lblClose, { autoAlpha: 0, duration: 0.2, ease: "none" })
@@ -576,7 +606,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                 id="mobile-menu"
                 ref={mobileMenuRef}
                 style={{ display: "none" }}
-                className="lg:hidden fixed z-[100] bg-black text-white inset-0 overflow-hidden md:inset-auto md:top-[10px] md:right-[10px] md:w-[max(60vw,520px)] md:h-[min(640px,calc(100dvh-20px))] md:rounded-[8px]"
+                className="lg:hidden fixed z-[100] bg-black text-white inset-0 overflow-hidden md:inset-auto md:top-[10px] md:right-[10px] md:w-[max(60vw,520px)] md:h-[min(640px,calc(100dvh-20px))] md:rounded-[16px]"
             >
                 <div className="absolute top-0 right-0 flex flex-col w-[100vw] h-[100dvh] px-[20px] pb-[40px] md:w-[max(60vw,520px)] md:h-[min(640px,calc(100dvh-20px))] md:p-[20px]">
                     {/* Phone: same 80px row as the header so the logo sits where it does in the bar.
