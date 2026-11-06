@@ -1,0 +1,13 @@
+---
+import Base from "../layouts/Base.astro"
+import Root from "../Root.jsx"
+
+export function getStaticPaths() {
+  return ["", "work", "work/weyra", "work/origen", "work/yimaj", "work/zhongshan"].map(
+    (s) => ({ params: { slug: s || undefined } })
+  )
+}
+---
+<Base>
+  <Root client:only="react" />
+</Base>

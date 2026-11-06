@@ -1,0 +1,45 @@
+{
+  "name": "my-site",
+  "type": "module",
+  "version": "0.0.1",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "check": "astro check",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/react": "^7.1.4",
+    "@astrojs/sitemap": "^3.7.4",
+    "@tailwindcss/vite": "^4.3.4",
+    "astro": "^7.4.7",
+    "framer-motion": "^14.9.1",
+    "gsap": "^3.15.1",
+    "lenis": "^1.3.27",
+    "lucide-react": "^1.70.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5",
+    "tailwindcss": "^4.3.4",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "prettier-plugin-astro": "^0.14.1"
+  },
+  "lumos": {
+    "version": "1.0.0",
+    "commit": "8c656b5054ee3d9023f19b35c4577a804dad1399",
+    "scaffolded": "2026-10-24"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true
+  }
+}
