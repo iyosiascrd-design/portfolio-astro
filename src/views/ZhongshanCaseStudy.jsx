@@ -22,7 +22,7 @@ const FRAME_PB = "pb-0"
 const CS_HEADING =
   "[font-family:var(--font-display)] font-medium uppercase text-[clamp(40px,calc(6.04px+5.66vw),64px)] lg:text-[clamp(44px,4.233vw,80px)] leading-[1] tracking-[-0.04em] [text-wrap:balance] lg:[text-wrap:wrap]"
 const CS_PARA =
-  "[font-family:var(--font-heading)] font-normal text-[var(--text-light-body)] text-[18px] lg:text-[clamp(15px,1.19vw,22px)] leading-[1.265] tracking-[-0.01em] [text-wrap:pretty]"
+  "[font-family:var(--font-body)] font-normal text-[var(--text-light-body)] text-[18px] lg:text-[clamp(15px,1.19vw,22px)] leading-[1.265] tracking-[-0.01em] [text-wrap:pretty]"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
