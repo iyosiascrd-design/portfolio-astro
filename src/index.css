@@ -4,7 +4,7 @@
    FONTS
    ============================================================ */
 
-/* Heading font */
+/* Heading + body font */
 @font-face {
   font-family: 'BDO Grotesk';
   src: url('/fonts/BDOGrotesk-Regular.woff2') format('woff2');
@@ -48,31 +48,6 @@
   font-display: swap;
 }
 
-/* Body font */
-@font-face {
-  font-family: 'Switzer';
-  src: url('/fonts/Switzer-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Switzer';
-  src: url('/fonts/Switzer-Medium.woff2') format('woff2');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Switzer';
-  src: url('/fonts/Switzer-Semibold.woff2') format('woff2');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* ============================================================
    TOKENS
    Desktop scale:  96 / 64 / 48 / 32 / 24 / 18
@@ -80,7 +55,7 @@
    UI text:        14 (Nav) / 12 (Label)
    ============================================================ */
 :root {
-  --font-body: 'Switzer', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'BDO Grotesk', 'Helvetica Neue', Arial, sans-serif;
   --font-heading: 'BDO Grotesk', var(--font-body);
   --font-display: 'Borscha', var(--font-heading); /* Borscha, BDO Grotesk as fallback */
 
@@ -280,7 +255,7 @@ img {
    TYPE CLASSES
    ============================================================ */
 
-/* Headings: BDO Grotesk */
+/* Headings: Borscha (display), BDO Grotesk fallback */
 .H1 {
   font-family: var(--font-display);
   font-size: var(--type-h1-size);
@@ -314,7 +289,7 @@ img {
   font-weight: 500;
 }
 
-/* Small headings: heading font (BDO Grotesk) */
+/* Small headings */
 .H5 {
   font-family: var(--font-display);
   font-size: var(--type-h5-size);
