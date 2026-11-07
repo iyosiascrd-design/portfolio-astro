@@ -15,14 +15,12 @@ import { Img as BaseImg, SceneVideo, LazyImg, HERO_IMG_PROPS, Media } from "../c
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
+import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM, CS_HERO_SCRIM_DIM } from "../lib/caseStudyStyles.JS"
+
 gsap.registerPlugin(ScrollTrigger)
 
 const FRAME_PB = "pb-0"
 
-const CS_HEADING =
-  "[font-family:var(--font-display)] font-medium uppercase text-[clamp(40px,calc(6.04px+5.66vw),64px)] lg:text-[clamp(44px,4.233vw,80px)] leading-[1] tracking-[-0.04em] [text-wrap:balance] lg:[text-wrap:wrap]"
-const CS_PARA =
-  "[font-family:var(--font-body)] font-normal text-[var(--text-light-body)] text-[18px] lg:text-[clamp(15px,1.19vw,22px)] leading-[1.265] tracking-[-0.01em] [text-wrap:pretty]"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
@@ -184,7 +182,7 @@ export default function ZhongshanCaseStudy() {
           alt="Zhongshan villa with travertine cantilever roof and olive tree"
           className="absolute inset-0 w-full h-full object-cover object-[35%_30%] md:object-center z-0 will-change-transform"
         />
-        <div className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-t from-black/50 via-black/10 to-transparent" aria-hidden="true" />
+        <div className={CS_HERO_SCRIM_DIM} aria-hidden="true" />
 
         <div
           data-hero-meta
@@ -230,7 +228,7 @@ export default function ZhongshanCaseStudy() {
               mode="words"
               delay={0.25}
               stagger={0.05}
-              className="CaseHero !text-white ![font-family:var(--font-heading)] max-md:!text-[20px] sm:max-md:portrait:!text-[25px] md:!text-[clamp(24px,2.7vw,28px)] lg:!text-[clamp(24px,1.8vw,34px)]"
+              className={CS_HERO_PARA}
             >
               {HERO_TEXT}
             </MaskRevealText>
@@ -301,18 +299,18 @@ export default function ZhongshanCaseStudy() {
                 Technical By Nature<br className="max-md:hidden" />{" "}Editorial By Design
               </h2>
 
-              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-start md:max-w-[290px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[12.5vw] md:mb-[24px] lg:mb-[64px] max-md:mb-[16px] md:!text-[clamp(14px,0.992vw,19px)] lg:!text-[clamp(15px,1.19vw,22px)]`}>
+              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-start md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[12.5vw] md:mb-[24px] lg:mb-[64px] max-md:mb-[16px]`}>
                 Inter balances bold editorial headlines with crisp, legible numbers across technical spec tables.
               </LineMaskText>
 
-              <div className="lg:row-start-3 lg:col-start-1 lg:h-[462px] flex flex-col">
+              <div className="lg:row-start-3 lg:col-start-1 lg:h-[32.08vw] flex flex-col">
                 <Media
                   src={ASSETS.color}
                   alt="Zhongshan colour palette"
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-2 lg:h-[462px] flex flex-col">
+              <div className="lg:row-start-3 lg:col-start-2 lg:h-[32.08vw] flex flex-col">
                 <Img
                   src={ASSETS.typeCard}
                   alt="Zhongshan Sourcing Technology folded navy card"
@@ -322,7 +320,7 @@ export default function ZhongshanCaseStudy() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-3 lg:h-[462px] flex flex-col tablet-hide">
+              <div className="lg:row-start-3 lg:col-start-3 lg:h-[32.08vw] flex flex-col tablet-hide">
                 <Media
                   src={ASSETS.typeTablet}
                   alt="Zhongshan product catalogue on a tablet over perforated metal"
@@ -339,7 +337,7 @@ export default function ZhongshanCaseStudy() {
             </h2>
             <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] gap-[12px] md:gap-[16px] lg:items-stretch lg:flex-1">
               <div className="lg:col-start-1 flex flex-col h-full">
-                <div className="w-full lg:h-[581px] overflow-hidden rounded-lg md:rounded-[12px] bg-[#eff5f5]">
+                <div className="w-full lg:h-[40.35vw] overflow-hidden rounded-lg md:rounded-[12px] bg-[#eff5f5]">
                   <Media
                     src={ASSETS.color}
                     alt="Zhongshan colour palette: Platinum, Pacific Blue, Prussian Blue, Dusty Grey and Shadow Grey"
@@ -348,14 +346,14 @@ export default function ZhongshanCaseStudy() {
                 </div>
               </div>
 
-              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 h-full lg:h-[581px]">
+              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 h-full lg:h-[40.35vw]">
                 <Img
                   src={ASSETS.colorTexture}
                   alt="Grey and blue fabric and timber material samples"
                   ratio="aspect-[357/345]"
                   className="bg-[#d9d4cb] lg:!aspect-[357/345] w-full tablet-hide"
                 />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[290px] md:!text-[clamp(14px,0.992vw,19px)] mt-[12px] lg:mt-auto`}>
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-[12px] lg:mt-auto`}>
                   A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
                 </LineMaskText>
               </div>
@@ -366,7 +364,7 @@ export default function ZhongshanCaseStudy() {
                   alt="Worker in a teal Zhongshan Sourcing Technology hard hat"
                   ratio="aspect-none"
                   parallax={false}
-                  className="bg-[#0b3b4a] w-full lg:h-[581px] object-cover"
+                  className="bg-[#0b3b4a] w-full lg:h-[40.35vw] object-cover"
                 />
               </div>
             </div>

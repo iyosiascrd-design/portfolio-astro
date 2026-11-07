@@ -15,14 +15,12 @@ import { Img, Media, isVideo, HERO_IMG_PROPS } from "../components/CaseStudyMedi
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
+import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM } from "../lib/caseStudyStyles.JS"
+
 gsap.registerPlugin(ScrollTrigger)
 
 const FRAME_PB = "pb-0"
 
-const CS_HEADING =
-  "[font-family:var(--font-display)] font-medium uppercase text-[clamp(40px,calc(6.04px+5.66vw),64px)] lg:text-[clamp(44px,4.233vw,80px)] leading-[1] tracking-[-0.04em] [text-wrap:balance] lg:[text-wrap:wrap]"
-const CS_PARA =
-  "[font-family:var(--font-body)] font-normal text-[var(--text-light-body)] text-[18px] lg:text-[clamp(15px,1.19vw,22px)] leading-[1.265] tracking-[-0.01em] [text-wrap:pretty]"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
@@ -220,7 +218,7 @@ export default function OrigenCaseStudy() {
           mediaProps={{ "data-hero-img": "", ...HERO_IMG_PROPS }}
           className="absolute inset-0 w-full h-full object-cover [object-position:var(--hero-pos-m)] md:[object-position:var(--hero-pos-d)] z-0 will-change-transform"
         />
-        <div className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-t from-black/50 via-black/10 to-transparent" aria-hidden="true" />
+        <div className={CS_HERO_SCRIM} aria-hidden="true" />
 
         <div
           data-hero-meta
@@ -263,7 +261,7 @@ export default function OrigenCaseStudy() {
               mode="words"
               delay={0.25}
               stagger={0.05}
-              className="CaseHero !text-white ![font-family:var(--font-heading)] max-md:!text-[20px] sm:max-md:portrait:!text-[25px] md:!text-[clamp(24px,2.7vw,28px)] lg:!text-[clamp(24px,1.8vw,34px)]"
+              className={CS_HERO_PARA}
             >
               {HERO_TEXT}
             </MaskRevealText>
@@ -337,7 +335,7 @@ export default function OrigenCaseStudy() {
                 Heritage Meets<br className="max-md:hidden" />{" "}Modernity
               </h2>
 
-              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-3 md:max-w-[490px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[24px] md:mb-[24px] lg:mb-[3.7vw] max-md:mb-[16px] md:!text-[clamp(14px,0.992vw,19px)]`}>
+              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-3 md:max-w-[490px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[24px] md:mb-[24px] lg:mb-[3.7vw] max-md:mb-[16px]`}>
                 Cormorant Garamond brings historical weight and editorial elegance, anchoring the identity in craft and origin storytelling through its high-contrast serif structure. DM Sans provides a clean, modern counterweight, delivering geometric precision and sharp legibility across product labels, origin specs, and roasting profiles.
               </LineMaskText>
 
@@ -385,7 +383,7 @@ export default function OrigenCaseStudy() {
                   ratio="aspect-[549/580]"
                   className="bg-[#c6b984] lg:col-start-2 lg:row-start-3 lg:self-start lg:!aspect-[357/345] max-lg:order-4 tablet-hide"
                 />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[290px] lg:!text-[clamp(14px,0.992vw,19px)] lg:col-start-2 lg:row-start-3 lg:self-end max-lg:order-2 max-lg:mb-[16px] md:max-lg:col-span-2`}>
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] lg:col-start-2 lg:row-start-3 lg:self-end max-lg:order-2 max-lg:mb-[16px] md:max-lg:col-span-2`}>
                   While competitors defaulted to sterile minimalism, we rooted the brand in the warmth and history of its original landscape.
                 </LineMaskText>
                 <Img

@@ -1,4 +1,4 @@
-// src/pages/WeyraCaseStudy.jsx
+// src/pages/YimajCaseStudy.jsx
 
 import React, { useEffect, useLayoutEffect, useRef } from "react"
 import { motion } from "framer-motion"
@@ -11,50 +11,74 @@ import MaskRevealText from "../components/MaskRevealText"
 import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
-import { Img, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
+import { Img as BaseImg, SceneVideo, LazyImg, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
+
+import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM } from "../lib/caseStudyStyles.JS"
 
 gsap.registerPlugin(ScrollTrigger)
 
 const FRAME_PB = "pb-0"
 
-const CS_HEADING =
-  "[font-family:var(--font-display)] font-medium uppercase text-[clamp(40px,calc(6.04px+5.66vw),64px)] lg:text-[clamp(44px,4.233vw,80px)] leading-[1] tracking-[-0.04em] [text-wrap:balance] lg:[text-wrap:wrap]"
-const CS_PARA =
-  "[font-family:var(--font-body)] font-normal text-[var(--text-light-body)] text-[18px] lg:text-[clamp(15px,1.19vw,22px)] leading-[1.265] tracking-[-0.01em] [text-wrap:pretty]"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
-const PRELOAD_SRCS = [
-  "/weyra-story.jpg",
-  "/weyra-pin.jpg",
-  "/weyra-clothing.jpg",
-  "/weyra-type.jpg",
-  "/weyra-wristbands.jpg",
-  "/weyra-badge.jpg",
-  "/weyra-tote.jpg",
-  "/weyra-banner.jpg",
-  "/weyra-magazine.jpg",
-  "/weyra-profile.jpg",
-  "/weyra-phones.jpg",
-  "/weyra-poster.jpg",
-  "/weyra-board.jpg",
-  "/weyra-flags.jpg",
-]
+const ASSETS = {
+  hero: "/yimaj-hero.jpg",
+  logoAnimation: "/yimaj-logo.webm",
+  logoConstruction: "/yimaj-logoconstruction.jpg",
+  logoPin: "/yimaj-wood.jpg",
+  typeTreatment: "/yimaj-type-treatment.jpg",
+  typeApplied: "/yimaj-typeapplied.jpg",
+  typeSpecimen: "/yimaj-type.jpg",
+  color: "/yimaj-color.webm",
+  logoGrid: "/yimaj-logo-grid.jpg",
+  colorCard: "/yimaj-color-card.jpg",
+  colorPoster: "/yimaj-color-poster.jpg",
+  envelope: "/yimaj-envelop.jpeg",
+  keytag: "/yimaj-keychain.jpg", 
+  businessCard: "/yimaj-buisnesscard.jpg",
+  brochure: "/yimaj-brochure.jpg",
+  wayfinding: "/yimaj-wayfinding.jpg",
+  iphone: "/yimaj-iphone.jpg",
+  billboard: "/yimaj-billboard.jpg",
+  folder: "/yimaj-folder.jpg",
+  socials: "/yimaj-socials.webm",
+  presentation: "/yimaj-presentation.jpg",
+  living: "/yimaj-living.jpg",
+  exterior: "/yimaj-exterior.jpg", 
+  bedroom: "/yimaj-bedroom.jpg",
+  kitchen: "/yimaj-kitchen.jpg",
+  sitePlan: "/yimaj-topdownsite.jpg", 
+  courtyard: "/yimaj-courtyard.jpg", 
+  football: "/yimaj-basketball.jpg", 
+  pool: "/yimaj-swimming.jpg",
+  floorplan: "/yimaj-floorplan.jpg",
+}
 
-const FRAME3_STORY_SRC = "/weyra-story.jpg"
-const FRAME3_PIN_SRC = "/weyra-pin.jpg"
+const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
 
 const HERO_TEXT =
-  "I shaped Weyra’s identity to challenge outdated narratives about Ethiopian youth, uniting 100+ participants across government, media, civil society, and youth organizations."
+  "Designing the brand identity and 3D visuals that resulted in 62 Million in sales before a single brick was laid."
 
-const FRAME5_COLOR_SRC = "/weyra-color.webm"
-const FRAME5_PHOTO_SRC = "/weyra-clothing.jpg"
+// Shared media primitives live in components/CaseStudyMedia.jsx
+const MEDIA_PLACEHOLDER = "bg-[#ece7df]"
 
-const WEYRA_LETTER_SPACING_EM = -0.02
+const Img = (props) => <BaseImg placeholder={MEDIA_PLACEHOLDER} hideOnError {...props} />
 
-export default function WeyraCaseStudy() {
+const Video = (props) => (
+  <SceneVideo
+    name="yimaj"
+    placeholder={MEDIA_PLACEHOLDER}
+    videoClassName="absolute inset-0 w-full h-full"
+    {...props}
+  />
+)
+
+const YIMAJ_LETTER_SPACING_EM = -0.02
+
+export default function YimajCaseStudy() {
   const outletCtx = useOutletContext()
   const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
   const heroFade = outletCtx?.heroFade
@@ -86,10 +110,11 @@ export default function WeyraCaseStudy() {
       const ctx = document.createElement("canvas").getContext("2d")
       ctx.font = '500 100px "Borscha"'
       const w100 =
-        Array.from("WEYRA").reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) +
-        5 * WEYRA_LETTER_SPACING_EM * 100
+        Array.from("YIMAJ").reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) +
+        5 * YIMAJ_LETTER_SPACING_EM * 100
       if (!w100 || !avail) return
-      title.style.letterSpacing = `${WEYRA_LETTER_SPACING_EM}em`
+      title.style.letterSpacing = `${YIMAJ_LETTER_SPACING_EM}em`
+      // Changed multiplier from 0.99 to 0.90 to respect padding
       title.style.fontSize = `${Math.floor((avail / w100) * 100 * 0.90)}px`
     }
 
@@ -146,7 +171,7 @@ export default function WeyraCaseStudy() {
   useCaseStudyReveal(rootRef, lenisRef)
 
   return (
-    <div ref={rootRef} data-page-transition="" className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
+    <div ref={rootRef} className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
 
       {/* Frame 1 — hero */}
       <section
@@ -157,18 +182,21 @@ export default function WeyraCaseStudy() {
         <img
           data-hero-img
           {...HERO_IMG_PROPS}
-          src="/weyra-hero.jpg"
-          alt="Weyra Brand Identity Sticker"
+          src={ASSETS.hero}
+          alt="Yimaj Heights lobby interior"
           className="absolute inset-0 w-full h-full object-cover object-[35%_30%] md:object-center z-0 will-change-transform"
         />
-        <div className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-t from-black/50 via-black/10 to-transparent" aria-hidden="true" />
+        <div className={CS_HERO_SCRIM} aria-hidden="true" />
 
         <div
           data-hero-meta
-          className="absolute inset-x-[var(--page-pad)] top-[22.3%] z-10 flex justify-between md:relative md:inset-x-auto md:top-auto md:grid md:grid-cols-12 md:max-lg:gap-x-[12px] lg:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
+          className="absolute inset-x-[var(--page-pad)] top-[22.3%] z-10 flex justify-between max-md:items-start md:relative md:inset-x-auto md:top-auto md:grid md:grid-cols-12 md:max-lg:gap-x-[12px] lg:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
         >
-          <span className="md:col-span-6">Brand Identity</span>
-          <span className="max-md:hidden md:col-start-7 md:col-span-3">Completed 2023</span>
+          <span className="md:col-span-6 inline-flex flex-col items-start gap-[4px]">
+            <span>Brand Identity</span>
+            <span>3D Visuals</span>
+          </span>
+          <span className="max-md:hidden md:col-start-7 md:col-span-3">Completed 2025</span>
           <span className="inline-flex items-center gap-[0.4em] md:col-start-10 md:col-span-3 md:justify-self-end">
             Scroll Down
             <motion.span
@@ -204,7 +232,7 @@ export default function WeyraCaseStudy() {
               mode="words"
               delay={0.25}
               stagger={0.05}
-              className="CaseHero !text-white ![font-family:var(--font-heading)] max-md:!text-[20px] sm:max-md:portrait:!text-[25px] md:!text-[clamp(24px,2.7vw,28px)] lg:!text-[clamp(24px,1.8vw,34px)]"
+              className={CS_HERO_PARA}
             >
               {HERO_TEXT}
             </MaskRevealText>
@@ -216,9 +244,9 @@ export default function WeyraCaseStudy() {
             active={ready}
             delay={0.4}
             stagger={0.1}
-            className="CaseH1 uppercase !leading-[1.1] -my-[0.125em]"
+            className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] md:max-w-[40vw] max-md:max-w-none max-w-full"
           >
-            Weyra
+            Yimaj
           </MaskRevealText>
         </div>
       </section>
@@ -231,38 +259,39 @@ export default function WeyraCaseStudy() {
           <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
             <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] items-end mb-[32px] md:mb-[48px] lg:mb-[72px]">
               <h2 className={`${CS_HEADING} lg:col-span-7`}>
-                An Olive Branch<br className="max-md:hidden" />{" "}Reimagined
+                Selling More Than<br className="max-md:hidden" />{" "}Square Metre
               </h2>
               <LineMaskText as="p" className={`${CS_PARA} md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
-                Weyra needed an identity that presented peacebuilding as something young people could actively shape, not just a response to conflict. I built a contemporary visual identity around the olive branch, giving the organization a clear, recognizable voice without relying on the familiar visual language of NGOs.
+                Most developments sell square footage and location. Yimaj Heights sold a way of life focusing on family, luxury, and community. The identity started with two ideas: aspiration and continuity. The star represents the ambition behind owning a home and building a better future. The bridge connects that ambition across generations: what families have built, what they are building now, and what they hope to leave behind.
               </LineMaskText>
             </div>
-            <Media
-              src="/weyra-stage.webm"
-              alt="Weyra Stage Presentation"
-              className="max-md:!aspect-[361/364] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw] w-full h-full object-cover rounded-lg md:rounded-[12px]"
+            <Video
+              src={ASSETS.logoAnimation}
+              label="Yimaj Heights logo animation"
+              ratio="aspect-[1472/581]"
+              className="max-md:!aspect-[361/364] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
             />
           </section>
 
           {/* Frame 3 */}
           <section
             data-header-bg="light"
-            className="w-full flex flex-col pt-0 pb-0 max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
+            className="w-full flex flex-col pt-0 pb-0 max-md:h-auto portrait:max-xl:h-auto landscape:md:max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
           >
-            <div className="grid grid-cols-[minmax(0,845fr)_minmax(0,607fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-2 portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-2 gap-[12px] md:gap-[16px] flex-1 min-h-0">
+            <div className="grid grid-cols-[minmax(0,845fr)_minmax(0,619fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-[auto_auto] portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-[auto_auto] gap-[12px] md:gap-[16px] portrait:max-xl:gap-[12px] flex-1 min-h-0">
               <Img
-                src={FRAME3_STORY_SRC}
-                alt="Olive Leaves + White Dove = Weyra"
+                src={ASSETS.logoConstruction}
+                alt="Aspiration plus Generational Bridge equals Yimaj Heights"
                 ratio="aspect-auto"
-                imgClassName="min-[600px]:portrait:max-xl:object-contain min-[600px]:portrait:max-xl:!transform-none"
-                className="bg-[#d9f5c8] xl:min-h-[31.7vw]"
+                parallax={false}
+                className="bg-[#4b95c0] self-start !aspect-auto [&>div]:!static [&>div]:!h-auto [&_img]:!static [&_img]:!h-auto [&_img]:!transform-none"
               />
-              <div className="flex items-center justify-center max-md:items-start">
+              <div className="flex items-center justify-center">
                 <Img
-                  src={FRAME3_PIN_SRC}
-                  alt="Weyra olive wreath pin on a green cap"
+                  src={ASSETS.logoPin}
+                  alt="Yimaj Heights star logo in brushed metal on a wood wall"
                   ratio="aspect-[546/600]"
-                  className="!w-[57.6%] !aspect-[546/600] max-md:!w-auto max-md:!h-[70%] portrait:max-xl:!w-auto portrait:max-xl:!h-[70%]"
+                  className="!w-[56%] !aspect-[546/600]"
                 />
               </div>
             </div>
@@ -272,35 +301,39 @@ export default function WeyraCaseStudy() {
           <section data-header-bg="light" className="w-full flex flex-col pt-[48px] lg:pt-[144px] pb-0 lg:pb-[16px]">
             <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_auto_auto] lg:flex-1 lg:min-h-0">
               <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-[48px]`}>
-                A Clear Voice<br className="max-md:hidden" />{" "}Everywhere
+                Precision Softened<br className="max-md:hidden" />{" "}By Warmth
               </h2>
 
-              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-start md:max-w-[290px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[12.5vw] md:mb-[24px] lg:mb-[64px] max-md:mb-[16px] md:!text-[clamp(14px,0.992vw,19px)] lg:!text-[clamp(15px,1.19vw,22px)]`}>
-                Acumin Variable Concept suits signage, social media, and editorial layouts. It is geometric, clear, and approachable.
+              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-start md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[12.5vw] md:mb-[24px] lg:mb-[64px] max-md:mb-[16px]`}>
+                Architectural precision sans serif meets timeless serif typography, creating a refined system that feels premium without feeling sterile.
               </LineMaskText>
 
-              <div className="lg:row-start-3 lg:col-start-1 lg:h-[462px] flex flex-col aspect-square lg:aspect-auto">
-                <Media
-                  src="/weyra-type-treatment.webm"
-                  alt="Beyond Conflict Typography Treatment"
-                  className="w-full h-full object-cover rounded-lg md:rounded-[12px]"
-                />
-              </div>
-              <div className="lg:row-start-3 lg:col-start-2 lg:h-[462px] flex flex-col aspect-square lg:aspect-auto">
+              <div className="lg:row-start-3 lg:col-start-1 lg:h-[32.08vw] flex flex-col">
                 <Img
-                  src="/weyra-type.jpg"
-                  alt="Acumin Variable Concept Specimen"
+                  src={ASSETS.typeSpecimen}
+                  alt="Switzer Variable and Snell Roundhand type specimen"
                   ratio="aspect-square"
                   parallax={false}
                   fade
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-3 lg:h-[462px] flex flex-col tablet-hide aspect-square lg:aspect-auto">
-                <Media
-                  src="/Weyra-iphone.webm"
-                  alt="Weyra Mobile App Mockup"
-                  className="w-full h-full object-cover rounded-lg md:rounded-[12px]"
+              <div className="lg:row-start-3 lg:col-start-2 lg:h-[32.08vw] flex flex-col">
+                <Img
+                  src={ASSETS.typeApplied}
+                  alt="Yimaj Heights welcome signage with serif script"
+                  ratio="aspect-square"
+                  parallax={false}
+                  fade
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="lg:row-start-3 lg:col-start-3 lg:h-[32.08vw] flex flex-col tablet-hide">
+                <Video
+                  src={ASSETS.socials}
+                  label="Yimaj Heights social media stories"
+                  ratio="aspect-square"
+                  className="bg-[#f0e6da] w-full h-full"
                 />
               </div>
             </div>
@@ -309,38 +342,38 @@ export default function WeyraCaseStudy() {
           {/* Frame 5 */}
           <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} pb-0 lg:pb-[16px]`}>
             <h2 className={`cs-f5-heading ${CS_HEADING} max-lg:mb-[48px] md:max-lg:mb-[64px] lg:mb-[72px]`}>
-              Familiarly<br className="max-md:hidden" />{" "}Ethiopian
+              Luxury Paired<br className="max-md:hidden" />{" "}With Belonging
             </h2>
             <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] gap-[12px] md:gap-[16px] lg:items-stretch lg:flex-1">
               <div className="lg:col-start-1 flex flex-col h-full max-md:order-2">
-                <div className="w-full max-md:aspect-[1205/1162] lg:h-[581px] overflow-hidden rounded-lg md:rounded-[12px] bg-[#e1efdc]">
-                  <Media
-                    src={FRAME5_COLOR_SRC}
-                    alt="Weyra colour palette"
-                    className="w-full h-full object-cover"
+                <div className="w-full max-md:aspect-[1205/1162] lg:h-[40.35vw] overflow-hidden rounded-lg md:rounded-[12px] bg-[#f2ede4]">
+                  <LazyImg
+                    src={ASSETS.color}
+                    alt="Yimaj Heights colour palette"
+                    className="w-full h-full object-contain object-left-top"
                   />
                 </div>
               </div>
               
-              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 h-full lg:h-[581px] max-md:contents">
+              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 h-full lg:h-[40.35vw] max-md:contents">
                 <Img
-                  src="/weyra-wristbands.jpg"
-                  alt="Weyra Branded Wristbands"
+                  src={ASSETS.colorCard}
+                  alt="Yimaj Heights colour card"
                   ratio="aspect-[357/345]"
-                  className="bg-[#0b1f14] lg:!aspect-[357/345] w-full tablet-hide max-md:order-3"
+                  className="bg-[#8a5a2b] lg:!aspect-[357/345] w-full tablet-hide max-md:order-3"
                 />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[290px] md:!text-[clamp(14px,0.992vw,19px)] mt-0 md:mt-[12px] lg:mt-auto max-md:order-1 max-md:mb-[16px]`}>
-                  Familiar Ethiopian colors bring warmth and youth to the palette, keeping the visual language grounded and true to its subject.
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-0 md:mt-[12px] lg:mt-auto max-md:order-1 max-md:mb-[16px]`}>
+                  Instead of following the cold, minimal language common in luxury real estate, Yimaj uses warm mineral tones to make the brand feel more human.
                 </LineMaskText>
               </div>
               
               <div className="lg:col-start-3 flex flex-col h-full max-md:order-4">
                 <Img
-                  src={FRAME5_PHOTO_SRC}
-                  alt="Weyra branded clothing"
-                  ratio="aspect-none"
+                  src={ASSETS.colorPoster}
+                  alt="Yimaj Heights colour poster"
+                  ratio="aspect-[1205/1162]"
                   parallax={false}
-                  className="bg-[#e1efdc] w-full lg:h-[581px] object-cover"
+                  className="bg-[#f0e6da] w-full lg:h-[40.35vw] object-cover"
                 />
               </div>
             </div>
@@ -349,58 +382,136 @@ export default function WeyraCaseStudy() {
           {/* Frame 6 */}
           <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
             <h2 className={`${CS_HEADING} mb-[32px] md:mb-[48px] lg:mb-[72px]`}>
-              One Identity<br className="max-md:hidden" />{" "}In Harmony
+              Bring It To Life With<br className="max-md:hidden" />{" "}Warmth &amp; Legacy
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] lg:flex-1 lg:min-h-0">
-              <Img src="/weyra-badge.jpg" alt="Weyra Event Lanyard" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
-              <Img src="/weyra-tote.jpg" alt="Weyra Branded Tote Bag" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
+              <Img src={ASSETS.keytag} alt="Yimaj Heights leather key tag" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
+              <Img src={ASSETS.businessCard} alt="Yimaj Heights embossed business card" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
             </div>
           </section>
 
         </div>
 
+        {/* Statement frame: the result, set as typography */}
+        <section data-header-bg="light" className={`w-full flex flex-col justify-between gap-[48px] ${CS_FRAME_PT} pb-[16px] lg:min-h-[100dvh]`}>
+          <p className="[font-family:var(--font-display)] font-medium uppercase text-[38vw] md:text-[26vw] leading-[0.8] tracking-[-0.04em] m-0">
+            62M
+          </p>
+          <p className={`${CS_PARA} max-w-[420px] lg:self-end`}>
+            In sales before a single brick was laid.
+          </p>
+        </section>
+
         {/* Frame 7 */}
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
-            src="/weyra-banner.jpg"
-            alt="Voices That Build Outdoor Banners"
-            ratio="aspect-[1472/942]"
-            className="max-md:!aspect-[4/3] lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            src={ASSETS.brochure}
+            alt="Woman reading the Yimaj Heights brochure"
+            ratio="aspect-[1472/867]"
+            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[65%_50%]" />
         </section>
 
         {/* Frame 8 */}
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
-          <Img src="/weyra-magazine.jpg" alt="Empowering Youth For Peace Report" ratio="aspect-[722/942]" />
-          <Img src="/weyra-profile.jpg" alt="Weyra Social Media Layout" ratio="aspect-[722/942]" />
+          <Img src={ASSETS.wayfinding} alt="Yimaj Heights wayfinding signs" ratio="aspect-[726/867]" />
+          <Img src={ASSETS.iphone} alt="Yimaj Heights 3D logo on a phone" ratio="aspect-[726/867]" />
         </section>
 
         {/* Frame 9 */}
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} md:landscape:h-[100dvh]`}>
-          <div data-reveal className="relative w-full max-md:aspect-square md:landscape:h-full overflow-hidden bg-[#d9f5c8] rounded-lg md:rounded-[12px]">
-            <LazyImg
-              src="/weyra-phones.jpg"
-              alt="Weyra Mobile Stories"
-              className="block w-full h-auto max-md:absolute max-md:inset-0 max-md:h-full max-md:object-contain max-md:scale-[1.35] md:landscape:h-full md:landscape:object-cover will-change-transform"
-            />
-          </div>
+        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
+          <Img
+            src={ASSETS.billboard}
+            alt="Where Luxury Meets Community billboard"
+            ratio="aspect-[1472/867]"
+            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
         {/* Frame 10 */}
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[74.1vh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
-          <Img src="/weyra-poster.jpg" alt="Youth holding Weyra Poster" ratio="aspect-[722/688]" />
-          <Img src="/weyra-board.jpg" alt="Branded Basketball Backboard" ratio="aspect-[722/688]" />
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+          <Img src={ASSETS.folder} alt="Yimaj Heights sales folder" ratio="aspect-[726/867]" />
+          <Img src={ASSETS.envelope} alt="Yimaj Heights envelope on marble" ratio="aspect-[726/867]" className="bg-[#e8e1d8]" />
         </section>
 
         {/* Frame 11 */}
-        <section data-header-bg="dark" className="w-full">
+        <section data-header-bg="light" className={`sticky top-0 z-0 w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
-            src="/weyra-flags.jpg"
-            alt="Weyra Outdoor Event Flags"
-            ratio="aspect-[1472/962]"
-            className="max-md:!aspect-square lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
+            src={ASSETS.presentation}
+            alt="Yimaj Heights investor presentation on a monitor"
+            ratio="aspect-[1476/792]"
+            parallax={false}
+            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        <NextProject current="weyra" />
+        {/* Frames 12 to 18 scroll over the pinned Frame 11 */}
+        <div className="relative z-10 w-full bg-[var(--bg-light)] flex flex-col gap-[12px] md:gap-[16px]">
+
+        {/* Frame 12 */}
+        <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} ${FRAME_PB} lg:h-[100dvh]`}>
+          <h2 className={`${CS_HEADING} mb-[32px] md:mb-[48px] lg:mb-[72px]`}>
+            62 Million In Sale<br className="max-md:hidden" />{" "}Pre-Construction
+          </h2>
+          <Img
+            src={ASSETS.living}
+            alt="Yimaj Heights living room render"
+            ratio="aspect-[1476/867]"
+            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+        </section>
+
+        {/* Frame 13 */}
+        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
+          <Img
+            src={ASSETS.exterior}
+            alt="Yimaj Heights towers exterior render"
+            ratio="aspect-[1472/867]"
+            className="max-md:!aspect-[3/2] lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+        </section>
+
+        {/* Frame 14 */}
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+          <Img src={ASSETS.bedroom} alt="Yimaj Heights bedroom render" ratio="aspect-[726/867]" />
+          <Img src={ASSETS.kitchen} alt="Yimaj Heights kitchen and dining render" ratio="aspect-[726/867]" />
+        </section>
+
+        {/* Frame 15 */}
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
+          <Img
+            src={ASSETS.sitePlan}
+            alt="Yimaj Heights site plan from above"
+            ratio="aspect-[1472/867]"
+            parallax={false}
+            imgClassName="!object-contain"
+            className="bg-white lg:flex-1 lg:min-h-0"
+          />
+        </section>
+
+        {/* Frame 16 */}
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+          <Img src={ASSETS.courtyard} alt="Yimaj Heights courtyard and amenity block" ratio="aspect-[726/867]" />
+          <Img src={ASSETS.football} alt="Yimaj Heights rooftop football court from above" ratio="aspect-[726/867]" />
+        </section>
+
+        {/* Frame 17 */}
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
+          <Img
+            src={ASSETS.pool}
+            alt="Yimaj Heights indoor swimming pool"
+            ratio="aspect-[1476/867]"
+            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+        </section>
+
+        {/* Frame 18 */}
+        <section data-header-bg="dark" className="w-full">
+          <Img
+            src={ASSETS.floorplan}
+            alt="Yimaj Heights isometric apartment floor plan"
+            ratio="aspect-[1476/798]"
+            className="max-md:!aspect-[3/2] lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
+        </section>
+
+        {/* Closing frame: preview of the next project */}
+        <NextProject current="yimaj" />
+
+        </div>
 
       </main>
     </div>

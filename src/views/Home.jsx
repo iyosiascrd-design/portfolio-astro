@@ -706,6 +706,9 @@ export default function Home() {
     }, [lenisRef])
 
     const [activeIndex, setActiveIndex] = useState(0)
+    // Hover highlight for the accordion rows (tablet/mobile widths with a mouse or trackpad).
+    // Touch input is ignored so taps still just toggle the row.
+    const [hoveredRow, setHoveredRow] = useState(null)
     const [openIndexes, setOpenIndexes] = useState([0])
     const [activeExpertise, setActiveExpertise] = useState(null)
 
@@ -1001,7 +1004,7 @@ export default function Home() {
                                 active={pageReady}
                                 delay={0.3}
                                 stagger={0.06}
-                                className="Body rwd-pretty sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-[var(--text-dark-muted)] max-w-[440px] sm:max-md:portrait:max-w-[560px] sm:max-md:portrait:self-start lg:max-w-none m-0 p-0 text-left self-end"
+                                className="svc-size Body rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] max-w-[440px] sm:max-md:portrait:max-w-[560px] sm:max-md:portrait:self-start lg:max-w-none m-0 p-0 text-left self-end"
                             >
                                 {"I close the gap between how good your\nbusiness is and how it looks."}
                             </MaskRevealText>
@@ -1076,11 +1079,11 @@ export default function Home() {
             <SunriseTransition anchorRef={transitionRef} onHeaderTone={setHeaderLight}>
                 <section
                     id="services"
-                    className="relative flex flex-col justify-between w-full lg:min-h-screen pt-[48px] lg:pt-[144px] pb-[48px] md:pb-[64px] m-0 bg-transparent"
+                    className="relative flex flex-col justify-between w-full lg:min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
                 >
                     <div className="w-full h-full px-[var(--page-pad)] flex flex-col flex-1 m-0">
-                        <div className="flex flex-col items-start gap-[20px] md:gap-[24px] w-full mb-[40px] md:mb-[56px] lg:flex-row lg:justify-between lg:items-start lg:gap-0 lg:mb-[80px] m-0">
-                            <MaskRevealText as="h2" mode="words" className="H1 text-white m-0 uppercase">
+                        <div className="flex flex-col items-start gap-[20px] w-full mb-[40px] md:mb-[56px] md:flex-row md:justify-between md:items-start md:gap-[32px] lg:mb-[clamp(48px,8svh,80px)] m-0">
+                            <MaskRevealText as="h2" mode="words" className="cap-align H1 md:shrink-0 md:max-lg:!text-[clamp(56px,8vw,96px)] text-white m-0 uppercase">
                                 Services
                             </MaskRevealText>
 
@@ -1089,14 +1092,14 @@ export default function Home() {
                                 mode="words"
                                 stagger={0.02}
                                 delay={0.1}
-                                className="Body rwd-pretty sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] w-full max-w-[557px] lg:w-[557px] !text-[var(--text-dark-muted)] m-0"
+                                className="cap-align svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] w-full max-w-[500px] md:w-auto md:flex-none md:ml-auto md:self-end md:min-w-0 !text-[var(--text-dark-muted)] m-0"
                             >
                                 Good brands don't happen because everything looks nice. They happen when the strategy, identity and experience all point in the same direction. I work across four disciplines to make that happen.
                             </MaskRevealText>
                         </div>
 
                         <div className="flex flex-col gap-[32px] w-full items-stretch lg:flex-row lg:items-start m-0 mt-auto">
-                            <div className="flex-1 flex flex-col w-full lg:pr-[32px] m-0">
+                            <div className="svc-list flex-1 min-w-0 flex flex-col w-full lg:pr-[32px] m-0">
                                 <motion.ul
                                     variants={servicesListContainerVariants}
                                     initial="hidden"
@@ -1108,6 +1111,7 @@ export default function Home() {
                                         const isActive = vp.isDesktop
                                             ? activeIndex === index
                                             : openIndexes.includes(index)
+                                        const isHighlighted = isActive || (!vp.isDesktop && hoveredRow === index)
 
                                         return (
                                             <motion.li
@@ -1131,46 +1135,46 @@ export default function Home() {
                                                         }
                                                     }}
                                                     onMouseEnter={vp.isDesktop ? () => selectService(index) : undefined}
+                                                    onPointerEnter={
+                                                        vp.isDesktop
+                                                            ? undefined
+                                                            : (e) => {
+                                                                  if (e.pointerType !== "touch") setHoveredRow(index)
+                                                              }
+                                                    }
+                                                    onPointerLeave={vp.isDesktop ? undefined : () => setHoveredRow(null)}
                                                     onClick={() => handleRowPress(index)}
-                                                    whileHover={vp.isDesktop ? { y: -3 } : undefined}
+                                                    whileHover={{ y: -3 }}
                                                     transition={{ duration: 0.25, ease: taylorEase }}
-                                                    className="svc-row grid grid-cols-[1fr_auto] items-center gap-[16px] lg:grid-cols-8 lg:gap-[24px] cursor-pointer group w-full py-[20px] md:py-[24px] lg:py-[28px] m-0 select-none"
+                                                    className="svc-row cursor-pointer group w-full m-0 select-none"
                                                 >
-                                                    <div className="svc-title-cell col-span-1 lg:col-span-5 flex items-start gap-[12px] md:gap-[20px] m-0 overflow-hidden">
-                                                        <motion.span
-                                                            animate={{
-                                                                color: isActive ? "#ffffff" : SERVICE_INACTIVE_GREY,
-                                                                y: 0,
-                                                            }}
-                                                            transition={{ duration: 0.25, ease: taylorEase }}
-                                                            className="svc-num Caption font-semibold transition-colors select-none pt-[3px]"
-                                                        >
-                                                            ({service.id})
-                                                        </motion.span>
+                                                    <motion.span
+                                                        animate={{ color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 }}
+                                                        transition={{ duration: 0.25, ease: taylorEase }}
+                                                        className="svc-num Caption font-semibold transition-colors select-none"
+                                                    >
+                                                        ({service.id})
+                                                    </motion.span>
 
-                                                        <div className="relative overflow-hidden">
-                                                            <motion.span
-                                                                animate={{
-                                                                    color: isActive ? "#ffffff" : SERVICE_INACTIVE_GREY,
-                                                                    y: 0,
-                                                                }}
-                                                                transition={{ duration: 0.25, ease: taylorEase }}
-                                                                className="H2 rwd-balance block tracking-[-0.02em] group-hover:text-white uppercase lg:!text-[44px] lg:!leading-[1.05]"
-                                                            >
-                                                                {service.title}
-                                                            </motion.span>
-                                                        </div>
+                                                    <div className="svc-title relative overflow-hidden">
+                                                        <motion.span
+                                                            animate={{ color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 }}
+                                                            transition={{ duration: 0.25, ease: taylorEase }}
+                                                            className="svc-title-text H2 block tracking-[-0.02em] group-hover:text-white uppercase"
+                                                        >
+                                                            {service.title}
+                                                        </motion.span>
                                                     </div>
 
-                                                    <div className="svc-keywords-cell hidden lg:block lg:col-span-3 m-0 overflow-hidden">
+                                                    <div className="svc-keywords-cell min-w-0 overflow-hidden">
                                                         <motion.div
                                                             animate={{
-                                                                color: isActive ? "#ffffff" : SERVICE_INACTIVE_GREY,
-                                                                opacity: isActive ? 1 : 0.45,
-                                                                y: isActive ? 0 : 4,
+                                                                color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY,
+                                                                opacity: isHighlighted ? 1 : 0.45,
+                                                                y: isHighlighted ? 0 : 4,
                                                             }}
                                                             transition={{ duration: 0.25, ease: taylorEase }}
-                                                            className="Body rwd-pretty sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] whitespace-pre-line"
+                                                            className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] whitespace-pre-line"
                                                         >
                                                             {service.keywords}
                                                         </motion.div>
@@ -1178,8 +1182,8 @@ export default function Home() {
 
                                                     <span
                                                         aria-hidden="true"
-                                                        className={`lg:hidden relative block w-[14px] h-[14px] shrink-0 transition-opacity duration-300 ${
-                                                            isActive ? "opacity-100" : "opacity-50"
+                                                        className={`svc-icon relative block w-[14px] h-[14px] shrink-0 transition-opacity duration-300 ${
+                                                            isHighlighted ? "opacity-100" : "opacity-50"
                                                         }`}
                                                     >
                                                         <span className="absolute left-0 top-[6.25px] w-full h-[1.5px] bg-white" />
@@ -1193,7 +1197,7 @@ export default function Home() {
 
                                                 {!vp.isDesktop && (
                                                     <AccordionPanel active={isActive}>
-                                                            <div className="svc-panel grid grid-cols-1 md:grid-cols-2 gap-[20px] md:gap-[var(--cs-gap)] pb-[28px] md:pb-[32px]">
+                                                            <div className="svc-panel">
                                                                 <ServiceAccordionImage
                                                                     src={service.image}
                                                                     alt={service.title}
@@ -1204,19 +1208,14 @@ export default function Home() {
                                                                         opacity: isActive ? 1 : 0,
                                                                         transition: `opacity ${isActive ? ACCORDION_OPEN.fadeIn : ACCORDION_CLOSE.fadeOut}s ease ${isActive ? ACCORDION_OPEN.fadeInDelay : 0}s`,
                                                                     }}
-                                                                    className="flex flex-col justify-between"
+                                                                    className="svc-panel-text"
                                                                 >
-                                                                    <p className="Body rwd-pretty sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-[var(--text-dark-muted)] mb-0">
-                                                                        {flat(service.keywords)}
+                                                                    <h4 className="Body rwd-balance !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-white m-0 font-semibold">
+                                                                        {flat(service.captionTitle)}
+                                                                    </h4>
+                                                                    <p className="Body !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] rwd-pretty m-0">
+                                                                        {service.captionText}
                                                                     </p>
-                                                                    <div className="mt-[40px] md:mt-0">
-                                                                        <h4 className="Body rwd-balance sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-white mb-4 font-semibold">
-                                                                            {flat(service.captionTitle)}
-                                                                        </h4>
-                                                                        <p className="Body sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-[var(--text-dark-muted)] rwd-pretty m-0">
-                                                                            {service.captionText}
-                                                                        </p>
-                                                                    </div>
                                                                 </div>
                                                             </div>
                                                     </AccordionPanel>
@@ -1233,7 +1232,7 @@ export default function Home() {
                             </div>
 
                             <div className="hidden lg:flex w-[332px] flex-shrink-0 flex-col justify-between m-0">
-                                <div className="relative w-full h-[230px] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]">
+                                <div className="relative w-full h-[clamp(150px,25svh,230px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]">
                                     <ServiceImageStage
                                         images={SERVICE_IMAGES}
                                         index={activeIndex}
@@ -1251,10 +1250,10 @@ export default function Home() {
                                             transition={{ duration: 0.4, ease: "easeOut" }}
                                             className="flex flex-col w-full m-0"
                                         >
-                                            <h4 className="Body rwd-balance sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-white mb-6 whitespace-pre-line !font-semibold">
+                                            <h4 className="Body rwd-balance !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-white mb-6 whitespace-pre-line !font-semibold">
                                                 {SERVICES_DATA[activeIndex].captionTitle}
                                             </h4>
-                                            <p className="Body sm:max-md:portrait:!text-[25px] sm:max-md:portrait:!leading-[1.3] !text-[var(--text-dark-muted)] rwd-pretty m-0">
+                                            <p className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] m-0">
                                                 {SERVICES_DATA[activeIndex].captionText}
                                             </p>
                                         </motion.div>
@@ -1381,11 +1380,11 @@ export default function Home() {
                                                         className="flex flex-col justify-between h-full pr-[120px] md:pr-0"
                                                         style={vp.isDesktop ? { paddingRight: EXPERTISE_SHIFT } : undefined}
                                                     >
-                                                        <p data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H6 ![font-family:var(--font-body)] rwd-balance whitespace-pre-line m-0 lg:transition-colors lg:duration-500">
+                                                        <p data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] rwd-balance whitespace-pre-line m-0 lg:transition-colors lg:duration-500">
                                                             {glueLastWords(item.description)}
                                                         </p>
 
-                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="H6 ![font-family:var(--font-body)] flex flex-col m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px]">
+                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] flex flex-col m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px]">
                                                             {item.tools.map((tool, i) => (
                                                                 <li key={tool}>
                                                                     {tool}

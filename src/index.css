@@ -81,12 +81,13 @@
   /* Color Tokens — Dark Theme Text */
   --text-dark-primary: #ffffff;
   --text-dark-secondary: #cccccc;
-  --text-dark-muted: #666666;
+  --text-dark-muted: #8f8f8f; /* ~6:1 on --bg-dark (was #666, ~3.5:1) */
   --text-dark-dim: #cccccc;
 
   /* Color Tokens — Light Theme Text */
   --text-light-primary: #000000;
   --text-light-secondary: #71717b;
+  --text-light-body: var(--text-light-primary); /* case study paragraphs */
   --text-light-disabled: #cccccc;
 
   /* Color Tokens — Borders */
@@ -442,6 +443,25 @@ img {
 
   .rwd-balance {
     text-wrap: balance;
+  }
+}
+
+/* ============================================================
+   CAP ALIGN
+   Trims the extra space above the first line's capitals and below the
+   last baseline, so two text blocks in a row meet on their letters
+   (cap-top / baseline) instead of on their line boxes.
+   Used for the Services heading + intro paragraph.
+   ============================================================ */
+.cap-align {
+  text-box: trim-both cap alphabetic;
+}
+
+/* Fallback for browsers without text-box-trim: assumes the capitals sit
+   centred in the line box (within about 1-2px for most fonts). */
+@supports not (text-box: trim-both cap alphabetic) {
+  .cap-align {
+    margin-block: calc((1lh - 1cap) / -2);
   }
 }
 
