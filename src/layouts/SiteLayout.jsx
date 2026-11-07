@@ -527,10 +527,10 @@ function SiteLayoutInternal() {
 
                         <div className="relative z-10">
                             <a href="mailto:info@iyosiasdesign.com" className="group block no-underline cursor-pointer">
-                                <FitText as="h2" wrapperClassName="mt-[var(--fm-gap)] md:mt-[48px]" className="font-[family-name:var(--font-heading)] font-medium tracking-[-0.04em] leading-[0.8] select-none text-white">
-                                    <span className="relative block overflow-hidden py-[0.06em]">
+                                <FitText as="h2" wrapperClassName="mt-[var(--fm-gap)] md:mt-[48px]" className="font-[family-name:var(--font-body)] font-medium tracking-[-0.04em] leading-[1] select-none text-white">
+                                    <span className="relative block overflow-hidden py-[0.14em] -my-[0.1em]">
                                         <span className="block transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-[125%] will-change-transform">{headlineWords}</span>
-                                        <span aria-hidden="true" className="absolute inset-0 py-[0.06em] block translate-y-[125%] transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-0 will-change-transform">{headlineWords}</span>
+                                        <span aria-hidden="true" className="absolute inset-0 py-[0.14em] block translate-y-[125%] transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-0 will-change-transform">{headlineWords}</span>
                                     </span>
                                 </FitText>
                             </a>
