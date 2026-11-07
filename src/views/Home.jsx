@@ -1373,7 +1373,7 @@ export default function Home() {
                                                     transition={{ duration: 0.45, ease: taylorEase }}
                                                     className="grid grid-cols-1 gap-[16px] md:grid-cols-2 md:gap-[24px] lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px] pt-[24px] pb-[48px] md:pt-[28px] md:pb-[56px] will-change-transform relative items-start"
                                                 >
-                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H3 expertise-title rwd-balance m-0 lg:transition-colors lg:duration-500">
+                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H3 expertise-title rwd-balance m-0 lg:transition-colors lg:duration-500 ![font-family:'BDO_Grotesk',sans-serif]">
                                                         {item.title}
                                                     </h3>
 
