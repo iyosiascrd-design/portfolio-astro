@@ -3,47 +3,48 @@
 import Base from "../layouts/Base.astro";
 import Root from "../Root.jsx";
 
-const DEFAULT_DESCRIPTION =
-  "Brand identity designer and creative director. I help ambitious companies build brands and websites that match what they have built.";
-
-// Per-page titles and descriptions. All pages share /og-image.png for now;
-// add `image: "/og/origen.png"` to any entry to give it its own preview.
-const PAGES = {
-  "": {
-    title: "Iyosias | Brand and Web Design",
-    description: DEFAULT_DESCRIPTION,
-  },
-  work: {
-    title: "Work | Iyosias",
-    description: "Selected brand identity and web design projects by Iyosias.",
-  },
-  "work/weyra": {
-    title: "Weyra | Case Study by Iyosias",
-    description: "Brand identity and web design case study for Weyra.",
-  },
-  "work/origen": {
-    title: "Origen | Case Study by Iyosias",
-    description: "Brand identity and web design case study for Origen.",
-  },
-  "work/yimaj": {
-    title: "Yimaj | Case Study by Iyosias",
-    description: "Brand identity and web design case study for Yimaj.",
-  },
-  "work/zhongshan": {
-    title: "Zhongshan | Case Study by Iyosias",
-    description: "Brand identity and web design case study for Zhongshan.",
-  },
-};
-
+// NOTE: getStaticPaths is hoisted by Astro, so everything it uses
+// must be defined INSIDE it (not in the surrounding frontmatter).
 export function getStaticPaths() {
-  return Object.keys(PAGES).map((s) => ({
-    params: { slug: s || undefined },
-    props: { slug: s },
+  const DEFAULT_DESCRIPTION =
+    "Brand identity designer and creative director. I help ambitious companies build brands and websites that match what they have built.";
+
+  // All pages share /og-image.png for now; add `image: "/og/origen.png"`
+  // to any entry to give it its own preview image.
+  const PAGES = {
+    "": {
+      title: "Iyosias | Brand and Web Design",
+      description: DEFAULT_DESCRIPTION,
+    },
+    work: {
+      title: "Work | Iyosias",
+      description: "Selected brand identity and web design projects by Iyosias.",
+    },
+    "work/weyra": {
+      title: "Weyra | Case Study by Iyosias",
+      description: "Brand identity and web design case study for Weyra.",
+    },
+    "work/origen": {
+      title: "Origen | Case Study by Iyosias",
+      description: "Brand identity and web design case study for Origen.",
+    },
+    "work/yimaj": {
+      title: "Yimaj | Case Study by Iyosias",
+      description: "Brand identity and web design case study for Yimaj.",
+    },
+    "work/zhongshan": {
+      title: "Zhongshan | Case Study by Iyosias",
+      description: "Brand identity and web design case study for Zhongshan.",
+    },
+  };
+
+  return Object.entries(PAGES).map(([slug, meta]) => ({
+    params: { slug: slug || undefined },
+    props: { meta },
   }));
 }
 
-const { slug } = Astro.props;
-const meta = PAGES[slug] ?? PAGES[""];
+const { meta } = Astro.props;
 ---
 
 <Base title={meta.title} description={meta.description} image={meta.image}>
