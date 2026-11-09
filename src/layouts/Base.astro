@@ -1,12 +1,41 @@
 ---
 import "../index.css"
+
+interface Props {
+  title?: string
+  description?: string
+  image?: string
+}
+
+const {
+  title = "Iyosias",
+  description = "Design portfolio and case studies by Iyosias.",
+  image = "/og-image.png",
+} = Astro.props
+
+// Hero images are only preloaded for speed (not used for the share preview)
+const HEROES: Record<string, string> = {
+  "/work/weyra": "/weyra-hero.jpg",
+  "/work/yimaj": "/yimaj-hero.jpg",
+  "/work/origen": "/origen-hero.jpg",
+  "/work/zhongshan": "/zhongshan-house.jpg",
+}
+
+const path = Astro.url.pathname.replace(/\/+$/, "") || "/"
+const hero = HEROES[path]
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site)
+const ogImage = new URL(image, Astro.site)
 ---
+
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Iyosias</title>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalURL} />
 
     <!-- Favicons -->
     <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
@@ -14,24 +43,24 @@ import "../index.css"
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
-    <script is:inline>
-      (function () {
-        var H = {
-          "/work/weyra": "/weyra-hero.jpg",
-          "/work/yimaj": "/yimaj-hero.jpg",
-          "/work/origen": "/origen-hero.jpg",
-          "/work/zhongshan": "/zhongshan-house.jpg",
-        };
-        var s = H[location.pathname.replace(/\/+$/, "")];
-        if (!s) return;
-        var l = document.createElement("link");
-        l.rel = "preload";
-        l.as = "image";
-        l.href = s;
-        l.setAttribute("fetchpriority", "high");
-        document.head.appendChild(l);
-      })();
-    </script>
+    <!-- Open Graph (Telegram, WhatsApp, Facebook, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Iyosias" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content={title} />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Preload hero image on work pages -->
+    {hero && <link rel="preload" as="image" href={hero} fetchpriority="high" />}
   </head>
   <body>
     <slot />
