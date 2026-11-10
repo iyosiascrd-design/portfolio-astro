@@ -921,7 +921,7 @@ export default function Work() {
         </ul>
       </div>
 
-      {/* Mobile: flipbook. Full-bleed (no side padding) so the tucked cards reach the screen edges. */}
+      {/* Mobile: flipbook. The component applies var(--page-pad) itself, so the tucked side cards stop at the page margin on both sides. */}
       {isPhone && (
         <div className="pt-2">
           <FlipbookCarousel ref={flipRef} projects={FLIP_PROJECTS} onSelect={handleFlipSelect} />

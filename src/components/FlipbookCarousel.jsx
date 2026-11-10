@@ -19,7 +19,7 @@ const MIN_CARD_PX = 160
 const SIDE_SCALE = 0.89
 
 const TUCK_ROTATE = 30
-const FAN_ROTATE = 35
+const FAN_ROTATE = 32
 
 // Decreased from 4.5 to 2.2 for much stronger 3D keystoning
 const PERSPECTIVE_PER_W =2.2 
@@ -127,11 +127,20 @@ const bandOf = (v) => {
     return a < 0.5 ? 0 : a < 1.35 ? 1 : 2
 }
 
+// The wrapper carries the page's side padding (var(--page-pad), falling back to EDGE_MARGIN).
+// Read it back in px so the tucked side cards end exactly at the page margin on both sides.
+const readPagePad = (el) => {
+    if (!el || typeof window === "undefined") return EDGE_MARGIN
+    const pad = parseFloat(window.getComputedStyle(el).paddingLeft)
+    return Number.isFinite(pad) ? pad : EDGE_MARGIN
+}
+
 const computeCardW = (el) => {
     const vw = el ? el.clientWidth : typeof window !== "undefined" ? window.innerWidth : 390
     const vh = typeof window !== "undefined" ? window.innerHeight : 800
+    const pad = readPagePad(el)
 
-    const maxByWidth = Math.min((vw * CARD_VW_MAX) / 100, (vw / 2 - EDGE_MARGIN) / SIDE_EXTENT)
+    const maxByWidth = Math.min((vw * CARD_VW_MAX) / 100, (vw / 2 - pad) / SIDE_EXTENT)
     const maxByViewportH = (vh * MAX_VIEWPORT_H) / CARD_RATIO
 
     return Math.max(MIN_CARD_PX, Math.min(maxByWidth, maxByViewportH))
@@ -559,7 +568,11 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
             role="region"
             aria-roledescription="carousel"
             aria-label="Projects"
-            style={{ touchAction: "pan-y", height: wrapHeight }}
+            style={{
+                touchAction: "pan-y",
+                height: wrapHeight,
+                paddingInline: `var(--page-pad, ${EDGE_MARGIN}px)`,
+            }}
             className="relative w-full overflow-hidden"
         >
             <div
