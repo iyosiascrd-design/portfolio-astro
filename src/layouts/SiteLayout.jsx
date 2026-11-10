@@ -527,10 +527,12 @@ function SiteLayoutInternal() {
 
                         <div className="relative z-10">
                             <a href="mailto:info@iyosiasdesign.com" className="group block no-underline cursor-pointer">
-                                <FitText as="h2" wrapperClassName="mt-[var(--fm-gap)] md:mt-[48px]" className="font-[family-name:var(--font-heading)] font-medium tracking-[-0.04em] leading-[0.8] select-none text-white">
-                                    <span className="relative block overflow-hidden py-[0.06em]">
-                                        <span className="block transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-[125%] will-change-transform">{headlineWords}</span>
-                                        <span aria-hidden="true" className="absolute inset-0 py-[0.06em] block translate-y-[125%] transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-0 will-change-transform">{headlineWords}</span>
+                                <FitText as="h2" wrapperClassName="mt-[var(--fm-gap)] md:mt-[48px]" className="font-[family-name:BDO_Grotesk,var(--font-heading),sans-serif] font-medium tracking-[-0.04em] leading-[0.8] select-none text-white">
+                                    {/* Mask has generous vertical padding (cancelled by negative margin so layout is unchanged)
+                                        so glyph ascenders/descenders aren't cut off by overflow-hidden at line-height 0.8. */}
+                                    <span className="relative block overflow-hidden py-[0.2em] -my-[0.2em]">
+                                        <span className="block transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-[160%] will-change-transform">{headlineWords}</span>
+                                        <span aria-hidden="true" className="absolute inset-x-0 top-[0.2em] block translate-y-[160%] transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-0 will-change-transform">{headlineWords}</span>
                                     </span>
                                 </FitText>
                             </a>
