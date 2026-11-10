@@ -2,12 +2,14 @@
 // src/pages/[...slug].astro
 import Base from "../layouts/Base.astro";
 import Root from "../Root.jsx";
+import SeoContent from "../components/SeoContent.astro";
+import { PAGE_CONTENT, PROJECT_LINKS } from "../data/pageContent.ts";
 
 // NOTE: getStaticPaths is hoisted by Astro, so everything it uses
 // must be defined INSIDE it (not in the surrounding frontmatter).
 export function getStaticPaths() {
   const DEFAULT_DESCRIPTION =
-    "Brand identity designer and creative director in Addis Ababa, Ethiopia. I help ambitious businesses build distinctive brands through strategy, visual identity, web design and 3D visualization.";
+    "Brand identity designer and creative director in Addis Ababa, Ethiopia. Strategy, visual identity, web design and 3D visualization for ambitious businesses.";
 
   const PAGES = {
     "": {
@@ -21,25 +23,25 @@ export function getStaticPaths() {
     "work/weyra": {
       title: "Weyra — Brand Identity for Youth-Led Peacebuilding | Iyosias",
       description: "A visual identity for Weyra, built around the role of Ethiopian youth in dialogue, peacebuilding and a more hopeful public narrative.",
-      image: "/weyra-hero.jpg",
+      hero: "/weyra-hero.jpg",
       type: "article",
     },
     "work/origen": {
       title: "Origen — Ethiopian Coffee Brand Identity | Iyosias",
       description: "A distinctive identity for an Ethiopian specialty coffee roaster bringing the story and origins of coffee to the Spanish market.",
-      image: "/origen-hero.jpg",
+      hero: "/origen-hero.jpg",
       type: "article",
     },
     "work/yimaj": {
       title: "Yimaj Heights — Real Estate Branding & 3D Visuals | Iyosias",
       description: "Brand identity and architectural 3D visualization for Yimaj Heights, helping bring a premium residential development to life before construction.",
-      image: "/yimaj-hero.jpg",
+      hero: "/yimaj-hero.jpg",
       type: "article",
     },
     "work/zhongshan": {
       title: "Zhongshan — China–Ethiopia Sourcing Brand | Iyosias",
       description: "A premium identity for a sourcing company connecting Ethiopian developers with finishing materials from China.",
-      image: "/zhongshan-house.jpg",
+      hero: "/zhongshan-house.jpg",
       type: "article",
     },
   };
@@ -51,8 +53,68 @@ export function getStaticPaths() {
 }
 
 const { meta } = Astro.props;
+
+const key = Astro.params.slug ?? "";
+const content = PAGE_CONTENT[key];
+const pagePath = key ? `/${key}` : "/";
+const isCaseStudy = key.startsWith("work/");
+
+// abs() is for files (images). pageUrl() is for pages and always ends with a
+// trailing slash, so it matches the canonical URL set in Base.astro.
+const abs = (path: string) => new URL(path, Astro.site).href;
+const pageUrl = (path: string) =>
+  new URL(path === "/" ? "/" : path.replace(/\/?$/, "/"), Astro.site).href;
+
+// Structured data (JSON-LD). The site-wide Person data is added by Base.astro.
+const jsonLd: Record<string, unknown>[] = [];
+
+if (isCaseStudy) {
+  jsonLd.push({
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: content.h1,
+    headline: meta.title.replace(/ \| Iyosias$/, ""),
+    description: meta.description,
+    url: pageUrl(pagePath),
+    image: abs("/og-image.png"),
+    dateCreated: content.year,
+    keywords: content.services?.join(", "),
+    inLanguage: "en",
+    author: { "@type": "Person", name: "Iyosias", url: Astro.site?.href },
+  });
+}
+
+if (key) {
+  const crumbs = [{ name: "Home", path: "/" }, { name: "Work", path: "/work" }];
+  if (isCaseStudy) crumbs.push({ name: content.h1, path: pagePath });
+  jsonLd.push({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: crumbs.map((c, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: c.name,
+      item: pageUrl(c.path),
+    })),
+  });
+}
+
+if (key === "work") {
+  jsonLd.push({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Selected work",
+    itemListElement: PROJECT_LINKS.map((p, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: p.label,
+      url: pageUrl(p.href),
+    })),
+  });
+}
 ---
 
-<Base title={meta.title} description={meta.description} image={meta.image} type={meta.type}>
-  <Root initialPath={Astro.url.pathname} client:load />
+<Base title={meta.title} description={meta.description} hero={meta.hero} type={meta.type} jsonLd={jsonLd}>
+  <Root initialPath={Astro.url.pathname} client:only="react" />
+  <SeoContent content={content} currentPath={pagePath} />
 </Base>

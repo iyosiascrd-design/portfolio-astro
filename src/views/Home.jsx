@@ -297,6 +297,10 @@ const ExpertiseCursorImage = ({ x, y, hoveredIndex, ratios }) => {
 const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
     const slideRef = useRef(null)
     const [reveal, setReveal] = useState(null)
+    // The arrow nudge only runs while this slide is hovered. Before, every slide ran an
+    // infinite framer-motion loop all the time (even while invisible), which competed
+    // with the ticker for the main thread on every frame.
+    const [hovered, setHovered] = useState(false)
 
     useEffect(() => {
         if (!ready || reveal) return
@@ -332,6 +336,10 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
         <div
             ref={slideRef}
             onClick={onClick}
+            onPointerEnter={(e) => {
+                if (e.pointerType === "mouse") setHovered(true)
+            }}
+            onPointerLeave={() => setHovered(false)}
             className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group"
         >
             <motion.div
@@ -380,13 +388,19 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
 
                             <span className="Caption !text-[14px] uppercase !font-medium leading-[1.2] opacity-0 translate-y-[14px] group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-1000 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex items-center gap-[6px] text-white">
                                 <span>VIEW PROJECT</span>
-                                <motion.span
-                                    animate={{ x: [0, 5, 0] }}
-                                    transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                                    className="flex items-center"
-                                >
-                                    <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
-                                </motion.span>
+                                {hovered ? (
+                                    <motion.span
+                                        animate={{ x: [0, 5, 0] }}
+                                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                                        className="flex items-center"
+                                    >
+                                        <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
+                                    </motion.span>
+                                ) : (
+                                    <span className="flex items-center">
+                                        <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
+                                    </span>
+                                )}
                             </span>
                         </div>
                     </div>
@@ -732,19 +746,29 @@ export default function Home() {
     const workSectionRef = useRef(null)
     const tickerEngine = useRef(null)
     const [tickerReady, setTickerReady] = useState(false)
+    const pageReadyRef = useRef(pageReady)
+    pageReadyRef.current = pageReady
 
     useEffect(() => {
         if (!tickerViewportRef.current || !tickerRef.current) return
         
         tickerEngine.current = createTicker(tickerViewportRef.current, tickerRef.current, {
             ...TICKER_MOTION,
+            startPaused: true,
         })
+        // If the page is already revealed (e.g. after a resize), start right away
+        if (pageReadyRef.current) tickerEngine.current.start()
         setTickerReady(true)
         return () => {
             tickerEngine.current?.destroy()
             tickerEngine.current = null
         }
     }, [vp.isMobile])
+
+    // Start the ticker once the page is revealed (after the preloader / page transition)
+    useEffect(() => {
+        if (pageReady) tickerEngine.current?.start()
+    }, [pageReady])
 
     useEffect(() => {
         const wrap = tickerWrapRef.current

@@ -1,6 +1,6 @@
 // src/components/MaskRevealText.jsx
 
-import React, { useEffect, useRef, useMemo } from "react"
+import React, { useLayoutEffect, useRef, useMemo } from "react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { useContext } from "react"
@@ -87,7 +87,8 @@ export default function MaskRevealText({
         .map((t) => (t.type === "node" ? `<${t.key}>` : t.type === "space" ? " " : t.text))
         .join("|")
 
-    useEffect(() => {
+    // useLayoutEffect: hide the text before the browser paints, so it never flashes visible first
+    useLayoutEffect(() => {
         const el = containerRef.current
         if (!el) return
 

@@ -3,8 +3,9 @@ import { BrowserRouter, StaticRouter } from "react-router-dom"
 import App from "./App.jsx"
 
 export default function Root({ initialPath = "/" }) {
-    const Router = typeof window === "undefined" ? StaticRouter : BrowserRouter
-    const routerProps = typeof window === "undefined" ? { location: initialPath } : {}
+    const isServer = typeof window === "undefined"
+    const Router = isServer ? StaticRouter : BrowserRouter
+    const routerProps = isServer ? { location: initialPath } : {}
 
     return (
         <React.StrictMode>

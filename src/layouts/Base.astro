@@ -5,24 +5,34 @@ interface Props {
   title?: string
   description?: string
   image?: string
+  /** Hero image to preload for speed (not used for the share preview) */
+  hero?: string
   type?: "website" | "article"
+  /** Extra JSON-LD structured data objects for this page */
+  jsonLd?: Record<string, unknown>[]
 }
+
+const SITE_BIO =
+  "Brand identity designer and creative director in Addis Ababa, Ethiopia. I help ambitious businesses build distinctive brands through strategy, visual identity, web design and 3D visualization."
 
 const {
   title = "Iyosias | Brand Identity Designer",
   description = "Brand identity designer and creative director in Addis Ababa, Ethiopia. Strategy, visual identity, digital design and 3D visualization for ambitious businesses.",
   image = "/og-image.png",
+  hero,
   type = "website",
+  jsonLd = [],
 } = Astro.props
 
+// Site-wide Person data. Always uses the site bio, never the page description.
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "Person",
   name: "Iyosias",
-  url: Astro.site,
+  url: Astro.site?.href,
   image: new URL("/portrait.jpeg", Astro.site).href,
   jobTitle: "Brand Identity Designer and Creative Director",
-  description,
+  description: SITE_BIO,
   address: {
     "@type": "PostalAddress",
     addressLocality: "Addis Ababa",
@@ -45,19 +55,18 @@ const structuredData = {
   ],
 }
 
-// Hero images are only preloaded for speed (not used for the share preview)
-const HEROES: Record<string, string> = {
-  "/work/weyra": "/weyra-hero.jpg",
-  "/work/yimaj": "/yimaj-hero.jpg",
-  "/work/origen": "/origen-hero.jpg",
-  "/work/zhongshan": "/zhongshan-house.jpg",
-}
-
-const path = Astro.url.pathname.replace(/\/+$/, "") || "/"
-const hero = HEROES[path]
-
 const canonicalURL = new URL(Astro.url.pathname, Astro.site)
 const ogImage = new URL(image, Astro.site)
+
+// Derive the image MIME type from the file extension
+const IMAGE_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+}
+const ext = ogImage.pathname.split(".").pop()?.toLowerCase() ?? ""
+const ogImageType = IMAGE_TYPES[ext] ?? "image/png"
 ---
 
 <!doctype html>
@@ -68,6 +77,7 @@ const ogImage = new URL(image, Astro.site)
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalURL} />
+    <link rel="sitemap" href="/sitemap-index.xml" />
 
     <!-- Favicons -->
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -82,10 +92,11 @@ const ogImage = new URL(image, Astro.site)
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:image" content={ogImage} />
-    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:type" content={ogImageType} />
     <meta property="og:image:alt" content={title} />
 
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+    {jsonLd.map((data) => <script type="application/ld+json" set:html={JSON.stringify(data)} />)}
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />

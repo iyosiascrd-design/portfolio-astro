@@ -1,0 +1,43 @@
+---
+// src/components/SeoContent.astro
+//
+// Real HTML text for crawlers and visitors without JavaScript. It sits inside
+// <noscript>, so normal visitors never see it or download it, and it cannot
+// affect the React page's loading or animations.
+import { PROJECT_LINKS, type PageContent } from "../data/pageContent.ts"
+
+interface Props {
+  content: PageContent
+  /** Hide the "other projects" list on a project's own page */
+  currentPath?: string
+}
+
+const { content, currentPath = "" } = Astro.props
+const links = PROJECT_LINKS.filter((l) => l.href !== currentPath)
+---
+
+<noscript>
+  <article
+    style="box-sizing:border-box;max-width:760px;margin:0 auto;padding:96px 24px;color:#fff;background:#050505;font-family:'Helvetica Neue',Arial,sans-serif;line-height:1.5"
+  >
+    <h1 style="font-size:40px;line-height:1.1;margin:0 0 16px">{content.h1}</h1>
+    {content.meta && content.meta.length > 0 && <p style="margin:0 0 16px;opacity:.7">{content.meta.join(" · ")}</p>}
+    {content.intro && <p style="font-size:20px;margin:0 0 32px">{content.intro}</p>}
+    {
+      content.sections.map((s) => (
+        <section style="margin:0 0 32px">
+          <h2 style="font-size:24px;line-height:1.2;margin:0 0 8px">{s.heading}</h2>
+          {s.text && <p style="margin:0">{s.text}</p>}
+        </section>
+      ))
+    }
+    <nav aria-label="Pages" style="margin-top:48px">
+      <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+        <li><a href="/" style="color:#fff">Home</a></li>
+        <li><a href="/work" style="color:#fff">Work</a></li>
+        {links.map((l) => <li><a href={l.href} style="color:#fff">{l.label}</a></li>)}
+        <li><a href="mailto:info@iyosiasdesign.com" style="color:#fff">info@iyosiasdesign.com</a></li>
+      </ul>
+    </nav>
+  </article>
+</noscript>

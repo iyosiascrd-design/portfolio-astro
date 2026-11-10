@@ -21,20 +21,27 @@ export const TICKER_MOTION = {
     copies: 3,
     baseSpeed: 80,
     hoverFactor: 0,
-    // Hover stop: ease-OUT = brakes smoothly with a long, soft tail.
-    hoverStopDuration: 2.4,
-    hoverStopEase: "power3.out",
-    // Hover resume: waits a beat, then ease-IN-OUT = slow gentle ramp, no sudden pickup.
-    hoverResumeDuration: 2.4,
-    hoverResumeDelay: 0.2,
-    hoverResumeEase: "power3.inOut",
-    flickMinDuration: 0.9,    // s, glide time for a gentle flick
-    flickMaxDuration: 2.4,    // s, glide time for a max-speed flick
-    flickMax: 4000,           // px/s cap
+
+    // ── Apple-style motion ─────────────────────────────────────────────────────────────────
+    // 1. Finger tracking is strictly 1:1. No lag, no smoothing: the content is attached to your
+    //    finger. Input is only coalesced to one position write per frame.
+    // 2. Letting go preserves your exact finger velocity (no boost, no jump), then the ticker
+    //    coasts with UIScrollView's exponential deceleration: v *= rate ^ milliseconds.
+    // 3. Cruise speed is a spring described the way SwiftUI does (response + dampingFraction).
+    //    It is critically damped (no bounce: there is no gesture momentum to justify one) and it
+    //    keeps its velocity when retargeted, so hover-stop, resume, or changing your mind halfway
+    //    never jerks. Starting from rest therefore always eases in with zero initial jerk.
+    decelerationRate: 0.998,                        // 0.998 = UIScrollView "normal", 0.99 = "fast"
+    stopSpring:   { response: 0.9, damping: 1 },    // hover in: eases to a stop (s, 1 = no overshoot)
+    resumeSpring: { response: 1.3, damping: 1 },    // hover out / after a flick: eases up to speed
+    catchSpring:  { response: 0.3, damping: 1 },    // finger lands on a moving ticker
+    catchRate: 22,            // 1/s, how quickly a coasting flick is caught when you touch it
+    flickMax: 5000,           // px/s cap
+    flickMinSpeed: 40,        // px/s, slower releases don't coast
     flingGain: 1,             // 1 = release speed equals finger speed
-    velocityWindow: 100,      // ms of pointer history used to measure a flick
+    velocityWindow: 80,       // ms of finger history used to measure release velocity
     dragThreshold: 4,
-    parallaxDepth: 0.12,
+    parallaxDepth: 0, // test: 0 = no per-frame image parallax (was 0.12)
 }
 
 export const ACCORDION = {
@@ -163,39 +170,49 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     let widths = []
 
     let x = 0        // wrapped position (painted)
-    let travel = 0   // unwrapped position (flick velocity is measured from this)
+    let travel = 0   // unwrapped position (release velocity is measured from this)
 
-    // Velocity = auto-scroll part + flick part. Each is driven by ONE gsap tween,
-    // so nothing eases on top of anything else.
-    const m = { cruise: 1, flick: 0 }
-    let cruiseTween = null
-    let flickTween = null
+    // ---- state: ONE velocity, made of two parts, both integrated here in tick() --------------
+    //   cruise : multiplier on baseSpeed, a critically damped spring (stop / resume)
+    //   flick  : px/s left over from a release, decays exponentially (UIScrollView style)
+    // No GSAP tweens drive velocity, so nothing can fight anything else, and every hand-off
+    // keeps the velocity it had.
+    let started = !cfg.startPaused
+    let cruise = started ? 1 : 0
+    let cruiseVel = 0
+    let cruiseTarget = started ? 1 : 0
+    let spring = cfg.resumeSpring
+    let flick = 0
     let hoverTarget = 1
+    let pending = 0                  // finger movement received since the last frame (px)
+    const decayRate = -Math.log(cfg.decelerationRate) * 1000 // 1/s
 
-    const tweenCruise = (to, stopping) => {
-        cruiseTween?.kill()
-        cruiseTween = gsap.to(m, {
-            cruise: to,
-            duration: stopping ? cfg.hoverStopDuration : cfg.hoverResumeDuration,
-            ease: stopping ? cfg.hoverStopEase : cfg.hoverResumeEase,
-            delay: stopping ? 0 : cfg.hoverResumeDelay,
-        })
+    // Retarget the speed spring. Its current velocity is kept, so this never jerks.
+    const aim = (to, s) => {
+        if (!started) return
+        cruiseTarget = to
+        spring = s
     }
-    const takeOver = () => { // finger/trackpad owns motion
-        cruiseTween?.kill()
-        flickTween?.kill()
-        m.cruise = 0
-        m.flick = 0
+    const aimHover = () => aim(hoverTarget, hoverTarget !== 1 ? cfg.stopSpring : cfg.resumeSpring)
+
+    const takeOver = () => { // finger / trackpad owns motion now
+        cruise = 0
+        cruiseVel = 0
+        cruiseTarget = 0
+        flick = 0
+        pending = 0
     }
-    const release = (flickV) => { // hand motion back to the ticker, continuously
-        const v = clamp(flickV, -cfg.flickMax, cfg.flickMax)
-        flickTween?.kill()
-        m.flick = v
-        if (v) {
-            const dur = gsap.utils.mapRange(0, cfg.flickMax, cfg.flickMinDuration, cfg.flickMaxDuration, Math.abs(v))
-            flickTween = gsap.to(m, { flick: 0, duration: dur, ease: "power3.out" })
+    // Finger landed on a moving ticker: catch it quickly and softly (not a dead freeze).
+    const catchIt = () => {
+        cruiseTarget = 0
+        spring = cfg.catchSpring
+    }
+    const release = (flickV, fromDrag = true) => {
+        if (fromDrag) {
+            const v = clamp(flickV, -cfg.flickMax, cfg.flickMax)
+            flick = Math.abs(v) >= cfg.flickMinSpeed ? v : 0 // exact finger velocity, no boost
         }
-        tweenCruise(hoverTarget, hoverTarget !== 1)
+        aimHover() // a plain tap leaves a coasting flick alone; it decays on its own
     }
 
     let visible = true
@@ -207,7 +224,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     let wheelActive = false
     let lastWheelT = 0
 
-    // ---- velocity sampler (unwrapped position over a short time window) ----
+    // ---- velocity sampler: unwrapped position, one sample per frame while the finger drives ----
     const samples = []
     const pushSample = () => {
         const t = performance.now()
@@ -215,6 +232,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         while (samples.length > 2 && t - samples[0].t > cfg.velocityWindow * 2) samples.shift()
     }
     const sampledVelocity = () => {
+        pushSample() // end the measurement exactly at release
         const now = performance.now()
         const recent = samples.filter((s) => now - s.t <= cfg.velocityWindow)
         if (recent.length < 2) return 0
@@ -222,8 +240,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         const b = recent[recent.length - 1]
         const dt = (b.t - a.t) / 1000
         if (dt < 0.016) return 0
-        const fresh = clamp(1 - (now - b.t) / cfg.velocityWindow, 0, 1)
-        return ((b.p - a.p) / dt) * fresh * cfg.flingGain
+        return ((b.p - a.p) / dt) * cfg.flingGain // holding still before release => ~0, like iOS
     }
 
     const measure = () => {
@@ -246,6 +263,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         if (x === paintedX) return
         paintedX = x
         setTrackX(x)
+        if (!cfg.parallaxDepth) return // no parallax: skip the per-slide writes entirely
         for (let i = 0; i < slides.length; i++) {
             const set = setFrameX[i]
             if (!set) continue
@@ -259,16 +277,41 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
     const tick = () => {
         if (!visible || !loopW) return
-        // deltaRatio is GSAP's lag-smoothed frame time: steady on 60/120/144Hz and after hitches
-        const dt = Math.min(gsap.ticker.deltaRatio(60), 3) / 60
+        // deltaRatio is GSAP's lag-smoothed frame time: steady on 60/120/144Hz and after hitches.
+        // Capped at 1.5 frames so a late frame advances the ticker by a normal step, not a jump.
+        const dt = Math.min(gsap.ticker.deltaRatio(60), 1.5) / 60
 
         if (wheelActive && performance.now() - lastWheelT > 120) {
             wheelActive = false
-            release(sampledVelocity())
+            pending = 0
+            release(0, false) // the OS already supplies trackpad momentum; no extra flick on top
         }
 
-        if (!pressed && !dragging && !wheelActive) {
-            const vel = -baseSpeed * m.cruise + m.flick
+        if (dragging || wheelActive) {
+            // Direct manipulation: 1:1 with the finger, written once per frame.
+            x += pending
+            travel += pending
+            pending = 0
+            pushSample()
+        } else {
+            // 1) flick: exponential deceleration (caught faster while a finger is down)
+            flick *= Math.exp(-(pressed ? cfg.catchRate : decayRate) * dt)
+            if (Math.abs(flick) < 1) flick = 0
+
+            // 2) cruise: critically damped spring, response/damping like SwiftUI. Semi-implicit
+            //    Euler in small sub-steps, stable on any frame rate.
+            const omega = (2 * Math.PI) / spring.response
+            const steps = Math.max(1, Math.ceil(dt / (1 / 120)))
+            const h = dt / steps
+            for (let i = 0; i < steps; i++) {
+                const accel = omega * omega * (cruiseTarget - cruise) - 2 * spring.damping * omega * cruiseVel
+                cruiseVel += accel * h
+                cruise += cruiseVel * h
+            }
+            if (cruise < 0) { cruise = 0; cruiseVel = 0 } // never drift backwards
+            if (cruiseTarget === 0 && cruise < 0.002) { cruise = 0; cruiseVel = 0 }
+
+            const vel = -baseSpeed * cruise + flick
             x += vel * dt
             travel += vel * dt
         }
@@ -296,30 +339,32 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         onPress() {
             pressed = true
             wheelActive = false
-            takeOver()
-            samples.length = 0
+            pending = 0
+            catchIt()
             lastPX = this.pointerX
-            pushSample()
         },
         onDragStart() {
             dragging = true
             suppressClick = true
             viewport.dataset.dragging = "true"
-            lastPX = this.pointerX
+            takeOver() // lastPX stays from the press, so the first few px are not lost
+            samples.length = 0
+            pushSample()
         },
         onDrag() {
             const px = this.pointerX
-            const dx = px - lastPX
+            pending += px - lastPX // applied 1:1 in the next tick
             lastPX = px
-            x += dx
-            travel += dx
-            pushSample()
-            wrap()
-            paint()
         },
         onRelease() {
             pressed = false
-            release(dragging ? sampledVelocity() : 0)
+            if (dragging) {
+                const v = sampledVelocity()
+                pending = 0
+                release(v)
+            } else {
+                release(0, false)
+            }
             endDrag()
         },
     })[0]
@@ -327,12 +372,12 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     const onEnter = (e) => {
         if (e.pointerType !== "mouse") return
         hoverTarget = cfg.hoverFactor
-        if (!pressed && !dragging && !wheelActive) tweenCruise(hoverTarget, true)
+        if (!pressed && !dragging && !wheelActive) aimHover()
     }
     const onLeave = (e) => {
         if (e.pointerType !== "mouse") return
         hoverTarget = 1
-        if (!pressed && !dragging && !wheelActive) tweenCruise(1, false)
+        if (!pressed && !dragging && !wheelActive) aimHover()
     }
 
     // Trackpad: 1:1 position, the OS already provides momentum events.
@@ -344,11 +389,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         else if (e.deltaMode === 2) dx *= vpW
         if (!wheelActive) { wheelActive = true; takeOver(); samples.length = 0; pushSample() }
         lastWheelT = performance.now()
-        x -= dx
-        travel -= dx
-        pushSample()
-        wrap()
-        paint()
+        pending -= dx
     }
 
     viewport.addEventListener("pointerenter", onEnter)
@@ -369,11 +410,14 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
     return {
         consumeDrag: () => suppressClick,
+        start() {
+            if (started) return
+            started = true
+            aimHover()
+        },
         destroy() {
             gsap.ticker.remove(tick)
             draggable.kill()
-            cruiseTween?.kill()
-            flickTween?.kill()
             ro.disconnect()
             io.disconnect()
             viewport.removeEventListener("pointerenter", onEnter)
