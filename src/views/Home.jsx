@@ -1208,12 +1208,12 @@ export default function Home() {
                                                                         opacity: isActive ? 1 : 0,
                                                                         transition: `opacity ${isActive ? ACCORDION_OPEN.fadeIn : ACCORDION_CLOSE.fadeOut}s ease ${isActive ? ACCORDION_OPEN.fadeInDelay : 0}s`,
                                                                     }}
-                                                                    className="svc-panel-text"
+                                                                    className="svc-panel-text !pl-[48px]"
                                                                 >
                                                                     <h4 className="Body rwd-balance !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-white m-0 font-semibold">
                                                                         {flat(service.captionTitle)}
                                                                     </h4>
-                                                                    <p className="Body !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] rwd-pretty m-0">
+                                                                    <p className="Body !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] rwd-pretty m-0 mt-[4px]">
                                                                         {service.captionText}
                                                                     </p>
                                                                 </div>
@@ -1305,8 +1305,8 @@ export default function Home() {
                                 />
                             </div>
 
-                            <div id="expertise" className="flex flex-col w-full mt-[48px] lg:mt-[144px]">
-                                <p className="H5 sm:max-md:portrait:!text-[28px] pb-[4px] nav-title mb-[24px] md:mb-[40px] text-[var(--text-light-primary)]">
+                            <div id="expertise" className="flex flex-col w-full mt-[48px] lg:mt-[clamp(72px,14svh,144px)]">
+                                <p className="H5 sm:max-md:portrait:!text-[28px] pb-[4px] nav-title mb-[48px] md:mb-[80px] lg:mb-[clamp(48px,8svh,80px)] text-[var(--text-light-primary)]">
                                     EXPERTISE
                                 </p>
 
@@ -1370,9 +1370,9 @@ export default function Home() {
                                                         x: vp.isDesktop && isActive ? EXPERTISE_SHIFT : 0,
                                                     }}
                                                     transition={{ duration: 0.45, ease: taylorEase }}
-                                                    className="grid grid-cols-1 gap-[16px] md:grid-cols-2 md:gap-[24px] lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px] pt-[24px] pb-[48px] md:pt-[28px] md:pb-[56px] will-change-transform relative items-start"
+                                                    className="grid grid-cols-1 gap-[16px] md:grid-cols-2 md:gap-[24px] lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px] pt-[24px] pb-[48px] md:pt-[28px] md:pb-[56px] lg:pt-[clamp(16px,2.5svh,28px)] lg:pb-[clamp(24px,5svh,56px)] will-change-transform relative items-start"
                                                 >
-                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H3 expertise-title rwd-balance m-0 lg:transition-colors lg:duration-500 ![font-family:'BDO_Grotesk',sans-serif]">
+                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H2 expertise-title rwd-balance m-0 tracking-[-0.02em] uppercase !text-[28px] lg:!text-[44px] lg:transition-colors lg:duration-500">
                                                         {item.title}
                                                     </h3>
 
@@ -1384,7 +1384,7 @@ export default function Home() {
                                                             {glueLastWords(item.description)}
                                                         </p>
 
-                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] flex flex-col m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px]">
+                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] flex flex-col lg:flex-row lg:flex-wrap lg:gap-x-[6px] m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px] lg:mt-[12px]">
                                                             {item.tools.map((tool, i) => (
                                                                 <li key={tool}>
                                                                     {tool}
