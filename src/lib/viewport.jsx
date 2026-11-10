@@ -11,10 +11,19 @@ export const getViewport = () => {
     }
 }
 
-export const ViewportContext = createContext(getViewport())
+const DEFAULT_VIEWPORT = {
+    width: 1280,
+    isMobile: false,
+    isTablet: false,
+    isDesktop: true,
+}
+
+export const ViewportContext = createContext(DEFAULT_VIEWPORT)
 
 export function useViewport() {
-    const [vp, setVp] = useState(getViewport)
+    // Keep the first client render identical to the server render; update to the
+    // actual viewport immediately after hydration.
+    const [vp, setVp] = useState(DEFAULT_VIEWPORT)
 
     useEffect(() => {
         const onResize = () => {
