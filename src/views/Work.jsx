@@ -60,12 +60,17 @@ const srcSetFor = (src, ext) =>
   IMAGE_WIDTHS.map((w) => `${src.replace(/\.[^.]+$/, "")}-${w}.${ext} ${w}w`).join(", ")
 const IMAGE_WAIT_MAX = 1500 // ms: never hold the intro longer than this waiting for images to decode
 
-// Motion feel. Smooth times are in seconds: bigger = softer / lazier.
-const DRAG_SMOOTH = 0.12 // while dragging: how long the row takes to catch up with your pointer (the ease-in)
-const GLIDE_SMOOTH = 0.45 // after release: how long the glide takes to settle (the ease-out)
-const REDUCED_DRAG_SMOOTH = 0.06 // prefers-reduced-motion: shorter, calmer catch-up
+// Motion feel: Apple-style. Dragging is 1:1 (the row is glued to your finger, no lag). Letting go keeps
+// your exact finger velocity, projects where a flick would coast to (UIScrollView's deceleration maths),
+// snaps to the nearest card, and gets there on a critically damped spring that starts at that velocity.
+const DECELERATION_RATE = 0.998 // UIScrollView "normal" (0.99 = "fast"): used to project where a flick would land
+const SNAP_RESPONSE = 0.65 // s: SwiftUI-style spring response for settling on a card after a release (smaller = snappier)
+const REDUCED_SNAP_RESPONSE = 0.35 // prefers-reduced-motion
+const CATCH_SMOOTH = 0.06 // s: how fast a gliding row is caught when you touch it
+const SLACK_RATE = 18 // 1/s: the first few px of a drag (the click threshold) ease in at this rate instead of jumping
+const VELOCITY_WINDOW = 80 // ms of finger history used to measure release velocity
+const GLIDE_SMOOTH = 0.45 // programmatic moves (arrow keys, service click, intro drift): long soft glide, in seconds
 const REDUCED_GLIDE_SMOOTH = 0.18
-const FLICK_SECONDS = 0.35 // a flick travels (pointer speed x this) before settling
 const MAX_THROW = 4 // max cards a single flick can travel
 const STACK_SCALE = 0.15 // how much a card shrinks while it stacks (0 for reduced motion)
 const SHADE_MAX = 0.4 // max strength of the stacking gradient (0 = none, 1 = solid black at the dark edge)
@@ -134,6 +139,8 @@ function useMediaQuery(query) {
   )
   return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => false)
 }
+
+const clamp = (n, a, b) => Math.min(b, Math.max(a, n))
 
 // Critically damped spring (the "SmoothDamp" used in game engines).
 // Velocity is continuous, so you get a real ease-in when you start dragging
@@ -317,8 +324,9 @@ export default function Work() {
 
     const cards = cardRefs.current.slice(0, LOOPED_CARDS.length)
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    const dragSmooth = reduceMotion ? REDUCED_DRAG_SMOOTH : DRAG_SMOOTH
     const glideSmooth = reduceMotion ? REDUCED_GLIDE_SMOOTH : GLIDE_SMOOTH
+    // SwiftUI "response" -> SmoothDamp smoothTime (omega = 2*pi/response = 2/smoothTime)
+    const snapSmooth = (reduceMotion ? REDUCED_SNAP_RESPONSE : SNAP_RESPONSE) / Math.PI
     const stackScale = reduceMotion ? 0 : STACK_SCALE
 
     let x = 0 // rendered offset
@@ -335,10 +343,11 @@ export default function Work() {
     let wheelTimer = 0
     const settleWaiters = []
 
-    // pointer velocity (px/s) used to decide how far a flick travels
-    let lastTime = 0
-    let lastClientX = 0
-    let pointerV = 0
+    let settleSmooth = glideSmooth // spring softness used while not tracking a finger
+    let wheelActive = false // trackpad swipe in progress: also tracked 1:1
+    let slack = 0 // px the row is "behind" the finger right after the drag threshold; eases to 0
+    let travel = 0 // unwrapped position (the loop wrap would otherwise look like a huge velocity)
+    const samples = [] // finger history, one per frame while tracking
 
     // Cache each card's parts once so the per-frame paint does no DOM queries
     const parts = cards.map((card) =>
@@ -442,13 +451,29 @@ export default function Work() {
       // the performance.now() stored by kick(), which would otherwise give a negative dt.
       const dt = Math.max(0, Math.min(0.05, (t - lastFrame) / 1000 || 1 / 60))
       lastFrame = t
+      const prevX = x
+      const tracking = (dragging && draggedRef.current) || wheelActive
 
-      // Tighter while the finger is down (feels attached), looser on release (long glide)
-      const smoothTime = dragging ? dragSmooth : glideSmooth
-      ;[x, v] = smoothDamp(x, target, v, smoothTime, dt)
+      if (tracking) {
+        // Direct manipulation: the row IS where your finger put it (1:1, one write per frame).
+        // Only the few px of click threshold are eased out so there is no jump when the drag begins.
+        slack *= Math.exp(-dt * SLACK_RATE)
+        if (Math.abs(slack) < 0.05) slack = 0
+        x = target + slack
+        v = 0
+      } else {
+        // Finger down but not dragging yet = catch the glide quickly; otherwise settle softly.
+        // v is carried over from the release, so nothing ever jumps.
+        const smoothTime = dragging ? CATCH_SMOOTH : settleSmooth
+        ;[x, v] = smoothDamp(x, target, v, smoothTime, dt)
+      }
+      travel += x - prevX
       paint()
 
-      if (Math.abs(target - x) < 0.05 && Math.abs(v) < 0.5) {
+      if (tracking) {
+        pushSample()
+        if (slack === 0) { raf = 0; return } // finger is still: sleep until the next move
+      } else if (Math.abs(target - x) < 0.05 && Math.abs(v) < 0.5) {
         x = target
         v = 0
         paint()
@@ -494,6 +519,39 @@ export default function Work() {
     }
     const wait = (ms) => new Promise((resolve) => timers.push(setTimeout(resolve, ms)))
 
+    /* ---------- release physics ---------- */
+    const pushSample = () => {
+      const t = performance.now()
+      samples.push({ p: travel, t })
+      while (samples.length > 2 && t - samples[0].t > VELOCITY_WINDOW * 2) samples.shift()
+    }
+    // Finger velocity (px/s) over the last VELOCITY_WINDOW ms. Held still before letting go = 0, like iOS.
+    const sampledVelocity = () => {
+      pushSample() // end the measurement exactly at release
+      const now = performance.now()
+      const recent = samples.filter((s) => now - s.t <= VELOCITY_WINDOW)
+      if (recent.length < 2) return 0
+      const a = recent[0]
+      const b = recent[recent.length - 1]
+      const dt = (b.t - a.t) / 1000
+      return dt < 0.016 ? 0 : (b.p - a.p) / dt
+    }
+    // Hand the row back to the spring: keep the finger's exact velocity, project where a flick would
+    // coast to, snap to the nearest card, and spring there starting at that velocity.
+    const releaseWith = (vel) => {
+      const throwDist = clamp(
+        (vel * DECELERATION_RATE) / (1 - DECELERATION_RATE) / 1000,
+        -MAX_THROW * step,
+        MAX_THROW * step
+      )
+      const projected = x + throwDist
+      target = SNAP && step ? Math.round(projected / step) * step : projected
+      v = vel
+      slack = 0
+      settleSmooth = snapSmooth
+      kick()
+    }
+
     /* ---------- input: drag (pointer capture), wheel, keyboard, focus ---------- */
     const onPointerMove = (e) => {
       if (!dragging || e.pointerId !== activePointer) return
@@ -508,18 +566,13 @@ export default function Work() {
         } catch {
           /* pointer already gone */
         }
+        target = startTarget + dx
+        slack = x - target // no jump: the threshold px ease out instead
+        samples.length = 0
+        pushSample()
       }
 
-      const now = performance.now()
-      const dt = now - lastTime
-      if (dt > 0) {
-        const inst = ((e.clientX - lastClientX) / dt) * 1000 // px/s
-        pointerV = pointerV * 0.6 + inst * 0.4 // smoothed so one jittery event can't spike it
-      }
-      lastClientX = e.clientX
-      lastTime = now
-
-      target = startTarget + dx
+      target = startTarget + dx // applied 1:1 by the loop on the next frame
       kick()
     }
 
@@ -531,6 +584,8 @@ export default function Work() {
 
     function onPointerUp(e) {
       if (!dragging || e.pointerId !== activePointer) return
+      const wasDrag = draggedRef.current
+      const vel = wasDrag ? sampledVelocity() : 0 // measure while still in drag mode
       dragging = false
       endDrag()
       viewport.removeAttribute("data-dragging")
@@ -540,15 +595,12 @@ export default function Work() {
         /* already released */
       }
 
-      if (draggedRef.current) {
-        // Held still before letting go? No flick.
-        if (performance.now() - lastTime > 60) pointerV = 0
-
-        // Where would a flick of this speed land? Then settle on the nearest card
-        // so the row never rests half-stacked (that looked like clipping).
-        const throwDist = Math.max(-MAX_THROW * step, Math.min(MAX_THROW * step, pointerV * FLICK_SECONDS))
-        const projected = target + throwDist
-        target = SNAP && step ? Math.round(projected / step) * step : projected
+      if (wasDrag) {
+        releaseWith(vel)
+      } else if (SNAP && step) {
+        // A tap, or you caught a moving row: settle on the nearest card instead of resting half-stacked
+        target = Math.round(x / step) * step
+        settleSmooth = snapSmooth
         kick()
       }
 
@@ -563,13 +615,13 @@ export default function Work() {
       interrupt()
       dragging = true
       draggedRef.current = false
+      wheelActive = false
+      clearTimeout(wheelTimer)
       activePointer = e.pointerId
       startX = e.clientX
-      target = x // catch the glide where it is right now
+      target = x // catch the glide where it is right now (v is kept, so it brakes smoothly)
       startTarget = target
-      lastClientX = e.clientX
-      lastTime = performance.now()
-      pointerV = 0
+      slack = 0
       viewport.setAttribute("data-dragging", "true")
       viewport.addEventListener("pointermove", onPointerMove)
       viewport.addEventListener("pointerup", onPointerUp)
@@ -584,21 +636,29 @@ export default function Work() {
       e.stopPropagation()
     }
 
-    // Trackpad / horizontal wheel: follows the gesture, then settles on a card
+    // Trackpad / horizontal wheel: 1:1 while the gesture (and the OS's own momentum) lasts,
+    // then it settles on a card exactly like a finger release.
     const onWheel = (e) => {
       if (dragging) return
       const dx = e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX
       if (Math.abs(dx) <= Math.abs(e.deltaY)) return // vertical scroll: leave it alone
       e.preventDefault() // also stops the browser's swipe-back gesture
       interrupt()
+      if (!wheelActive) {
+        wheelActive = true
+        target = x
+        slack = 0
+        v = 0
+        samples.length = 0
+        pushSample()
+      }
       target -= dx
       kick()
       clearTimeout(wheelTimer)
       wheelTimer = setTimeout(() => {
-        if (SNAP && step) {
-          target = Math.round(target / step) * step
-          kick()
-        }
+        const vel = sampledVelocity()
+        wheelActive = false
+        releaseWith(vel)
       }, WHEEL_SNAP_DELAY)
     }
 
@@ -610,6 +670,7 @@ export default function Work() {
       interrupt()
       const dir = e.key === "ArrowRight" ? -1 : 1
       target = Math.round(target / step) * step + dir * step
+      settleSmooth = glideSmooth
       kick()
     }
 
@@ -622,6 +683,7 @@ export default function Work() {
       if (idx < 0) return
       interrupt()
       target = -idx * step
+      settleSmooth = glideSmooth
       kick()
     }
 
@@ -632,6 +694,7 @@ export default function Work() {
       const setWidth = step * N
       const base = -(N + k) * step // card k in the middle set
       target = base + Math.round((target - base) / setWidth) * setWidth
+      settleSmooth = glideSmooth
       kick()
     }
 
@@ -647,6 +710,7 @@ export default function Work() {
         x *= k
         target *= k
         startTarget *= k
+        slack *= k
         v *= k
       }
       parts.forEach((p) => p && (p.last = -1))
