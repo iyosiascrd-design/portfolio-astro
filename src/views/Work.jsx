@@ -1,6 +1,6 @@
 // src/pages/Work.jsx
 
-import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { Link, useNavigate, useOutletContext } from "react-router-dom"
 import gsap from "gsap"
 
@@ -49,13 +49,16 @@ const TIME_PLACE = "Addis Ababa"
 /* ---------- images ---------- */
 const IMAGE_W = 800 // intrinsic ratio hint (4:5) so the browser reserves space before load
 const IMAGE_H = 1000
-const IMAGE_SIZES = "(min-width: 768px) 31.4vw, 100vw"
+// Upper bound of the card width (portrait tablets use up to 46vw). Cards can be smaller when the window is
+// short, which only means the browser may fetch a slightly larger file than needed, never a blurry one.
+const IMAGE_SIZES = "(min-width: 768px) 46vw, 100vw"
 // Flip to true once you have exported responsive copies next to each original, named
-//   <name>-640.webp  <name>-960.webp  <name>-1280.webp   (and the same with .avif)
+//   <name>-640.webp  <name>-960.webp  <name>-1280.webp  <name>-1600.webp  <name>-1920.webp   (and the same with .avif)
 // e.g. zhongshan-cargo-640.avif. The original JPG stays as the fallback <img>.
 // Leave false until the files exist: a <source> that 404s does NOT fall back to the <img>.
 const USE_RESPONSIVE_IMAGES = false
-const IMAGE_WIDTHS = [640, 960, 1280]
+// 1600 and 1920 cover 2x displays on big monitors (a card can reach ~800 CSS px wide there).
+const IMAGE_WIDTHS = [640, 960, 1280, 1600, 1920]
 const srcSetFor = (src, ext) =>
   IMAGE_WIDTHS.map((w) => `${src.replace(/\.[^.]+$/, "")}-${w}.${ext} ${w}w`).join(", ")
 const IMAGE_WAIT_MAX = 1500 // ms: never hold the intro longer than this waiting for images to decode
@@ -94,20 +97,36 @@ const TITLE_GAP = 80 // px between the bottom of the card labels and the top of 
 const LABELS_H = 44 // px reserved under the images for the name/tag labels (8px margin + 2 lines)
 const TITLE_RATIO = 0.293 // WORK font-size as a fraction of the card width (same as 9.2vw / 31.4vw)
 
+// ONE source of truth for the card shape. Keep in sync with the aspect-[4/5] class on the image box below.
+const CARD_ASPECT = 1.25 // card height / card width (4:5)
+
 // The card width shrinks on short windows so the title always fits below the cards with the full gap.
 // (dvh, not vh, so mobile browser chrome doesn't throw the size off)
-const FIT = 1.25 + 0.8 * TITLE_RATIO // 1.484
+const FIT = CARD_ASPECT + 0.8 * TITLE_RATIO // 1.484
 
-const LAYOUT_VARS = {
+// Smallest card the height rule may produce. Below the window height where this floor is reached the
+// page stops squeezing and scrolls instead of clipping the WORK title (see --min-page-h).
+const MIN_CARD_W = 200
+
+// Left column and cards origin follow the card width (same ratios as the 31.4vw / 30vw / 34.2vw design),
+// so when a short window shrinks the cards the whole composition shrinks with them.
+const LEFT_COL_RATIO = 30 / 31.4
+const CARDS_LEFT_RATIO = 34.2 / 31.4
+
+// Portrait tablets: let the card grow (the height rule still caps it).
+const buildLayoutVars = (portrait) => ({
   "--work-top": "clamp(96px, 9.2vw, 140px)",
-  "--left-col-w": "max(220px, 30vw)", 
-  "--cards-left": "max(240px, 34.2vw)", 
-  "--card-w": `min(max(260px, 31.4vw), max(240px, calc((100dvh - var(--work-top) - ${LABELS_H + TITLE_GAP}px - var(--page-pad)) / ${FIT})))`, 
+  "--card-w": `min(${portrait ? "max(260px, 46vw)" : "max(260px, 31.4vw)"}, max(${MIN_CARD_W}px, calc((100dvh - var(--work-top) - ${LABELS_H + TITLE_GAP}px - var(--page-pad)) / ${FIT})))`,
+  "--card-h": `calc(var(--card-w) * ${CARD_ASPECT})`,
+  "--left-col-w": portrait ? "max(220px, 30vw)" : `max(220px, calc(var(--card-w) * ${LEFT_COL_RATIO}))`,
+  "--cards-left": portrait ? "max(240px, 34.2vw)" : `max(240px, calc(var(--card-w) * ${CARDS_LEFT_RATIO}))`,
   "--type-label-size": "14px",
   "--type-caption-size": "14px",
-  "--title-top": `calc(var(--work-top) + var(--card-w) * 1.25 + ${LABELS_H + TITLE_GAP}px)`,
+  "--title-top": `calc(var(--work-top) + var(--card-h) + ${LABELS_H + TITLE_GAP}px)`,
   "--title-h": `calc(var(--card-w) * ${TITLE_RATIO} * 0.8)`,
-}
+  // Window height at which MIN_CARD_W is reached: never make the page shorter than this on tablet/desktop
+  "--min-page-h": `calc(var(--work-top) + ${MIN_CARD_W * FIT}px + ${LABELS_H + TITLE_GAP}px + var(--page-pad))`,
+})
 
 // Giant WORK title: sits exactly TITLE_GAP below the labels, sized relative to the cards
 const TITLE_STYLE = {
@@ -120,7 +139,8 @@ const TITLE_STYLE = {
 const LEFT_TEXT_VARS = { "--type-caption-size": "20px" }
 
 // Corner radius of the project images. Change this one value to match the rest of the site.
-const CARD_RADIUS = "12px"
+// Scales with the card (12px at the smallest, about 14px at the 452px design size, 24px max).
+const CARD_RADIUS = "clamp(12px, calc(var(--card-w) * 0.03), 24px)"
 
 const NOOP = () => {} // stable identity, so effects never re-fire because of a fallback function
 
@@ -237,7 +257,7 @@ function ServiceItem({ label, active, onSelect }) {
         type="button"
         onClick={onSelect}
         aria-pressed={active}
-        className="block cursor-pointer text-left will-change-transform"
+        className="block cursor-pointer text-left will-change-transform [@media(pointer:coarse)]:py-2.5"
       >
         {label}
       </button>
@@ -275,6 +295,8 @@ export default function Work() {
   
   const isCarousel = useMediaQuery(CAROUSEL_QUERY)
   const isPhone = useMediaQuery(PHONE_QUERY)
+  const isPortraitTablet = useMediaQuery("(min-width: 768px) and (orientation: portrait)")
+  const layoutVars = useMemo(() => buildLayoutVars(isPortraitTablet), [isPortraitTablet])
 
   const pageReady = usePageReady()
   
@@ -871,12 +893,12 @@ export default function Work() {
 
   return (
     <div
-      className="relative min-h-[100dvh] bg-white pt-28 md:h-[100dvh] md:overflow-hidden md:pt-0"
-      style={LAYOUT_VARS}
+      className="relative min-h-[100dvh] bg-white pt-28 md:h-[100dvh] md:min-h-[var(--min-page-h)] md:overflow-x-clip md:pt-0"
+      style={layoutVars}
     >
       {/* Left column: heading level with the top of the images, services level with the image bottoms */}
       <div
-        className="flex flex-col gap-6 px-[var(--page-pad)] pb-4 pt-4 md:absolute md:left-0 md:top-[var(--work-top)] md:h-[calc(var(--card-w)_*_1.25)] md:w-[var(--left-col-w)] md:justify-between md:gap-0 md:pb-0 md:pt-0"
+        className="flex flex-col gap-6 px-[var(--page-pad)] pb-4 pt-4 md:absolute md:left-0 md:top-[var(--work-top)] md:h-[var(--card-h)] md:w-[var(--left-col-w)] md:justify-between md:gap-0 md:pb-0 md:pt-0"
         style={LEFT_TEXT_VARS}
       >
         {/* H4: 32px display, tight two-line stack */}

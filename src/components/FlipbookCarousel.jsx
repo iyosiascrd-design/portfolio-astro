@@ -1,84 +1,196 @@
 // src/components/FlipbookCarousel.jsx
-import React, { forwardRef, useImperativeHandle, useRef, useEffect, useState } from "react"
-import { motion, useMotionValue, useTransform } from "framer-motion"
+import React, {
+    forwardRef,
+    useImperativeHandle,
+    useRef,
+    useEffect,
+    useLayoutEffect,
+    useState,
+} from "react"
+import { motion, useMotionValue, useTransform, useReducedMotion } from "framer-motion"
 import gsap from "gsap"
 import { ArrowRight } from "lucide-react"
 
-const CARD_VW = 80
-const CARD_RATIO = 1.5
-const SIDE_GUTTER = 12
-const SCALE_DROP = 0.08
-const TUCK_ROTATE = 62 
-const SPACING = 0.94
-const PERSPECTIVE = 1200
-const CARD_TOP = 24      // px gap above the cards (pushes them lower)
-const CARD_BOTTOM = 72   // px of room under the cards so the drop shadow isn't cut off
+/* ---------- sizing ---------- */
+const CARD_VW_MAX = 78
+const CARD_RATIO = 1.4
+const MAX_VIEWPORT_H = 0.82
+const MIN_CARD_PX = 160
+const SIDE_SCALE = 0.89
 
-const FLING_MIN_VELOCITY = 1.4   
+const TUCK_ROTATE = 30
+const FAN_ROTATE = 35
+
+// Decreased from 4.5 to 2.2 for much stronger 3D keystoning
+const PERSPECTIVE_PER_W =2.2 
+
+const PEEK = 0.14
+const EDGE_MARGIN = 8
+const DRAG_STEP = 0.55
+const CARD_TOP = 24
+const CARD_BOTTOM = 72
+const CARD_RADIUS = "clamp(12px, 5vw, 20px)"
+
+const FLING_MIN_VELOCITY = 1.4
 const FLING_MAX_VELOCITY = 16
-const FLING_COAST = 0.55         
+const FLING_COAST = 0.55
 const FLING_MIN_TIME = 0.5
 const FLING_MAX_TIME = 2.6
-const SNAP_TIME = 0.6            
-const STEP_TIME = 0.95           
-const VELOCITY_WINDOW = 100      
+const SNAP_TIME = 0.6
+const STEP_TIME = 0.95
+const VELOCITY_WINDOW = 100
 const AUTOPLAY_MS = 3200
 const RESUME_MS = 2500
 
-// React 19 wants fetchPriority, React 18 wants the lowercase attribute
+/* ---------- layered shadows (negative spread + downward offset keeps them from bleeding past the top/bottom of the carousel) ---------- */
+const ACTIVE_SHADOW = [
+    "0 1px 2px rgba(0,0,0,0.12)",
+    "0 4px 8px -1px rgba(0,0,0,0.14)",
+    "0 12px 20px -4px rgba(0,0,0,0.18)",
+    "0 24px 40px -10px rgba(0,0,0,0.28)",
+].join(", ")
+
+const SIDE_SHADOW = [
+    "0 1px 2px rgba(0,0,0,0.10)",
+    "0 6px 12px -6px rgba(0,0,0,0.14)",
+    "0 14px 24px -14px rgba(0,0,0,0.20)",
+].join(", ")
+
+/* Hard guard: a shadow can never paint outside the carousel's own margins.
+   Side cards: limited to CARD_TOP / CARD_BOTTOM / EDGE_MARGIN on all sides.
+   Active card: same top/bottom, but free sideways so it can fall onto its neighbours. */
+const SIDE_SHADOW_CLIP = `inset(-${CARD_TOP}px -${EDGE_MARGIN}px -${CARD_BOTTOM}px -${EDGE_MARGIN}px)`
+const ACTIVE_SHADOW_CLIP = `inset(-${CARD_TOP}px -1000px -${CARD_BOTTOM}px -1000px)`
+
 const FETCH_PRIORITY_ATTR = parseInt(React.version, 10) >= 19 ? "fetchPriority" : "fetchpriority"
 
-const vp = { w: typeof window !== "undefined" ? window.innerWidth : 390 }
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect
 
 const wrap = (x, n) => ((((x + n / 2) % n) + n) % n) - n / 2
 const mod = (x, n) => ((x % n) + n) % n
+const lerp = (a, b, t) => a + (b - a) * t
 
+/* ---------- flipbook fan-out & tuck maths ---------- */
 const R = (TUCK_ROTATE * Math.PI) / 180
+const SIDE_HALF = 0.5 * SIDE_SCALE * Math.cos(R)
+const SIDE_T = (SIDE_SCALE * Math.sin(R)) / (2 * PERSPECTIVE_PER_W)
+const SIDE_OUTER = SIDE_HALF / (1 - SIDE_T)
+
+const SIDE_REST = 0.5 + PEEK - SIDE_OUTER
+const FAN_PEAK = 0.38 
+const SIDE_EXTENT = 0.5 + PEEK
+
 const offsetFor = (v, W) => {
-    const t = Math.abs(v)
-    const inner = Math.min(t, 1)
-    let x = (W * Math.sin(R * inner)) / R
-    if (t > 1) x += (t - 1) * W * Math.cos(R)
-    return Math.sign(v) * x * SPACING
+    const s = Math.sign(v)
+    const a = Math.abs(v)
+
+    let shift
+    if (a <= 0.5) {
+        const t = a / 0.5
+        const ease = Math.sin((t * Math.PI) / 2)
+        shift = lerp(0, FAN_PEAK, ease)
+    } else if (a <= 1) {
+        const t = (a - 0.5) / 0.5
+        const ease = 0.5 - 0.5 * Math.cos(t * Math.PI)
+        shift = lerp(FAN_PEAK, SIDE_REST, ease)
+    } else {
+        shift = SIDE_REST
+    }
+
+    return s * shift * W
 }
 
-const DrumCard = ({ project, index, count, pos, onActivate }) => {
+const scaleFor = (v) => {
+    const a = Math.abs(v)
+    if (a <= 0.5) {
+        return lerp(1, SIDE_SCALE, a / 0.5)
+    }
+    return SIDE_SCALE
+}
+
+const rotateFor = (v) => {
+    const s = Math.sign(v)
+    const a = Math.abs(v)
+    if (a <= 0.5) {
+        const t = a / 0.5
+        return -s * lerp(0, FAN_ROTATE, Math.sin((t * Math.PI) / 2))
+    } else if (a <= 1) {
+        const t = (a - 0.5) / 0.5
+        return -s * lerp(FAN_ROTATE, TUCK_ROTATE, 0.5 - 0.5 * Math.cos(t * Math.PI))
+    }
+    return -s * TUCK_ROTATE
+}
+
+// 0 = active, 1 = visible side card, 2 = fully faded out (culled)
+const bandOf = (v) => {
+    const a = Math.abs(v)
+    return a < 0.5 ? 0 : a < 1.35 ? 1 : 2
+}
+
+const computeCardW = (el) => {
+    const vw = el ? el.clientWidth : typeof window !== "undefined" ? window.innerWidth : 390
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800
+
+    const maxByWidth = Math.min((vw * CARD_VW_MAX) / 100, (vw / 2 - EDGE_MARGIN) / SIDE_EXTENT)
+    const maxByViewportH = (vh * MAX_VIEWPORT_H) / CARD_RATIO
+
+    return Math.max(MIN_CARD_PX, Math.min(maxByWidth, maxByViewportH))
+}
+
+const DrumCard = ({ project, index, count, pos, cardW, onActivate }) => {
+    const reduce = useReducedMotion()
     const d = useTransform(pos, (p) => wrap(index - p, count))
 
-    const transform = useTransform(d, (v) => {
-        const abs = Math.abs(v)
-        const scale = Math.max(0.8, 1 - abs * SCALE_DROP)
-        const W = (vp.w * CARD_VW) / 100
-        const x = offsetFor(v, W)
-        const rotate = -Math.max(-1, Math.min(1, v)) * TUCK_ROTATE
-        return `perspective(${PERSPECTIVE}px) translateX(${x}px) rotateY(${rotate}deg) scale(${scale})`
+    const outerTransform = useTransform([d, cardW], ([v, W]) => {
+        const x = offsetFor(v, W) - W / 2
+        return `translate3d(${x}px, 0px, 0px)`
     })
 
-    const zIndex = useTransform(d, (v) => Math.round(1000 - Math.abs(v) * 100) + (index * 0.001))
+    const innerTransform = useTransform([d, cardW], ([v, W]) => {
+        const scale = scaleFor(v)
+        const rotate = rotateFor(v)
+        return `perspective(${W * PERSPECTIVE_PER_W}px) rotateY(${rotate}deg) scale(${scale})`
+    })
 
-    // Load order: the front card first, its two neighbours next, the rest at low priority,
-    // so the cards you can actually see are not competing with the ones that are tucked away.
+    const height = useTransform(cardW, (W) => W * CARD_RATIO)
+
+    const zIndex = useTransform(d, (v) => {
+        const distScore = Math.round((count - Math.abs(v)) * 100)
+        return 1000 + distScore * count + index
+    })
+
+    const [band, setBand] = useState(() => bandOf(d.get()))
+    useEffect(() => {
+        setBand(bandOf(d.get()))
+        return d.on("change", (v) => setBand(bandOf(v)))
+    }, [d])
+
     const [loaded, setLoaded] = useState(false)
     const imgRef = useRef(null)
     const isNeighbour = index === 0 || index === 1 || index === count - 1
     const priority = index === 0 ? "high" : isNeighbour ? "auto" : "low"
+    
     useEffect(() => {
         const el = imgRef.current
-        if (el?.complete && el.naturalWidth) setLoaded(true) // already cached
+        if (el?.complete && el.naturalWidth) setLoaded(true)
     }, [])
 
-    const opacity = useTransform(d, [-1.8, -1.2, 1.2, 1.8], [0, 1, 1, 0])
-    const shade = useTransform(d, [-1.5, -1, 0, 1, 1.5], [0.6, 0.3, 0, 0.3, 0.6])
-    const pointerEvents = useTransform(d, (v) => (Math.abs(v) > 1.2 ? "none" : "auto"))
+    const opacity = useTransform(d, [-1.35, -1, 1, 1.35], [0, 1, 1, 0])
     
-    // Shadow fades in fully at center (d=0) and disappears as it tucks away
-    const shadowOpacity = useTransform(d, [-0.6, 0, 0.6], [0, 1, 0])
+    // Active card casts a large, soft shadow onto its neighbours; fades out as it leaves centre
+    const activeShadowOpacity = useTransform(d, [-0.6, 0, 0.6], [0, 1, 0])
+    // Side cards keep a constant, tighter contact shadow (same for every side card)
+    const sideShadowOpacity = useTransform(d, [-0.6, 0, 0.6], [1, 0, 1])
+    const pointerEvents = useTransform(d, (v) => (Math.abs(v) > 1.2 ? "none" : "auto"))
 
     return (
         <motion.div
             role="button"
-            tabIndex={0}
-            aria-label={`Open ${project.name}`}
+            tabIndex={band === 0 ? 0 : -1}
+            aria-label={band === 0 ? `Open ${project.name}` : `Show ${project.name}`}
+            aria-current={band === 0 ? "true" : undefined}
+            aria-hidden={band === 2 ? true : undefined}
+            data-index={index}
             onClick={() => onActivate(index, project.name)}
             onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -87,73 +199,105 @@ const DrumCard = ({ project, index, count, pos, onActivate }) => {
                 }
             }}
             style={{
-                transform,
+                transform: outerTransform,
                 zIndex,
                 opacity,
                 pointerEvents,
-                width: `${CARD_VW}vw`,
-                height: `${CARD_VW * CARD_RATIO}vw`,
-                left: `${(100 - CARD_VW) / 2}vw`,
-                transformOrigin: "center center",
-                willChange: "transform, opacity",
-                backfaceVisibility: "hidden",
+                width: cardW,
+                height,
+                left: "50%",
+                isolation: "isolate",
+                // Fully faded cards are skipped by the renderer and don't hold a GPU layer
+                visibility: band === 2 ? "hidden" : "visible",
+                willChange: band === 2 ? "auto" : "transform, opacity",
             }}
-            className="absolute top-0 cursor-pointer select-none"
+            className="group absolute top-0 cursor-pointer select-none outline-none"
         >
-            {/* 1. HARDWARE-ACCELERATED SHADOW LAYER (Softened for dark mode) */}
             <motion.div
-                style={{ opacity: shadowOpacity }}
-                className="absolute inset-0 rounded-[16px] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)] pointer-events-none will-change-opacity"
-            />
-
-            {/* 2. VISUAL CONTENT CLIPPING WRAPPER */}
-            <div className="absolute inset-0 overflow-hidden rounded-[16px] bg-[var(--bg-surface-dark)]">
-                <img
-                    ref={imgRef}
-                    src={project.image}
-                    srcSet={project.srcSet}
-                    sizes={project.srcSet ? `${CARD_VW}vw` : undefined}
-                    alt={project.name}
-                    draggable={false}
-                    decoding="async"
-                    {...{ [FETCH_PRIORITY_ATTR]: priority }}
-                    onLoad={() => setLoaded(true)}
-                    onError={() => setLoaded(true)}
-                    style={{ opacity: loaded ? 1 : 0 }}
-                    className="absolute inset-0 object-cover w-full h-full pointer-events-none select-none transition-opacity duration-500 ease-out"
-                />
-                {/* Dims only the tucked-away side cards (shade is 0 on the front card) */}
+                style={{
+                    transform: innerTransform,
+                    transformOrigin: "center center",
+                    willChange: "transform",
+                }}
+                className="relative h-full w-full"
+            >
+                {/* Side cards: soft contact shadow */}
                 <motion.div
-                    style={{ opacity: shade }}
-                    className="absolute inset-0 bg-black rounded-[inherit] pointer-events-none"
+                    style={{
+                        opacity: sideShadowOpacity,
+                        borderRadius: CARD_RADIUS,
+                        boxShadow: SIDE_SHADOW,
+                        clipPath: SIDE_SHADOW_CLIP,
+                    }}
+                    className="pointer-events-none absolute inset-0"
                 />
 
-                <div className="absolute bottom-0 inset-x-0 z-10 flex items-end justify-between p-[20px] text-white pointer-events-none">
-                    <span className="Caption !text-[12px] uppercase !font-medium text-white leading-[1.2]">
-                        {project.name}
-                    </span>
+                {/* Active card: layered, realistic shadow cast onto the side cards */}
+                <motion.div
+                    style={{
+                        opacity: activeShadowOpacity,
+                        borderRadius: CARD_RADIUS,
+                        boxShadow: ACTIVE_SHADOW,
+                        clipPath: ACTIVE_SHADOW_CLIP,
+                    }}
+                    className="pointer-events-none absolute inset-0"
+                />
 
-                    <span className="Caption !text-[12px] uppercase !font-medium leading-[1.2] flex items-center gap-[6px] text-white">
-                        <span>VIEW PROJECT</span>
-                        <motion.span
-                            animate={{ x: [0, 5, 0] }}
-                            transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                            className="flex items-center"
-                        >
-                            <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
-                        </motion.span>
-                    </span>
+                <div
+                    className="absolute inset-0 overflow-hidden bg-[var(--bg-surface-dark)]"
+                    style={{ borderRadius: CARD_RADIUS }}
+                >
+                    <img
+                        ref={imgRef}
+                        src={project.image}
+                        srcSet={project.srcSet}
+                        sizes={project.srcSet ? `${CARD_VW_MAX}vw` : undefined}
+                        alt={project.name}
+                        draggable={false}
+                        decoding="async"
+                        {...{ [FETCH_PRIORITY_ATTR]: priority }}
+                        onLoad={() => setLoaded(true)}
+                        onError={() => setLoaded(true)}
+                        style={{ opacity: loaded ? 1 : 0 }}
+                        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover transition-opacity duration-500 ease-out"
+                    />
+
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />
+
+                    <div
+                        className="pointer-events-none absolute inset-0 z-20 opacity-0 ring-2 ring-inset ring-white transition-opacity group-focus-visible:opacity-100"
+                        style={{ borderRadius: CARD_RADIUS }}
+                    />
+
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between p-[20px] text-white">
+                        <span className="Caption !text-[12px] uppercase !font-medium leading-[1.2] text-white">
+                            {project.name}
+                        </span>
+
+                        <span className="Caption flex items-center gap-[6px] !text-[12px] uppercase !font-medium leading-[1.2] text-white">
+                            <span>VIEW PROJECT</span>
+                            <motion.span
+                                animate={reduce || band !== 0 ? { x: 0 } : { x: [0, 5, 0] }}
+                                transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                                className="flex items-center"
+                            >
+                                <ArrowRight className="h-[1.1em] w-[1.1em]" strokeWidth={2.5} />
+                            </motion.span>
+                        </span>
+                    </div>
                 </div>
-            </div>
+            </motion.div>
         </motion.div>
     )
 }
 
-// Pass a ref to get { goTo(index) }: flips to that card by the shortest way round.
 const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSelect }, ref) {
     const count = projects.length
     const pos = useMotionValue(0)
-    const state = useRef({ v: 0 }) 
+    const cardW = useMotionValue(computeCardW(null))
+    const wrapHeight = useTransform(cardW, (W) => W * CARD_RATIO + CARD_TOP + CARD_BOTTOM)
+
+    const state = useRef({ v: 0 })
     const tween = useRef(null)
     const wrapRef = useRef(null)
     const drag = useRef({ id: null, locked: null, x0: 0, y0: 0, pos0: 0, from: 0, samples: [] })
@@ -161,6 +305,8 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
     const paused = useRef(false)
     const inView = useRef(true)
     const resumeTimer = useRef(null)
+    const focusPaused = useRef(false)
+    const endDragRef = useRef(() => {})
 
     const reduceMotion = () =>
         typeof window !== "undefined" &&
@@ -201,15 +347,29 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
         animateTo(target, Math.min(1.6, STEP_TIME + (dist - 1) * 0.25), "power3.inOut")
     }
 
-    useEffect(() => {
-        const onResize = () => (vp.w = window.innerWidth)
-        onResize()
-        window.addEventListener("resize", onResize)
-        return () => {
-            window.removeEventListener("resize", onResize)
-            killTween()
+    useIsoLayoutEffect(() => {
+        const el = wrapRef.current
+        if (!el) return
+
+        const measure = () => {
+            const next = computeCardW(el)
+            if (Math.abs(next - cardW.get()) > 0.5) cardW.set(next)
         }
-    }, [])
+        measure()
+
+        const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null
+        ro?.observe(el)
+        ro?.observe(document.body)
+        window.addEventListener("resize", measure)
+        window.addEventListener("orientationchange", measure)
+        return () => {
+            ro?.disconnect()
+            window.removeEventListener("resize", measure)
+            window.removeEventListener("orientationchange", measure)
+        }
+    }, [cardW])
+
+    useEffect(() => () => killTween(), [])
 
     useEffect(() => {
         const el = wrapRef.current
@@ -227,7 +387,8 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
     useEffect(() => {
         if (count < 2) return
         const id = setInterval(() => {
-            if (paused.current || !inView.current || document.hidden) return
+            if (paused.current || focusPaused.current) return
+            if (!inView.current || document.hidden) return
             if (reduceMotion()) return
             settle(Math.round(pos.get()) + 1)
         }, AUTOPLAY_MS)
@@ -249,7 +410,7 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
         }, RESUME_MS)
     }
 
-    const cardPx = () => (vp.w * CARD_VW) / 100
+    const cardPx = () => Math.max(1, cardW.get() * DRAG_STEP)
 
     const release = (velocity) => {
         const cur = pos.get()
@@ -258,7 +419,7 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
         if (speed >= FLING_MIN_VELOCITY) {
             const v = Math.max(-FLING_MAX_VELOCITY, Math.min(FLING_MAX_VELOCITY, velocity))
             const s = Math.abs(v)
-            const target = Math.round(cur + (v * FLING_COAST) )
+            const target = Math.round(cur + v * FLING_COAST)
             const dist = Math.abs(target - cur)
             const time = Math.max(FLING_MIN_TIME, Math.min(FLING_MAX_TIME, (3 * dist) / s))
             animateTo(target, time, "power3.out")
@@ -296,7 +457,7 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
             if (Math.abs(dx) > Math.abs(dy)) {
                 d.locked = "x"
                 moved.current = true
-                d.x0 = e.clientX 
+                d.x0 = e.clientX
                 d.pos0 = pos.get()
                 try {
                     wrapRef.current?.setPointerCapture(e.pointerId)
@@ -330,11 +491,35 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
             const first = s[0]
             if (!cancelled && last && first && last !== first && performance.now() - last.t < 80) {
                 const dt = Math.max(1, last.t - first.t)
-                velocity = -((last.x - first.x) / dt) * 1000 / cardPx()
+                velocity = (-((last.x - first.x) / dt) * 1000) / cardPx()
             }
             release(velocity)
         }
         resumeAutoplay()
+    }
+
+    endDragRef.current = endDrag
+
+    // Listen on window so a press that ends outside the carousel can never leave autoplay paused
+    useEffect(() => {
+        const up = (e) => endDragRef.current(e, false)
+        const cancel = (e) => endDragRef.current(e, true)
+        window.addEventListener("pointerup", up)
+        window.addEventListener("pointercancel", cancel)
+        return () => {
+            window.removeEventListener("pointerup", up)
+            window.removeEventListener("pointercancel", cancel)
+        }
+    }, [])
+
+    const onKeyDown = (e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return
+        e.preventDefault()
+        const next = Math.round(pos.get()) + (e.key === "ArrowRight" ? 1 : -1)
+        settle(next)
+        wrapRef.current
+            ?.querySelector(`[data-index="${mod(next, count)}"]`)
+            ?.focus({ preventScroll: true })
     }
 
     const handleActivate = (index, name) => {
@@ -358,19 +543,30 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
     }))
 
     return (
-        <div
+        <motion.div
             ref={wrapRef}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
-            onPointerUp={(e) => endDrag(e, false)}
-            onPointerCancel={(e) => endDrag(e, true)}
-            style={{
-                touchAction: "pan-y",
-                height: `calc(${CARD_VW * CARD_RATIO}vw + ${CARD_TOP + CARD_BOTTOM}px)`,
+            onPointerEnter={(e) => e.pointerType === "mouse" && pauseAutoplay()}
+            onPointerLeave={(e) => e.pointerType === "mouse" && !drag.current.id && resumeAutoplay()}
+            onKeyDown={onKeyDown}
+            onFocus={(e) => {
+                if (e.target.matches?.(":focus-visible")) focusPaused.current = true
             }}
+            onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) focusPaused.current = false
+            }}
+            role="region"
+            aria-roledescription="carousel"
+            aria-label="Projects"
+            style={{ touchAction: "pan-y", height: wrapHeight }}
             className="relative w-full overflow-hidden"
         >
-            <div className="absolute inset-x-0 bottom-0" style={{ top: CARD_TOP }}>
+            <div
+                className="absolute inset-x-0 bottom-0 isolate"
+                style={{ top: CARD_TOP }}
+                aria-live="off"
+            >
                 {projects.map((project, i) => (
                     <DrumCard
                         key={project.id || i}
@@ -378,13 +574,13 @@ const FlipbookCarousel = forwardRef(function FlipbookCarousel({ projects, onSele
                         index={i}
                         count={count}
                         pos={pos}
+                        cardW={cardW}
                         onActivate={handleActivate}
                     />
                 ))}
             </div>
-        </div>
+        </motion.div>
     )
 })
-
 
 export default FlipbookCarousel

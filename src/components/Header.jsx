@@ -207,7 +207,15 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
     const closeLblCloseRef = useRef(null)
     const closePillRef = useRef(null)
 
-    /* ---------- phone: hide on scroll down, show on scroll up ---------- */
+    /* ---------- phone: scroll-linked header (iOS-style collapsing bar) ----------
+       The header's position is a direct function of scroll distance, so it tracks the finger
+       and never lags behind the content:
+         - Scrolling down: the header leaves HIDE_GAIN x faster than the page moves, so it is
+           always gone before the content can slide underneath it.
+         - Scrolling up: it returns 1:1 with the finger.
+         - When scrolling stops, it snaps fully hidden or fully shown (based on the last
+           direction) with a short ease-out.
+         - Touching / scrolling mid-snap catches the tween where it is, so nothing fights the finger. */
 
     useEffect(() => {
         const el = headerRef.current
@@ -215,53 +223,62 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
 
         const mq = window.matchMedia("(max-width: 767px)")
         const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-        const HIDE_AFTER = 12 // px scrolled down in one direction before hiding
-        const SHOW_AFTER = 8 // px scrolled up in one direction before showing
+        const HIDE_GAIN = 2 // header leaves 2x faster than the content scrolls (1 = exactly 1:1, iOS Safari feel)
+        const SETTLE_DELAY = 90 // ms of no scrolling before it snaps open/closed
+        const SETTLE_DURATION = 0.28 // s, ease-out of the snap
+        const clamp = (n, a, b) => Math.min(b, Math.max(a, n))
 
-        let hidden = false
+        let H = el.offsetHeight
+        let offset = 0 // 0 = fully shown, -H = fully hidden
         let lastY = Math.max(0, window.scrollY)
-        let acc = 0
+        let lastDir = 0
         let frame = null
+        let settleTimer = 0
 
-        const move = (hide) => {
-            if (hidden === hide) return
-            hidden = hide
+        const paint = () => {
+            frame = null
+            gsap.set(el, { y: offset })
+        }
+
+        const settle = () => {
+            const hide = lastDir > 0 && offset < -4
+            const to = hide ? -H : 0
+            offset = to
             gsap.to(el, {
-                yPercent: hide ? -100 : 0,
-                duration: reduce ? 0 : 0.5,
-                ease: "power3.inOut",
-                overwrite: "auto",
+                y: to,
+                duration: reduce ? 0 : SETTLE_DURATION,
+                ease: "power3.out",
+                overwrite: true,
             })
         }
 
-        const update = () => {
-            frame = null
+        const onScroll = () => {
             const y = Math.max(0, window.scrollY) // ignore iOS rubber-band overscroll
             const diff = y - lastY
             lastY = y
+            if (!diff) return
 
-            if (menuOpen || y <= 10) {
-                acc = 0
-                move(false)
-                return
+            // Grabbing the page mid-snap: pick up from where the header currently is
+            if (gsap.isTweening(el)) {
+                offset = gsap.getProperty(el, "y")
+                gsap.killTweensOf(el)
             }
-            if (diff === 0) return
 
-            // Reset the running total whenever the direction flips
-            if ((diff > 0) !== (acc > 0)) acc = 0
-            acc += diff
+            lastDir = diff
+            H = el.offsetHeight
+            offset =
+                y <= 0 || menuOpen
+                    ? 0
+                    : clamp(offset - (diff > 0 ? diff * HIDE_GAIN : diff), -H, 0)
 
-            if (acc > HIDE_AFTER && y > el.offsetHeight) move(true)
-            else if (acc < -SHOW_AFTER) move(false)
-        }
+            if (frame === null) frame = requestAnimationFrame(paint)
 
-        const onScroll = () => {
-            if (frame === null) frame = requestAnimationFrame(update)
+            clearTimeout(settleTimer)
+            settleTimer = setTimeout(settle, SETTLE_DELAY)
         }
 
         const reset = () => {
-            hidden = false
-            acc = 0
+            offset = 0
             gsap.killTweensOf(el)
             gsap.set(el, { clearProps: "transform" })
         }
@@ -272,6 +289,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         }
         const detach = () => {
             window.removeEventListener("scroll", onScroll)
+            clearTimeout(settleTimer)
             if (frame !== null) {
                 cancelAnimationFrame(frame)
                 frame = null
@@ -287,7 +305,10 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         }
 
         if (mq.matches) attach()
-        if (menuOpen) move(false)
+        if (menuOpen) {
+            offset = 0
+            gsap.to(el, { y: 0, duration: 0.2, overwrite: true })
+        }
         mq.addEventListener("change", onBreakpoint)
 
         return () => {
