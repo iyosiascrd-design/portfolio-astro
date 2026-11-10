@@ -50,5 +50,5 @@ const { meta } = Astro.props;
 ---
 
 <Base title={meta.title} description={meta.description} image={meta.image}>
-  <Root client:only="react" />
+  <Root initialPath={Astro.url.pathname} client:load />
 </Base>
