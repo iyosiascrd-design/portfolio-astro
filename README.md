@@ -1,45 +1,30 @@
-<p align="center">
-  <img src=".github/assets/banner.png" alt="Lumos For Astro" width="720">
-</p>
+# Iyosias — Portfolio
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/create-lumos"><img alt="npm version" src="https://img.shields.io/npm/v/create-lumos?labelColor=1E1E1E&color=C6FB50"></a>
-  <a href="LICENSE"><img alt="license" src="https://img.shields.io/npm/l/create-lumos?labelColor=1E1E1E&color=C6FB50"></a>
-  <a href="https://github.com/lumosframework/lumos-for-astro/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lumosframework/lumos-for-astro/actions/workflows/ci.yml/badge.svg"></a>
-</p>
+Portfolio of Iyosias, a brand identity designer and creative director based in Addis Ababa, Ethiopia.
 
-A component and styling framework for building Astro sites, designed around
-efficiency, scalability and accessibility.
+The site brings together selected work across brand strategy, visual identity, digital design, presentations, 3D visualization and motion.
 
-Documentation lives at **[lumosframework.com](https://lumosframework.com)**.
+## Built with
 
-## Getting started
+- [Astro](https://astro.build/)
+- React
+- Tailwind CSS
+- Framer Motion
+- GSAP
 
-```sh
-npm create lumos@latest my-site
-```
-
-That scaffolds a new site from this repository and installs its dependencies
-with whichever package manager you ran it with. Then:
+## Development
 
 ```sh
-cd my-site
+npm install
 npm run dev
 ```
 
-| Script            | What it does                      |
-| ----------------- | --------------------------------- |
-| `npm run dev`     | Starts the dev server             |
-| `npm run build`   | Builds the site to `dist/`        |
-| `npm run preview` | Serves the built site             |
-| `npm run check`   | Type-checks every `.astro` file   |
-| `npm run format`  | Formats the project with Prettier |
+## Checks and production build
 
-## Documentation
+```sh
+npm run check
+npm run build
+npm run preview
+```
 
-Component reference, styling guides and examples are at
-[lumosframework.com](https://lumosframework.com).
-
-## License
-
-[MIT](LICENSE)
+The production site is [iyosiasdesign.com](https://iyosiasdesign.com).
