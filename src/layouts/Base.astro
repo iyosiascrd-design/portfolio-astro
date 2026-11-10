@@ -5,13 +5,45 @@ interface Props {
   title?: string
   description?: string
   image?: string
+  type?: "website" | "article"
 }
 
 const {
-  title = "Iyosias",
-  description = "Design portfolio and case studies by Iyosias.",
+  title = "Iyosias | Brand Identity Designer",
+  description = "Brand identity designer and creative director in Addis Ababa, Ethiopia. Strategy, visual identity, digital design and 3D visualization for ambitious businesses.",
   image = "/og-image.png",
+  type = "website",
 } = Astro.props
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: "Iyosias",
+  url: Astro.site,
+  image: new URL("/portrait.jpeg", Astro.site).href,
+  jobTitle: "Brand Identity Designer and Creative Director",
+  description,
+  address: {
+    "@type": "PostalAddress",
+    addressLocality: "Addis Ababa",
+    addressCountry: "ET",
+  },
+  knowsAbout: [
+    "Brand strategy",
+    "Brand identity design",
+    "Graphic design",
+    "Digital design",
+    "Web design",
+    "3D visualization",
+    "Presentation design",
+    "Motion graphics",
+  ],
+  sameAs: [
+    "https://www.instagram.com/iyosias.t/",
+    "https://www.linkedin.com/in/iyosias-tekezeshoa-3524031ba/",
+    "https://x.com/IyosiasTeke",
+  ],
+}
 
 // Hero images are only preloaded for speed (not used for the share preview)
 const HEROES: Record<string, string> = {
@@ -44,7 +76,7 @@ const ogImage = new URL(image, Astro.site)
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <!-- Open Graph (Telegram, WhatsApp, Facebook, LinkedIn) -->
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={type} />
     <meta property="og:site_name" content="Iyosias" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
@@ -52,6 +84,10 @@ const ogImage = new URL(image, Astro.site)
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:alt" content={title} />
+
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
