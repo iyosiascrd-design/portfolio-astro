@@ -1,11 +1,11 @@
-/** Site name. Appended to every page title and used as `og:site_name`. */
-export const SITE_NAME = "Lumos Framework";
-/** Fallback meta description for pages that don't set their own. */
+/** Site name used for metadata and structured data. */
+export const SITE_NAME = "Iyosias";
+/** Default description for pages without custom metadata. */
 export const SITE_DESCRIPTION =
-  "Lumos is a cutting-edge framework for building Astro sites. It's designed with efficiency, scaleability, and accessibility at its core.";
-/** Canonical origin. Resolves canonical URLs, social images, and the sitemap. */
-export const SITE_URL = "https://preview.lumosframework.com";
+  "Brand identity designer and creative director in Addis Ababa, Ethiopia. Strategy, visual identity, digital design and 3D visualization for ambitious businesses.";
+/** Canonical production origin. */
+export const SITE_URL = "https://iyosiasdesign.com";
 /** BCP 47 locale tag used to format dates and numbers. */
-export const SITE_LOCALE = "en-US";
-/** Routes excluded from search and the sitemap. Surrounding slashes are ignored. */
+export const SITE_LOCALE = "en";
+/** Routes excluded from search and the sitemap. */
 export const NOINDEX_ROUTES: string[] = ["/404"];
