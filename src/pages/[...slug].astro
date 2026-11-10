@@ -7,34 +7,36 @@ import Root from "../Root.jsx";
 // must be defined INSIDE it (not in the surrounding frontmatter).
 export function getStaticPaths() {
   const DEFAULT_DESCRIPTION =
-    "Brand identity designer and creative director. I help ambitious companies build brands and websites that match what they have built.";
+    "Brand identity designer and creative director in Addis Ababa, Ethiopia. I help ambitious businesses build distinctive brands through strategy, visual identity, web design and 3D visualization.";
 
-  // All pages share /og-image.png for now; add `image: "/og/origen.png"`
-  // to any entry to give it its own preview image.
   const PAGES = {
     "": {
-      title: "Iyosias | Brand and Web Design",
+      title: "Brand Identity Designer in Ethiopia | Iyosias",
       description: DEFAULT_DESCRIPTION,
     },
     work: {
-      title: "Work | Iyosias",
-      description: "Selected brand identity and web design projects by Iyosias.",
+      title: "Selected Branding & Design Projects | Iyosias",
+      description: "Explore selected brand identity, digital design, presentation and 3D visualization projects by Iyosias, an independent designer in Addis Ababa, Ethiopia.",
     },
     "work/weyra": {
-      title: "Weyra | Case Study by Iyosias",
-      description: "Brand identity and web design case study for Weyra.",
+      title: "Weyra — Brand Identity for Youth-Led Peacebuilding | Iyosias",
+      description: "A visual identity for Weyra, built around the role of Ethiopian youth in dialogue, peacebuilding and a more hopeful public narrative.",
+      image: "/weyra-hero.jpg",
     },
     "work/origen": {
-      title: "Origen | Case Study by Iyosias",
-      description: "Brand identity and web design case study for Origen.",
+      title: "Origen — Ethiopian Coffee Brand Identity | Iyosias",
+      description: "A distinctive identity for an Ethiopian specialty coffee roaster bringing the story and origins of coffee to the Spanish market.",
+      image: "/origen-hero.jpg",
     },
     "work/yimaj": {
-      title: "Yimaj | Case Study by Iyosias",
-      description: "Brand identity and web design case study for Yimaj.",
+      title: "Yimaj Heights — Real Estate Branding & 3D Visuals | Iyosias",
+      description: "Brand identity and architectural 3D visualization for Yimaj Heights, helping bring a premium residential development to life before construction.",
+      image: "/yimaj-hero.jpg",
     },
     "work/zhongshan": {
-      title: "Zhongshan | Case Study by Iyosias",
-      description: "Brand identity and web design case study for Zhongshan.",
+      title: "Zhongshan — China–Ethiopia Sourcing Brand | Iyosias",
+      description: "A premium identity for a sourcing company connecting Ethiopian developers with finishing materials from China.",
+      image: "/zhongshan-house.jpg",
     },
   };
 
