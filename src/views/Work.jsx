@@ -182,6 +182,8 @@ const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
   hour12: false,
 })
 
+// Touch devices get a 44px tap target via an invisible ::before that extends past the text, so the
+// rows keep the same tight spacing as on desktop (padding would push them apart).
 // One row in the services list. GSAP drives the hover so it stays smooth and interruptible.
 // The <li> never moves (it is the hover target); only the <button> inside slides, so the hover
 // area can't flicker at the edge. Mid-hover reversals simply retarget the tween from where it is.
@@ -257,7 +259,7 @@ function ServiceItem({ label, active, onSelect }) {
         type="button"
         onClick={onSelect}
         aria-pressed={active}
-        className="block cursor-pointer text-left will-change-transform [@media(pointer:coarse)]:py-2.5"
+        className="relative block cursor-pointer text-left will-change-transform [@media(pointer:coarse)]:before:absolute [@media(pointer:coarse)]:before:inset-x-0 [@media(pointer:coarse)]:before:-inset-y-2.5"
       >
         {label}
       </button>
