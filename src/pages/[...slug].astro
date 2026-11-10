@@ -22,21 +22,25 @@ export function getStaticPaths() {
       title: "Weyra — Brand Identity for Youth-Led Peacebuilding | Iyosias",
       description: "A visual identity for Weyra, built around the role of Ethiopian youth in dialogue, peacebuilding and a more hopeful public narrative.",
       image: "/weyra-hero.jpg",
+      type: "article",
     },
     "work/origen": {
       title: "Origen — Ethiopian Coffee Brand Identity | Iyosias",
       description: "A distinctive identity for an Ethiopian specialty coffee roaster bringing the story and origins of coffee to the Spanish market.",
       image: "/origen-hero.jpg",
+      type: "article",
     },
     "work/yimaj": {
       title: "Yimaj Heights — Real Estate Branding & 3D Visuals | Iyosias",
       description: "Brand identity and architectural 3D visualization for Yimaj Heights, helping bring a premium residential development to life before construction.",
       image: "/yimaj-hero.jpg",
+      type: "article",
     },
     "work/zhongshan": {
       title: "Zhongshan — China–Ethiopia Sourcing Brand | Iyosias",
       description: "A premium identity for a sourcing company connecting Ethiopian developers with finishing materials from China.",
       image: "/zhongshan-house.jpg",
+      type: "article",
     },
   };
 
@@ -49,6 +53,6 @@ export function getStaticPaths() {
 const { meta } = Astro.props;
 ---
 
-<Base title={meta.title} description={meta.description} image={meta.image}>
+<Base title={meta.title} description={meta.description} image={meta.image} type={meta.type}>
   <Root initialPath={Astro.url.pathname} client:load />
 </Base>
