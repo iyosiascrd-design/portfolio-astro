@@ -986,7 +986,7 @@ export default function Home() {
                     <div className="flex flex-col w-full mt-auto max-md:gap-[96px] gap-[48px] md:gap-[64px] m-0">
                         <main className="flex flex-col items-start gap-[32px] w-full m-0 lg:flex-row lg:items-end lg:justify-between lg:gap-0">
                             <MaskRevealText
-                                as="h3"
+                                as="h1"
                                 mode="lines"
                                 linesFrom="md"
                                 active={pageReady}
