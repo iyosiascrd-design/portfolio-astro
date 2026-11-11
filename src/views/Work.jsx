@@ -70,15 +70,19 @@ const IMAGE_WAIT_MAX = 1500 // ms: never hold the intro longer than this waiting
 // Motion feel: Apple-style. Dragging is 1:1 (the row is glued to your finger, no lag). Letting go keeps
 // your exact finger velocity, projects where a flick would coast to (UIScrollView's deceleration maths),
 // snaps to the nearest card, and gets there on a critically damped spring that starts at that velocity.
-const DECELERATION_RATE = 0.996 // between UIScrollView "normal" (0.998) and "fast" (0.99): flicks project a little shorter, so they settle sooner
+const DECELERATION_RATE = 0.994 // slightly shorter coast than before: with velocity-biased paging, flicks settle sooner
 const SNAP_RESPONSE = 0.38 // s: SwiftUI-style spring response for settling on a card after a release (smaller = snappier)
 const REDUCED_SNAP_RESPONSE = 0.25 // prefers-reduced-motion
 const CATCH_SMOOTH = 0.04 // s: how fast a gliding row is caught when you touch it
-const SLACK_RATE = 18 // 1/s: the first few px of a drag (the click threshold) ease in at this rate instead of jumping
+const SLACK_RATE = 18 // 1/s: eases out any leftover offset between row and finger (drags now rebase at the threshold, so this is normally 0)
 const VELOCITY_WINDOW = 60 // ms of finger history used to measure release velocity
+const FLICK_MIN = 250 // px/s: any flick faster than this always advances at least one card (like UIScrollView paging)
 const GLIDE_SMOOTH = 0.3 // programmatic moves (arrow keys, service click, intro slide): long soft glide, in seconds
 const REDUCED_GLIDE_SMOOTH = 0.14
-const MAX_THROW = 2 // max cards a single flick can travel
+const MAX_THROW = 5 // max cards a single flick can travel (the loop is endless, so a hard flick can go far)
+const FLICK_GAIN = 0.7 // extra distance for the fastest flicks (0 = pure projection). Faster flick = disproportionately farther
+const FLICK_FAST = 3000 // px/s: flick speed at which the gain and the long glide are fully applied
+const MAX_FLICK_SMOOTH = 0.7 // s: softest spring a fast flick may use (longer = a longer, more luxurious slow-down)
 const STACK_SCALE = 0.15 // how much a card shrinks while it stacks (0 for reduced motion)
 const SHADE_MAX = 0.4 // max strength of the stacking gradient (0 = none, 1 = solid black at the dark edge)
 const WHEEL_SNAP_DELAY = 90 // ms after the last wheel/trackpad event before settling on a card
@@ -363,6 +367,7 @@ export default function Work() {
     // SwiftUI "response" -> SmoothDamp smoothTime (omega = 2*pi/response = 2/smoothTime)
     const snapSmooth = (reduceMotion ? REDUCED_SNAP_RESPONSE : SNAP_RESPONSE) / Math.PI
     const stackScale = reduceMotion ? 0 : STACK_SCALE
+    const dpr = window.devicePixelRatio || 1
 
     let x = 0 // rendered offset
     let v = 0 // rendered velocity (px/s), carried across drag -> release so nothing ever jumps
@@ -381,9 +386,9 @@ export default function Work() {
     let settleSmooth = glideSmooth // spring softness used while not tracking a finger
     let wheelActive = false // trackpad swipe in progress: also tracked 1:1
     let autoDrift = false // true while the row is auto-scrolling (the loop pushes target left every frame)
-    let slack = 0 // px the row is "behind" the finger right after the drag threshold; eases to 0
+    let slack = 0 // leftover px between row and finger; drags rebase at the threshold so this stays 0
     let travel = 0 // unwrapped position (the loop wrap would otherwise look like a huge velocity)
-    const samples = [] // finger history, one per frame while tracking
+    const samples = [] // finger history (raw pointer px for drags, row travel for wheel)
 
     // Cache each card's parts once so the per-frame paint does no DOM queries
     const parts = cards.map((card) =>
@@ -427,7 +432,9 @@ export default function Work() {
       })
     }
 
-    const paint = () => {
+    // snapPx = true only when the row has come to rest: land on a whole device pixel so images and
+    // labels are crisp instead of slightly soft from a fractional resting offset.
+    const paint = (snapPx = false) => {
       if (!step) return
       const setWidth = step * N
 
@@ -442,7 +449,8 @@ export default function Work() {
         startTarget -= setWidth
       }
 
-      track.style.transform = `translate3d(${x}px, 0, 0)`
+      const tx = snapPx ? Math.round(x * dpr) / dpr : x
+      track.style.transform = `translate3d(${tx}px, 0, 0)`
 
       // --- STACKING DECK ---
       for (let i = 0; i < parts.length; i++) {
@@ -492,7 +500,6 @@ export default function Work() {
 
       if (tracking) {
         // Direct manipulation: the row IS where your finger put it (1:1, one write per frame).
-        // Only the few px of click threshold are eased out so there is no jump when the drag begins.
         slack *= Math.exp(-dt * SLACK_RATE)
         if (Math.abs(slack) < 0.05) slack = 0
         x = target + slack
@@ -509,12 +516,13 @@ export default function Work() {
       paint()
 
       if (tracking) {
-        pushSample()
+        // Drags sample the raw pointer in onPointerMove; only the wheel is sampled per frame
+        if (wheelActive) pushSample()
         if (slack === 0) { raf = 0; return } // finger is still: sleep until the next move
       } else if (Math.abs(target - x) < 0.05 && Math.abs(v) < 0.5) {
         x = target
         v = 0
-        paint()
+        paint(true) // at rest: land on a whole device pixel
         raf = 0
         settleWaiters.splice(0).forEach((resolve) => resolve())
         return
@@ -631,14 +639,15 @@ export default function Work() {
     const wait = (ms) => new Promise((resolve) => timers.push(setTimeout(resolve, ms)))
 
     /* ---------- release physics ---------- */
-    const pushSample = () => {
-      const t = performance.now()
-      samples.push({ p: travel, t })
+    // Records a position/time pair. Drags pass the RAW pointer x and its event timestamp (so velocity is the
+    // finger's, not the rendered row's, which trails by a frame). The wheel uses the default (row travel, now).
+    const pushSample = (p = travel, t = performance.now()) => {
+      samples.push({ p, t })
       while (samples.length > 2 && t - samples[0].t > VELOCITY_WINDOW * 2) samples.shift()
     }
     // Finger velocity (px/s) over the last VELOCITY_WINDOW ms. Held still before letting go = 0, like iOS.
-    const sampledVelocity = () => {
-      pushSample() // end the measurement exactly at release
+    const sampledVelocity = (endP = travel) => {
+      pushSample(endP) // end the measurement exactly at release
       const now = performance.now()
       const recent = samples.filter((s) => now - s.t <= VELOCITY_WINDOW)
       if (recent.length < 2) return 0
@@ -648,28 +657,53 @@ export default function Work() {
       return dt < 0.016 ? 0 : (b.p - a.p) / dt
     }
     // Hand the row back to the spring: keep the finger's exact velocity, project where a flick would
-    // coast to, snap to the nearest card, and spring there starting at that velocity.
+    // coast to, snap to the nearest card (flicks always advance at least one card), and spring there
+    // starting at that velocity, stiffened just enough that it never overshoots.
     const releaseWith = (vel) => {
+      // 0 for a gentle release, 1 for a very fast flick
+      const speed = clamp((Math.abs(vel) - FLICK_MIN) / (FLICK_FAST - FLICK_MIN), 0, 1)
       const throwDist = clamp(
-        (vel * DECELERATION_RATE) / (1 - DECELERATION_RATE) / 1000,
+        ((vel * DECELERATION_RATE) / (1 - DECELERATION_RATE) / 1000) * (1 + FLICK_GAIN * speed),
         -MAX_THROW * step,
         MAX_THROW * step
       )
-      const projected = x + throwDist
-      target = SNAP && step ? Math.round(projected / step) * step : projected
+      let goal = SNAP && step ? Math.round((x + throwDist) / step) * step : x + throwDist
+
+      // Like UIScrollView paging: a deliberate flick goes to the next card in its direction
+      if (SNAP && step && Math.abs(vel) > FLICK_MIN) {
+        const pos = x / step
+        goal =
+          vel > 0
+            ? Math.max(goal, Math.ceil(pos - 0.02) * step)
+            : Math.min(goal, Math.floor(pos + 0.02) * step)
+      }
+      target = goal
+
+      // A critically damped spring overshoots when |v| > omega * distance (omega = 2 / smoothTime).
+      // Stiffen the spring just enough, and cap v, so a flick never rubber-bands.
+      const dist = Math.abs(goal - x)
+      let smooth = snapSmooth
       v = vel
+      if (dist > 1 && Math.sign(goal - x) === Math.sign(vel) && Math.abs(vel) > 1) {
+        // 2 * dist / |vel| is the softest spring that still can't overshoot. Slow releases stay crisp
+        // (snapSmooth); fast flicks may use a much longer one, so the row keeps its speed over several
+        // cards and then eases out slowly, instead of braking hard.
+        const softest = snapSmooth + (MAX_FLICK_SMOOTH - snapSmooth) * speed
+        smooth = clamp((2 * dist) / Math.abs(vel), 0.06, Math.max(snapSmooth, softest))
+        const maxV = (2 / smooth) * dist
+        v = Math.sign(vel) * Math.min(Math.abs(vel), maxV)
+      }
       slack = 0
-      settleSmooth = snapSmooth
+      settleSmooth = smooth
       kick()
     }
 
     /* ---------- input: drag (pointer capture), wheel, keyboard, focus ---------- */
     const onPointerMove = (e) => {
       if (!dragging || e.pointerId !== activePointer) return
-      const dx = e.clientX - startX
 
       if (!draggedRef.current) {
-        if (Math.abs(dx) <= DRAG_THRESHOLD) return
+        if (Math.abs(e.clientX - startX) <= DRAG_THRESHOLD) return
         draggedRef.current = true
         // Capture only once it's really a drag, so plain clicks keep their normal target
         try {
@@ -677,13 +711,19 @@ export default function Work() {
         } catch {
           /* pointer already gone */
         }
-        target = startTarget + dx
-        slack = x - target // no jump: the threshold px ease out instead
+        // Rebase: row and finger start in sync from here. No slack, no lag.
+        startX = e.clientX
+        startTarget = x
+        target = x
+        slack = 0
         samples.length = 0
-        pushSample()
       }
 
-      target = startTarget + dx // applied 1:1 by the loop on the next frame
+      // Feed every coalesced event (up to 240Hz on trackpads and Pencil) into the velocity measurement
+      const evs = e.getCoalescedEvents?.() ?? [e]
+      for (const ce of evs) pushSample(ce.clientX, ce.timeStamp)
+
+      target = startTarget + (e.clientX - startX) // applied 1:1 by the loop on the next frame
       kick()
     }
 
@@ -696,7 +736,7 @@ export default function Work() {
     function onPointerUp(e) {
       if (!dragging || e.pointerId !== activePointer) return
       const wasDrag = draggedRef.current
-      const vel = wasDrag ? sampledVelocity() : 0 // measure while still in drag mode
+      const vel = wasDrag ? sampledVelocity(e.clientX) : 0 // measure from the finger while still in drag mode
       dragging = false
       scheduleResume(AUTO_RESUME_DELAY)
       endDrag()
@@ -1052,14 +1092,17 @@ export default function Work() {
                 }}
                 aria-hidden={canonical ? undefined : true}
                 tabIndex={canonical ? undefined : -1}
-                className="block shrink-0 md:will-change-transform md:[contain:layout] md:w-[var(--card-w)]"
+                // will-change only on the 4 on-screen (middle set) cards: 12 promoted layers is a lot of texture memory
+                className={`block shrink-0 md:[contain:layout] md:w-[var(--card-w)] ${canonical ? "md:will-change-transform" : ""}`}
                 style={{ transformOrigin: "left center" }}
                 draggable={false}
               >
                 <div className="card-inner" style={!pageReady ? { opacity: 0 } : {}}>
                   <div
                     className="relative aspect-[4/5] w-full overflow-hidden bg-[var(--bg-surface-light)]"
-                    style={{ borderRadius: CARD_RADIUS }}
+                    // isolation + translateZ(0): gives the rounded clip its own compositor layer, so
+                    // border-radius + overflow-hidden on a moving, scaled card doesn't stutter on mid-range GPUs
+                    style={{ borderRadius: CARD_RADIUS, isolation: "isolate", transform: "translateZ(0)" }}
                   >
                     {imgSrc &&
                       (USE_RESPONSIVE_IMAGES ? (
