@@ -1,4 +1,3 @@
-// src/components/Preloader.jsx
 import React, { useEffect, useRef, useState } from "react"
 import gsap from "gsap"
 import { usePageTransition, shouldPreload, announcePreloadDone, PRELOAD_KEY } from "./PageTransitionOverlay"
@@ -102,8 +101,8 @@ function trackLoading(onProgress) {
 }
 
 export default function Preloader({ lenisRef }) {
-    const ctx = usePageTransition()
-    const finishPreload = ctx?.finishPreload
+    const ctxTransition = usePageTransition()
+    const finishPreload = ctxTransition?.finishPreload
     const [show, setShow] = useState(shouldPreload)
 
     const overlayRef = useRef(null)
@@ -119,210 +118,178 @@ export default function Preloader({ lenisRef }) {
 
         document.body.style.overflow = "hidden"
         const lockRaf = requestAnimationFrame(() => lenisRef?.current?.stop())
+        
+        let ctx = gsap.context(() => {
+            const overlay = overlayRef.current
+            const findMain = () => document.querySelector("[data-page-transition]") || document.querySelector("main")
+            let mainEl = findMain()
 
-        const overlay = overlayRef.current
-        const findMain = () => document.querySelector("[data-page-transition]") || document.querySelector("main")
-        let mainEl = findMain()
+            let finished = false
+            let maxTimer = null
+            let introTl = null
+            let loopTl = null
+            let exitTl = null
+            let loopDone = false
+            let rawP = 0 
+            const t0 = performance.now()
 
-        let cancelled = false
-        let finished = false
-        let maxTimer = null
-        let introTl = null
-        let loopTl = null
-        let exitTl = null
-        let loopDone = false
-        let rawP = 0 // real loading progress, 0..1
-        const t0 = performance.now()
-
-        const unlock = () => {
-            document.body.style.overflow = ""
-            lenisRef?.current?.start()
-        }
-
-        // Each letter is a single glyph on its own reel.
-        // Intro: reel rises from below (y = pitch) to rest (y = 0).
-        // Exit: reel keeps going up and out (y = -pitch). The clip hides both ends.
-        const reels = LETTERS.map(({ row }) => ({ y: rowPitch(row) }))
-
-        const paintReels = () => {
-            for (let i = 0; i < reels.length; i++) {
-                const el = stripRefs.current[i]
-                if (!el) continue
-                el.setAttribute("transform", `translate(0 ${reels[i].y.toFixed(2)})`)
+            const unlock = () => {
+                document.body.style.overflow = ""
+                lenisRef?.current?.start()
             }
-        }
-        paintReels()
-        gsap.ticker.add(paintReels)
 
-        const offsets = LETTERS.map(({ row, pos }) =>
-            row === 0
-                ? pos * P.letterStagger
-                : (ROW_GLYPHS[0].length - 1) * P.letterStagger + P.rowGap + pos * P.letterStagger
-        )
+            const reels = LETTERS.map(({ row }) => ({ y: rowPitch(row) }))
 
-        // bot: overlay clip from the bottom (0 = covering, 100 = gone)
-        // y:   page offset in px
-        const s = { bot: 0, y: 0 }
-
-        const sync = () => {
-            if (overlay) {
-                const clip = `inset(0% 0% ${s.bot}% 0%)`
-                overlay.style.clipPath = clip
-                overlay.style.webkitClipPath = clip
+            const paintReels = () => {
+                for (let i = 0; i < reels.length; i++) {
+                    const el = stripRefs.current[i]
+                    if (!el) continue
+                    el.setAttribute("transform", `translate(0 ${reels[i].y.toFixed(2)})`)
+                }
             }
-            if (mainEl) {
-                mainEl.style.transform = s.y ? `translate3d(0, ${s.y}px, 0)` : ""
+            paintReels()
+            gsap.ticker.add(paintReels)
+
+            const offsets = LETTERS.map(({ row, pos }) =>
+                row === 0
+                    ? pos * P.letterStagger
+                    : (ROW_GLYPHS[0].length - 1) * P.letterStagger + P.rowGap + pos * P.letterStagger
+            )
+
+            const s = { bot: 0, y: 0 }
+
+            const sync = () => {
+                if (overlay) {
+                    const clip = `inset(0% 0% ${s.bot}% 0%)`
+                    overlay.style.clipPath = clip
+                    overlay.style.webkitClipPath = clip
+                }
+                if (mainEl) {
+                    mainEl.style.transform = s.y ? `translate3d(0, ${s.y}px, 0)` : ""
+                }
             }
-        }
 
-        const clearMain = () => {
-            if (mainEl) mainEl.style.transform = ""
-        }
+            const clearMain = () => {
+                if (mainEl) mainEl.style.transform = ""
+            }
 
-        const handOver = () => {
-            clearMain()
-            unlock()
-            setShow(false)
-        }
+            const handOver = () => {
+                clearMain()
+                unlock()
+                setShow(false)
+            }
 
-        // ---- intro: letters rise in, staggered, then sit still ----
-        introTl = gsap.timeline()
-        reels.forEach((r, i) => {
-            introTl.to(r, { y: 0, duration: P.reelDuration, ease: P.reelEase }, offsets[i])
+            introTl = gsap.timeline()
+            reels.forEach((r, i) => {
+                introTl.to(r, { y: 0, duration: P.reelDuration, ease: P.reelEase }, offsets[i])
+            })
+
+            const maxOffset = Math.max(...offsets)
+            const cycle = maxOffset + P.loopDuration
+
+            const pickLoopCount = () => {
+                if (rawP >= 0.999) return P.loopMin 
+                if (rawP <= 0.05) return P.loopMax 
+                const elapsed = (performance.now() - t0) / 1000
+                const remaining = Math.max(0, elapsed / rawP - elapsed)
+                const n = Math.ceil(remaining / cycle)
+                return Math.min(P.loopMax, Math.max(P.loopMin, n))
+            }
+
+            const startLoop = () => {
+                const count = pickLoopCount()
+                loopTl = gsap.timeline({
+                    onComplete: () => {
+                        loopDone = true
+                    },
+                })
+                reels.forEach((r, i) => {
+                    for (let k = 0; k < count; k++) {
+                        loopTl.fromTo(
+                            r,
+                            { y: 0 },
+                            {
+                                y: -rowPitch(LETTERS[i].row),
+                                duration: P.loopDuration,
+                                ease: P.loopEase,
+                                immediateRender: false,
+                                onComplete: () => {
+                                    r.y = 0
+                                },
+                            },
+                            offsets[i] + k * P.loopDuration
+                        )
+                    }
+                })
+            }
+            introTl.call(startLoop, null, P.reelDuration)
+
+            const master = { p: 0 }
+            const real = { v: 0 }
+
+            const setReal = (r) => {
+                rawP = r
+                gsap.to(real, { v: r, duration: 0.5, ease: "power2.out", overwrite: true })
+            }
+
+            trackLoading(setReal)
+            maxTimer = setTimeout(() => setReal(1), P.maxWait)
+            gsap.to(master, { p: 1, duration: P.minWait, ease: "linear" })
+
+            const exit = () => {
+                reels.forEach((r) => (r.y = 0))
+                copyRefs.current.forEach((el) => el && (el.style.display = "none"))
+                paintReels()
+
+                const H = window.innerHeight
+                const revealAt = P.logoHold + P.revealLead
+
+                mainEl = findMain() 
+                s.y = P.newPageOffset * H
+                sync()
+
+                exitTl = gsap.timeline({ onComplete: handOver, onUpdate: sync })
+
+                reels.forEach((r, i) => {
+                    exitTl.to(
+                        r,
+                        { y: -rowPitch(LETTERS[i].row), duration: P.rollOut, ease: P.rollOutEase },
+                        P.logoHold + offsets[i] * 0.6
+                    )
+                })
+
+                exitTl.to(s, { bot: 100, duration: P.reveal, ease: P.revealEase }, revealAt)
+                exitTl.to(s, { y: 0, duration: P.reveal + P.pageExtra, ease: P.pageEase }, revealAt)
+
+                exitTl.add(() => {
+                    finishPreload?.()
+                    announcePreloadDone()
+                }, revealAt + P.contentDelay)
+            }
+
+            const tick = () => {
+                if (finished) return
+                if (master.p < 1 || real.v < 0.999) return
+                if (introTl.progress() < 1) return
+                if (!loopDone) return
+                finished = true
+                gsap.ticker.remove(tick)
+                exit()
+            }
+            gsap.ticker.add(tick)
+
+            return () => {
+                clearTimeout(maxTimer)
+                gsap.ticker.remove(tick)
+                gsap.ticker.remove(paintReels)
+                clearMain()
+                unlock()
+            }
         })
 
-        // ---- loop: same roll as the intro, chained with no pause ----
-        // Each strip holds two copies of its glyph. Rolling y from 0 to -pitch pushes the
-        // current copy out the top while the second copy rises into the same spot, then y
-        // resets to 0 (identical picture), so every repeat looks exactly like the intro.
-        // Each letter starts its first repeat the moment it lands from the intro, and each
-        // repeat starts the moment the previous one ends, so the logo never sits still.
-        const maxOffset = Math.max(...offsets)
-        const cycle = maxOffset + P.loopDuration
-
-        // Decide the number of repeats once, when the first letter lands: estimate the
-        // remaining load time from the progress so far, then fit that many cycles into it.
-        const pickLoopCount = () => {
-            if (rawP >= 0.999) return P.loopMin // already loaded
-            if (rawP <= 0.05) return P.loopMax // barely started: assume slow
-            const elapsed = (performance.now() - t0) / 1000
-            const remaining = Math.max(0, elapsed / rawP - elapsed)
-            const n = Math.ceil(remaining / cycle)
-            return Math.min(P.loopMax, Math.max(P.loopMin, n))
-        }
-
-        const startLoop = () => {
-            if (cancelled) return
-            const count = pickLoopCount()
-            loopTl = gsap.timeline({
-                onComplete: () => {
-                    loopDone = true
-                },
-            })
-            reels.forEach((r, i) => {
-                for (let k = 0; k < count; k++) {
-                    loopTl.fromTo(
-                        r,
-                        { y: 0 },
-                        {
-                            y: -rowPitch(LETTERS[i].row),
-                            duration: P.loopDuration,
-                            ease: P.loopEase,
-                            immediateRender: false,
-                            onComplete: () => {
-                                r.y = 0
-                            },
-                        },
-                        offsets[i] + k * P.loopDuration
-                    )
-                }
-            })
-        }
-        // First letter has landed: the rest are still landing, and loopTl's per-letter
-        // offsets line each letter's first repeat up with its own landing.
-        introTl.call(startLoop, null, P.reelDuration)
-
-        // ---- loading tracking ----
-        const master = { p: 0 }
-        const real = { v: 0 }
-
-        const setReal = (r) => {
-            if (cancelled) return
-            rawP = r
-            gsap.to(real, { v: r, duration: 0.5, ease: "power2.out", overwrite: true })
-        }
-
-        trackLoading(setReal)
-        maxTimer = setTimeout(() => setReal(1), P.maxWait)
-        gsap.to(master, { p: 1, duration: P.minWait, ease: "linear" })
-
-        // ---- exit: letters roll out the top while the mask wipes up ----
-        const exit = () => {
-            // Exit rolls letters out the top with nothing rising in behind them,
-            // so drop the second glyph copy that the loop used.
-            reels.forEach((r) => (r.y = 0))
-            copyRefs.current.forEach((el) => el && (el.style.display = "none"))
-            paintReels()
-
-            const H = window.innerHeight
-            const revealAt = P.logoHold + P.revealLead
-
-            // Page sits below, hidden under the black overlay, ready to rise.
-            mainEl = findMain() // re-query: the routed page may have mounted after the preloader did
-            s.y = P.newPageOffset * H
-            sync()
-
-            exitTl = gsap.timeline({ onComplete: handOver, onUpdate: sync })
-
-            // letters roll up and out, same odometer language as the intro
-            reels.forEach((r, i) => {
-                exitTl.to(
-                    r,
-                    {
-                        y: -rowPitch(LETTERS[i].row),
-                        duration: P.rollOut,
-                        ease: P.rollOutEase,
-                    },
-                    P.logoHold + offsets[i] * 0.6
-                )
-            })
-
-            // mask wipes up
-            exitTl.to(s, { bot: 100, duration: P.reveal, ease: P.revealEase }, revealAt)
-
-            // page rises slightly longer and softer than the mask (parallax)
-            exitTl.to(s, { y: 0, duration: P.reveal + P.pageExtra, ease: P.pageEase }, revealAt)
-
-            // let page content animate only once the mask is already moving
-            exitTl.add(() => {
-                finishPreload?.()
-                announcePreloadDone()
-            }, revealAt + P.contentDelay)
-        }
-
-        const tick = () => {
-            if (cancelled || finished) return
-            if (master.p < 1 || real.v < 0.999) return
-            if (introTl.progress() < 1) return
-            if (!loopDone) return
-            finished = true
-            gsap.ticker.remove(tick)
-            exit()
-        }
-        gsap.ticker.add(tick)
-
         return () => {
-            cancelled = true
             cancelAnimationFrame(lockRaf)
-            clearTimeout(maxTimer)
-            gsap.ticker.remove(tick)
-            gsap.ticker.remove(paintReels)
-            introTl?.kill()
-            loopTl?.kill()
-            exitTl?.kill()
-            gsap.killTweensOf([master, real, s, ...reels])
-            clearMain()
-            unlock()
+            ctx.revert()
         }
     }, [show, lenisRef, finishPreload])
 

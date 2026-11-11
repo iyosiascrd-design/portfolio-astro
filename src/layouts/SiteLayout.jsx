@@ -6,7 +6,7 @@ import { motion, useMotionValue, useTransform, useSpring, useReducedMotion, cubi
 import Lenis from "lenis"
 import { ArrowUp } from "lucide-react"
 
-import Header from "../components/Header"
+import Header, { PENDING_SCROLL_KEY } from "../components/Header"
 import Logo from "../components/Logo"
 import RollingLink from "../components/RollingLink"
 import FitText from "../components/FitText"
@@ -328,6 +328,47 @@ function FooterLogoLink({ scrollToTarget }) {
     )
 }
 
+const FOOTER_LINK_CLASS = "H5 max-md:!text-[length:var(--fm-list-size)] text-white transition-colors duration-200 hover:text-white/80"
+
+// Footer navigation link. Same behaviour as the header links:
+// - on the homepage it smooth-scrolls (Lenis) to the section
+// - from any other page it plays the page transition, then lands on the section
+// Lives in its own component because usePageTransition() only works below <PageTransitionProvider>.
+function FooterNavLink({ href, label, scrollToTarget }) {
+    const { pathname } = useLocation()
+    const pageTransition = usePageTransition()
+    const navigate = useNavigate()
+
+    const handleClick = (e) => {
+        // Let the browser handle new-tab / modified clicks
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+        e.preventDefault()
+
+        const i = href.indexOf("#")
+        const section = i >= 0 ? href.slice(i) : null // "#services" or null for "/"
+
+        if (pathname === "/") {
+            scrollToTarget(section || 0)
+            return
+        }
+
+        // Other page: remember the section, play the transition, Header lands on it
+        if (section) {
+            try {
+                sessionStorage.setItem(PENDING_SCROLL_KEY, section)
+            } catch {}
+        }
+        if (pageTransition?.triggerTransition) pageTransition.triggerTransition(href)
+        else navigate(href)
+    }
+
+    return (
+        <RollingLink href={href} className={FOOTER_LINK_CLASS} onClick={handleClick}>
+            {label}
+        </RollingLink>
+    )
+}
+
 function SiteLayoutInternal() {
     const vp = useViewport()
     const { pathname } = useLocation()
@@ -365,8 +406,13 @@ function SiteLayoutInternal() {
     }, [pathname, heroFade, headerFade, smoothHeaderFade])
 
     useEffect(() => {
-        window.scrollTo(0, 0)
-        lenisRef.current?.scrollTo(0, { immediate: true })
+        // Arriving on a #section (e.g. "/#services"): Header lands on it, so do NOT reset to the top
+        // here. This effect runs right after Header's jump and would undo it, causing a second jump.
+        const landingOnSection = !!window.location.hash
+        if (!landingOnSection) {
+            window.scrollTo(0, 0)
+            lenisRef.current?.scrollTo(0, { immediate: true })
+        }
         const t = setTimeout(() => { lenisRef.current?.resize() }, 150)
         return () => clearTimeout(t)
     }, [pathname])
@@ -445,7 +491,7 @@ function SiteLayoutInternal() {
                 <div className="relative w-full overflow-x-clip bg-[var(--bg-dark)] selection:bg-black selection:text-white">
                     <style>{RESPONSIVE_CSS}</style>
 
-                    <Header dark={headerDark} opacity={smoothHeaderFade} scrollToTarget={scrollToTarget} />
+                    <Header dark={headerDark} opacity={smoothHeaderFade} scrollToTarget={scrollToTarget} lenisRef={lenisRef} />
 
                     <TransitionMain className="relative z-10 bg-[var(--bg-dark)] overflow-clip">
                         <Outlet context={{ setHeaderLight, scrollToTarget, heroFade, headerFade, lenisRef }} />
@@ -489,23 +535,7 @@ function SiteLayoutInternal() {
                                 <nav className="flex flex-col gap-[6px] md:gap-0">
                                     {FOOTER_NAV.map(({ label, href }, i) => (
                                         <RiseMask key={label} progress={footerRevealSmooth} range={[FOOTER_RANGES.linksStart + i * FOOTER_RANGES.linkStep, FOOTER_RANGES.linksStart + i * FOOTER_RANGES.linkStep + FOOTER_RANGES.linkLength]}>
-                                            <RollingLink 
-                                                href={href} 
-                                                className="H5 max-md:!text-[length:var(--fm-list-size)] text-white transition-colors duration-200 hover:text-white/80" 
-                                                onClick={(e) => { 
-                                                    if (pathname === "/") {
-                                                        if (href === "/") {
-                                                            e.preventDefault();
-                                                            scrollToTarget(0);
-                                                        } else if (href.startsWith("/#")) {
-                                                            e.preventDefault();
-                                                            scrollToTarget(href.replace("/", "")); 
-                                                        }
-                                                    } 
-                                                }}
-                                            >
-                                                {label}
-                                            </RollingLink>
+                                            <FooterNavLink href={href} label={label} scrollToTarget={scrollToTarget} />
                                         </RiseMask>
                                     ))}
                                 </nav>

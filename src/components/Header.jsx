@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import gsap from "gsap"
 import MaskRevealText from "./MaskRevealText"
-import { usePageTransition } from "./PageTransitionOverlay"
+import { usePageTransition, announcePageLanded } from "./PageTransitionOverlay"
 
 /* ------------------------------------------------------------------
    Layout (matches the 1512px reference)
@@ -35,6 +35,14 @@ const NAV = [
 // The Work link opens the dedicated /work page; the other links scroll to a homepage section.
 const WORK_ROUTE = "/work"
 const hrefFor = (target) => (target === "#work" ? WORK_ROUTE : target)
+
+// sessionStorage key used to remember which homepage section to scroll to after a page change.
+// Must be a NAMED EXPORT: SiteLayout.jsx imports it.
+export const PENDING_SCROLL_KEY = "pendingScroll"
+
+// Extra scroll offset in px when landing on a section. Negative = land higher up
+// (shows more above the section's top edge). Tweak this if the title still sits too high or low.
+const SCROLL_OFFSET = 0
 
 const GET_IN_TOUCH = { label: "Get In Touch", href: "mailto:info@iyosiasdesign.com" }
 
@@ -206,6 +214,8 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
     const closeLblMenuRef = useRef(null)
     const closeLblCloseRef = useRef(null)
     const closePillRef = useRef(null)
+    // true while we programmatically land on a section (the scroll-linked header must ignore it)
+    const landingRef = useRef(false)
 
     /* ---------- phone: scroll-linked header (iOS-style collapsing bar) ----------
        The header's position is a direct function of scroll distance, so it tracks the finger
@@ -254,6 +264,11 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
 
         const onScroll = () => {
             const y = Math.max(0, window.scrollY) // ignore iOS rubber-band overscroll
+            // Programmatic landing jump: track position, but never hide/show the bar for it
+            if (landingRef.current) {
+                lastY = y
+                return
+            }
             const diff = y - lastY
             lastY = y
             if (!diff) return
@@ -510,6 +525,132 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         }
     }, [lenisRef])
 
+    /* ---------- arriving on the homepage from another page: land on the requested section ----------
+       handleNavClick stores the target (e.g. "#services") before the route changes.
+
+       Rules that keep this smooth under the page transition:
+       1. Measure WITHOUT the transition's transform. The overlay slides <main> with a translate3d
+          while it is covered, so getBoundingClientRect() lies by up to 20% of the viewport. We subtract
+          that shift, so the first jump is already exact and nothing is "fixed" later in front of the visitor.
+       2. Land once, then re-correct only when the page height really changes (ResizeObserver),
+          coalesced to one jump per frame. No fixed timers.
+       3. Lenis is stopped and the scroll-linked header is told to ignore the jump while we land.
+       4. When settled (400ms with no layout change) we tell the overlay, which holds its reveal until then. */
+
+    useLayoutEffect(() => {
+        if (location.pathname !== "/") return
+
+        let target = null
+        try {
+            target = sessionStorage.getItem(PENDING_SCROLL_KEY)
+        } catch {}
+        if (!target && location.hash) target = location.hash
+        if (!target) return
+        try {
+            sessionStorage.removeItem(PENDING_SCROLL_KEY)
+        } catch {}
+
+        const lenis = lenisRef?.current
+        let cancelled = false
+        let raf = 0
+        let quietTimer = 0
+        let hardStop = 0
+        let ro = null
+
+        // How far the page transition currently has <main> shifted (0 at rest)
+        const pageShift = () => {
+            const main = document.querySelector("[data-page-transition]")
+            if (!main) return 0
+            const t = getComputedStyle(main).transform
+            return t && t !== "none" ? new DOMMatrixReadOnly(t).m42 : 0
+        }
+        // Absolute scroll position of the section, independent of any transition transform
+        const targetY = (el) => el.getBoundingClientRect().top - pageShift() + window.scrollY + SCROLL_OFFSET
+
+        const jump = (el) => {
+            const y = Math.max(0, targetY(el))
+            if (lenis?.scrollTo) {
+                lenis.resize?.()
+                lenis.scrollTo(y, { immediate: true, force: true })
+            } else {
+                window.scrollTo({ top: y, behavior: "auto" })
+            }
+        }
+        const offBy = (el) => Math.abs(targetY(el) - window.scrollY)
+
+        const userEvents = ["wheel", "touchstart", "keydown", "mousedown"]
+
+        const finish = () => {
+            if (cancelled) return
+            cancelled = true
+            cancelAnimationFrame(raf)
+            clearTimeout(quietTimer)
+            clearTimeout(hardStop)
+            ro?.disconnect()
+            userEvents.forEach((ev) => window.removeEventListener(ev, finish))
+            landingRef.current = false
+            lenis?.start()
+            announcePageLanded()
+        }
+
+        // The visitor takes over: stop correcting immediately
+        userEvents.forEach((ev) => window.addEventListener(ev, finish, { passive: true }))
+
+        landingRef.current = true
+        lenis?.stop() // nothing can fight the jump
+
+        // Re-correct only when the page actually changes height
+        const watchLayout = (el) => {
+            let pending = false
+            ro = new ResizeObserver(() => {
+                if (cancelled || pending) return
+                pending = true
+                raf = requestAnimationFrame(() => {
+                    pending = false
+                    if (cancelled) return
+                    if (offBy(el) > 1) jump(el)
+                    clearTimeout(quietTimer)
+                    quietTimer = setTimeout(finish, 400) // 400ms of no layout change = settled
+                })
+            })
+            ro.observe(document.documentElement)
+            quietTimer = setTimeout(finish, 400)
+            hardStop = setTimeout(finish, 2500) // never listen forever
+        }
+
+        const land = (el) => {
+            jump(el) // this runs before paint, so the first frame is already at the section
+            const fontsReady = document.fonts?.ready ?? Promise.resolve()
+            fontsReady.then(() => {
+                if (cancelled) return
+                raf = requestAnimationFrame(() => {
+                    // one frame for the font swap to re-wrap the hero
+                    if (cancelled) return
+                    if (offBy(el) > 1) jump(el)
+                    watchLayout(el)
+                })
+            })
+        }
+
+        const first = document.querySelector(target)
+        if (first) {
+            land(first)
+        } else {
+            // Section not mounted yet: wait frame by frame (max ~4s)
+            let frames = 0
+            const poll = () => {
+                if (cancelled) return
+                const el = document.querySelector(target)
+                if (el) return land(el)
+                if (++frames > 240) return finish()
+                raf = requestAnimationFrame(poll)
+            }
+            raf = requestAnimationFrame(poll)
+        }
+
+        return finish
+    }, [location.pathname, location.hash])
+
     /* ---------- navigation ---------- */
 
     const handleNavClick = (e, targetId) => {
@@ -528,8 +669,11 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
                 if (location.pathname !== WORK_ROUTE) go(WORK_ROUTE)
                 return
             }
-            // Off the homepage: play the page transition, then land on the section
+            // Off the homepage: remember the section, play the page transition, then land on it
             if (location.pathname !== "/") {
+                try {
+                    sessionStorage.setItem(PENDING_SCROLL_KEY, targetId)
+                } catch {}
                 go("/" + targetId)
                 return
             }

@@ -67,6 +67,13 @@ export function announcePreloadDone() {
     if (typeof window !== "undefined") window.dispatchEvent(new Event(PRELOAD_DONE_EVENT))
 }
 
+// Header -> provider handoff: the page has landed on its target section and its layout is
+// stable, so the overlay can reveal without the visitor ever seeing a scroll correction.
+const PAGE_LANDED_EVENT = "iyosias:page-landed"
+export function announcePageLanded() {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(PAGE_LANDED_EVENT))
+}
+
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()))
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -389,7 +396,20 @@ export function PageTransitionProvider({ children }) {
 
                 if (!mounted.current) return
 
-                // 2) SWAP: fully covered, change route; new page starts lower down
+                // 2) SWAP: fully covered, change route; new page starts lower down.
+                // A target with a #section means the Header will scroll to it: listen BEFORE
+                // navigating, so the reveal can wait until that scroll has settled.
+                const landed = to.includes("#")
+                    ? new Promise((resolve) => {
+                          const done = () => {
+                              window.removeEventListener(PAGE_LANDED_EVENT, done)
+                              clearTimeout(cap)
+                              resolve()
+                          }
+                          const cap = setTimeout(done, 2000) // never hold the reveal forever
+                          window.addEventListener(PAGE_LANDED_EVENT, done)
+                      })
+                    : Promise.resolve()
                 navigate(to)
                 s.y = T.newPageOffset * H
                 sync()
@@ -407,8 +427,8 @@ export function PageTransitionProvider({ children }) {
                     return
                 }
 
-                // Let the logo finish landing before anything is revealed
-                await lettersLanded
+                // Let the logo finish landing, and the page finish settling, before anything is revealed
+                await Promise.all([lettersLanded, landed])
                 await nextFrame()
                 await nextFrame()
                 await wait(T.hold)
