@@ -1061,6 +1061,7 @@ export default function Home() {
                 {vp.isMobile ? (
                     <div className="w-full pb-[var(--page-pad-y)]">
                         <FlipbookCarousel
+                            fullWidth
                             projects={[...WORK_PROJECTS].sort((a, b) =>
                                 b.name.toLowerCase().includes("weyra") ? 1 : -1
                             )}

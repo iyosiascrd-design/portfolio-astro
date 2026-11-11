@@ -28,6 +28,10 @@ const FLIP_PROJECTS = CARDS.map((c) => ({ id: c.match, name: c.name, image: c.im
 const LOOPED_CARDS = [...CARDS, ...CARDS, ...CARDS]
 const N = CARDS.length
 
+// Phone only: height the availability footnote needs below the flipbook (2 text lines + bottom padding).
+// The flipbook shrinks just enough that this always fits on screen.
+const PHONE_FOOTER_H = 64
+
 const SERVICES = ["Brand Identity", "Digital Design", "Communication", "3D Visual"]
 
 // Clicking a service slides the carousel to the first matching card (clicking it again steps to the
@@ -895,12 +899,12 @@ export default function Work() {
 
   return (
     <div
-      className="relative min-h-[100dvh] bg-white pt-28 md:h-[100dvh] md:min-h-[var(--min-page-h)] md:overflow-x-clip md:pt-0"
+      className="relative flex min-h-[100dvh] flex-col bg-white pt-28 md:block md:h-[100dvh] md:min-h-[var(--min-page-h)] md:overflow-x-clip md:pt-0"
       style={layoutVars}
     >
       {/* Left column: heading level with the top of the images, services level with the image bottoms */}
       <div
-        className="flex flex-col gap-6 px-[var(--page-pad)] pb-4 pt-4 md:absolute md:left-0 md:top-[var(--work-top)] md:h-[var(--card-h)] md:w-[var(--left-col-w)] md:justify-between md:gap-0 md:pb-0 md:pt-0"
+        className="flex flex-col gap-6 px-[var(--page-pad)] pb-0 pt-4 md:absolute md:left-0 md:top-[var(--work-top)] md:h-[var(--card-h)] md:w-[var(--left-col-w)] md:justify-between md:gap-0 md:pb-0 md:pt-0"
         style={LEFT_TEXT_VARS}
       >
         {/* H4: 32px display, tight two-line stack */}
@@ -923,8 +927,8 @@ export default function Work() {
 
       {/* Mobile: flipbook. The component applies var(--page-pad) itself, so the tucked side cards stop at the page margin on both sides. */}
       {isPhone && (
-        <div className="pt-2">
-          <FlipbookCarousel ref={flipRef} projects={FLIP_PROJECTS} onSelect={handleFlipSelect} />
+        <div className="pt-6">
+          <FlipbookCarousel ref={flipRef} projects={FLIP_PROJECTS} onSelect={handleFlipSelect} bottomReserve={PHONE_FOOTER_H} />
         </div>
       )}
 
@@ -1024,7 +1028,7 @@ export default function Work() {
 
       {/* Availability badge, bottom left, aligned with the WORK title */}
       <div
-        className="flex flex-col gap-4 px-[var(--page-pad)] pb-[var(--page-pad)] pt-12 md:absolute md:left-0 md:top-[var(--title-top)] md:h-[var(--title-h)] md:w-[var(--left-col-w)] md:justify-end md:pb-0 md:pt-0"
+        className="mt-auto flex flex-col gap-4 px-[var(--page-pad)] pb-[max(var(--page-pad),env(safe-area-inset-bottom))] pt-0 md:mt-0 md:absolute md:left-0 md:top-[var(--title-top)] md:h-[var(--title-h)] md:w-[var(--left-col-w)] md:justify-end md:pb-0 md:pt-0"
       >
         <Availability />
       </div>
