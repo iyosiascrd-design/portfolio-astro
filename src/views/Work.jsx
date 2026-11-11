@@ -70,29 +70,36 @@ const IMAGE_WAIT_MAX = 1500 // ms: never hold the intro longer than this waiting
 // Motion feel: Apple-style. Dragging is 1:1 (the row is glued to your finger, no lag). Letting go keeps
 // your exact finger velocity, projects where a flick would coast to (UIScrollView's deceleration maths),
 // snaps to the nearest card, and gets there on a critically damped spring that starts at that velocity.
-const DECELERATION_RATE = 0.998 // UIScrollView "normal" (0.99 = "fast"): used to project where a flick would land
-const SNAP_RESPONSE = 0.65 // s: SwiftUI-style spring response for settling on a card after a release (smaller = snappier)
-const REDUCED_SNAP_RESPONSE = 0.35 // prefers-reduced-motion
-const CATCH_SMOOTH = 0.06 // s: how fast a gliding row is caught when you touch it
+const DECELERATION_RATE = 0.996 // between UIScrollView "normal" (0.998) and "fast" (0.99): flicks project a little shorter, so they settle sooner
+const SNAP_RESPONSE = 0.38 // s: SwiftUI-style spring response for settling on a card after a release (smaller = snappier)
+const REDUCED_SNAP_RESPONSE = 0.25 // prefers-reduced-motion
+const CATCH_SMOOTH = 0.04 // s: how fast a gliding row is caught when you touch it
 const SLACK_RATE = 18 // 1/s: the first few px of a drag (the click threshold) ease in at this rate instead of jumping
-const VELOCITY_WINDOW = 80 // ms of finger history used to measure release velocity
-const GLIDE_SMOOTH = 0.45 // programmatic moves (arrow keys, service click, intro drift): long soft glide, in seconds
-const REDUCED_GLIDE_SMOOTH = 0.18
-const MAX_THROW = 4 // max cards a single flick can travel
+const VELOCITY_WINDOW = 60 // ms of finger history used to measure release velocity
+const GLIDE_SMOOTH = 0.3 // programmatic moves (arrow keys, service click, intro slide): long soft glide, in seconds
+const REDUCED_GLIDE_SMOOTH = 0.14
+const MAX_THROW = 2 // max cards a single flick can travel
 const STACK_SCALE = 0.15 // how much a card shrinks while it stacks (0 for reduced motion)
 const SHADE_MAX = 0.4 // max strength of the stacking gradient (0 = none, 1 = solid black at the dark edge)
-const WHEEL_SNAP_DELAY = 140 // ms after the last wheel/trackpad event before settling on a card
+const WHEEL_SNAP_DELAY = 90 // ms after the last wheel/trackpad event before settling on a card
 // Intro animation (carousel). Times in ms.
 const INTRO_DELAY = 250 // wait before the first card starts (raise this if a page-transition overlay is still covering the page)
 const INTRO_DURATION = 1100 // how long each card takes to glide in
 const INTRO_STAGGER = 130 // gap between one card starting and the next
 const INTRO_EASE = "cubic-bezier(0.16, 1, 0.3, 1)" // strong ease-out: fast start, long soft landing
-// Ticker drift after the cards land: the row glides left at a steady pace (ease in, constant speed, ease out)
-const DRIFT_CARDS = 0.35 // how far the drift travels, in card widths
-const DRIFT_MS = 400 // how long the steady part of the drift lasts
-const DRIFT_HOLD = 200 // ms to rest at the far end before settling back
+// One-card hint: right after the cards land, the row glides exactly one card to the left, once, and stays there.
+// Speed is governed by GLIDE_SMOOTH above (raise it for a slower, softer slide).
+const USE_INTRO_SLIDE = true
 const SNAP = true // settle exactly on a card after release (set false for free-floating)
 const DRAG_THRESHOLD = 5 // px of movement before a press counts as a drag, not a click
+// Auto-scroll (carousel): a slow constant-speed drift to the left that stops while the mouse is over the row.
+// It rides the same critically damped spring as everything else, so it eases in from rest and eases out to a stop.
+// Off by default: the row only moves when the visitor moves it (plus the one-card intro slide above).
+const USE_AUTO_SCROLL = false
+const AUTO_SPEED = 0.1 // cards per second (0.1 is about 45px/s at the design size)
+const AUTO_SMOOTH = 0.6 // s: spring softness while drifting (bigger = longer, gentler ease-in)
+const HOVER_RESUME_DELAY = 800 // ms the row rests after the mouse leaves before it eases back into motion
+const AUTO_RESUME_DELAY = 3000 // ms of calm after a touch, wheel or key interaction before drifting again
 
 // Layout measurements taken from the design. Tweak these to fine-tune.
 // The two --type-* lines bump the small text on this page (Label / Caption) to 14px
@@ -298,14 +305,14 @@ function Availability() {
 export default function Work() {
   const outletCtx = useOutletContext()
   const navigate = useNavigate()
-  
+
   const isCarousel = useMediaQuery(CAROUSEL_QUERY)
   const isPhone = useMediaQuery(PHONE_QUERY)
   const isPortraitTablet = useMediaQuery("(min-width: 768px) and (orientation: portrait)")
   const layoutVars = useMemo(() => buildLayoutVars(isPortraitTablet), [isPortraitTablet])
 
   const pageReady = usePageReady()
-  
+
   // Bring in the triggerTransition function from the PageTransitionOverlay context
   const transitionCtx = usePageTransition()
   const triggerTransition = transitionCtx?.triggerTransition
@@ -373,6 +380,7 @@ export default function Work() {
 
     let settleSmooth = glideSmooth // spring softness used while not tracking a finger
     let wheelActive = false // trackpad swipe in progress: also tracked 1:1
+    let autoDrift = false // true while the row is auto-scrolling (the loop pushes target left every frame)
     let slack = 0 // px the row is "behind" the finger right after the drag threshold; eases to 0
     let travel = 0 // unwrapped position (the loop wrap would otherwise look like a huge velocity)
     const samples = [] // finger history, one per frame while tracking
@@ -492,6 +500,8 @@ export default function Work() {
       } else {
         // Finger down but not dragging yet = catch the glide quickly; otherwise settle softly.
         // v is carried over from the release, so nothing ever jumps.
+        // Auto-scroll: move the goal at a constant speed; the spring turns that into an ease-in and ease-out.
+        if (autoDrift) target -= step * AUTO_SPEED * dt
         const smoothTime = dragging ? CATCH_SMOOTH : settleSmooth
         ;[x, v] = smoothDamp(x, target, v, smoothTime, dt)
       }
@@ -525,10 +535,81 @@ export default function Work() {
         else settleWaiters.push(resolve)
       })
 
+    /* ---------- auto-scroll: slow constant-speed drift, stopped by hover (off unless USE_AUTO_SCROLL) ---------- */
+    let autoEnabled = false // switched on once the intro has finished (and only if USE_AUTO_SCROLL)
+    let hovering = false
+    let inView = true
+    let resumeTimer = 0
+
+    const canDrift = () =>
+      autoEnabled &&
+      !cancelled &&
+      !reduceMotion &&
+      step > 0 &&
+      !dragging &&
+      !wheelActive &&
+      !hovering &&
+      inView &&
+      !document.hidden &&
+      !viewport.querySelector(":focus-visible") // keyboard focus only: a mouse click must not block it forever
+
+    const startDrift = () => {
+      if (autoDrift) return
+      autoDrift = true
+      settleSmooth = AUTO_SMOOTH
+      kick() // starts from rest, so the spring gives a natural ease-in
+    }
+
+    // snap = true: glide to the nearest card and stop (the velocity is kept, so it decelerates smoothly).
+    // snap = false: the caller is about to set its own target (drag, wheel, keys).
+    const stopDrift = (snap) => {
+      if (!autoDrift) return
+      autoDrift = false
+      if (snap && step) {
+        target = Math.round(x / step) * step
+        settleSmooth = snapSmooth
+        kick()
+      }
+    }
+
+    // If something is still blocking (off-screen, keyboard focus...), check again shortly
+    const tryResume = () => {
+      if (canDrift()) startDrift()
+      else resumeTimer = setTimeout(tryResume, 500)
+    }
+    const scheduleResume = (delay) => {
+      clearTimeout(resumeTimer)
+      if (!autoEnabled || cancelled || reduceMotion) return
+      resumeTimer = setTimeout(tryResume, delay)
+    }
+
+    const onEnter = (e) => {
+      if (e.pointerType !== "mouse") return
+      hovering = true
+      clearTimeout(resumeTimer)
+      stopDrift(true)
+    }
+    const onLeave = (e) => {
+      if (e.pointerType !== "mouse") return
+      hovering = false
+      scheduleResume(HOVER_RESUME_DELAY)
+    }
+    viewport.addEventListener("pointerenter", onEnter)
+    viewport.addEventListener("pointerleave", onLeave)
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting
+        if (!inView) stopDrift(false)
+        else scheduleResume(500)
+      },
+      { threshold: 0.5 }
+    )
+    io.observe(viewport)
+
     /* ---------- intro helpers (declared first: input handlers call interrupt()) ---------- */
     const timers = []
     const anims = []
-    let driftRaf = 0
     let touched = false // any real interaction cancels the hint
     // The card(s) stacked at the far left (the previous loop set) are hidden during the intro,
     // otherwise they show through while the first cards are still sliding in.
@@ -541,6 +622,8 @@ export default function Work() {
         c.style.opacity = ""
       })
     const interrupt = () => {
+      stopDrift(false)
+      scheduleResume(AUTO_RESUME_DELAY)
       if (touched) return
       touched = true
       showBehind()
@@ -615,6 +698,7 @@ export default function Work() {
       const wasDrag = draggedRef.current
       const vel = wasDrag ? sampledVelocity() : 0 // measure while still in drag mode
       dragging = false
+      scheduleResume(AUTO_RESUME_DELAY)
       endDrag()
       viewport.removeAttribute("data-dragging")
       try {
@@ -753,36 +837,13 @@ export default function Work() {
     viewport.addEventListener("keydown", onKeyDown)
     viewport.addEventListener("focusin", onFocusIn)
 
-    /* ---------- intro: cards glide in from the right (staggered), then a ticker-style drift hints "drag me" ---------- */
+    /* ---------- intro: cards glide in from the right (staggered), then the row slides one card left as a "drag me" hint ---------- */
     // Everything chains on real signals (decode, animation.finished, settle), not guessed timeouts.
     const decodeImages = (imgs) =>
       Promise.race([
         Promise.all(imgs.map((img) => (img?.decode ? img.decode().catch(() => {}) : Promise.resolve()))),
         wait(IMAGE_WAIT_MAX),
       ])
-
-    const drift = () =>
-      new Promise((resolve) => {
-        const home = target
-        const speed = (step * DRIFT_CARDS) / (DRIFT_MS / 1000) // px per second
-        let t0 = null
-        let last = 0
-
-        // Push the target left at constant speed; the damped follower turns that into
-        // an ease-in at the start and an ease-out when the target stops.
-        const tick = (now) => {
-          if (cancelled || touched || dragging) return resolve(null)
-          if (t0 === null) {
-            t0 = last = now
-          }
-          target -= speed * (Math.max(0, now - last) / 1000)
-          last = now
-          kick()
-          if (now - t0 < DRIFT_MS) driftRaf = requestAnimationFrame(tick)
-          else resolve(home)
-        }
-        driftRaf = requestAnimationFrame(tick)
-      })
 
     const runIntro = async () => {
       // Cards in the middle set are the ones on screen (paint() already moved us there)
@@ -830,28 +891,32 @@ export default function Work() {
       if (cancelled) return
       if (touched || dragging) return showBehind()
 
-      // Ticker drift, starting as the last card lands
-      const home = await drift()
-      if (cancelled) return
-      if (home === null) return showBehind()
-
-      await wait(DRIFT_HOLD)
-      if (cancelled) return
-      if (touched || dragging) return showBehind()
-
-      target = home // settle back on the first card
-      kick()
-      await whenSettled() // once it has settled, the loop is free to show the stacked cards
+      // One-card hint: glide exactly one card width to the left, once, and stay there
+      if (USE_INTRO_SLIDE && step) {
+        target = Math.round(target / step) * step - step
+        settleSmooth = glideSmooth
+        kick()
+        await whenSettled()
+      }
       if (!cancelled) showBehind()
     }
 
-    if (!reduceMotion) runIntro()
+    if (!reduceMotion) {
+      runIntro().finally(() => {
+        autoEnabled = USE_AUTO_SCROLL
+        if (USE_AUTO_SCROLL) scheduleResume(HOVER_RESUME_DELAY)
+      })
+    }
 
     return () => {
       cancelled = true
+      autoDrift = false
+      clearTimeout(resumeTimer)
+      io.disconnect()
+      viewport.removeEventListener("pointerenter", onEnter)
+      viewport.removeEventListener("pointerleave", onLeave)
       timers.forEach(clearTimeout)
       clearTimeout(wheelTimer)
-      cancelAnimationFrame(driftRaf)
       cancelAnimationFrame(raf)
       anims.forEach((a) => a.cancel())
       ro.disconnect()
@@ -865,7 +930,7 @@ export default function Work() {
       // Cards 0-3 keep their DOM nodes when we drop to mobile, so clear every inline style
       resetStyles()
     }
-  }, [isCarousel, pageReady]) // ADDED pageReady TO DEPENDENCY ARRAY
+  }, [isCarousel, pageReady])
 
   // Left list click: slide to the first card with that service's tag; clicking the same one again
   // steps to the next match (wraps around). Carousel slides the row, mobile flips the flipbook.
