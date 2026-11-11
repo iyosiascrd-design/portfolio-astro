@@ -392,16 +392,6 @@ export default function YimajCaseStudy() {
 
         </div>
 
-        {/* Statement frame: the result, set as typography */}
-        <section data-header-bg="light" className={`w-full flex flex-col justify-between gap-[48px] ${CS_FRAME_PT} pb-[16px] lg:min-h-[100dvh]`}>
-          <p className="[font-family:var(--font-display)] font-medium uppercase text-[38vw] md:text-[26vw] leading-[0.8] tracking-[-0.04em] m-0">
-            62M
-          </p>
-          <p className={`${CS_PARA} max-w-[420px] lg:self-end`}>
-            In sales before a single brick was laid.
-          </p>
-        </section>
-
         {/* Frame 7 */}
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
