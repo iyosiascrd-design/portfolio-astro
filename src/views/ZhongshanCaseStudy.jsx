@@ -31,6 +31,7 @@ const ASSETS = {
   logoConstruction: "/zhongshan-logo-construction.jpg",
   logoBrass: "/zhongshan-brass.jpg",
   typeSpecimen: "/zhongshan-type.jpg",
+  font: "/zhongshan-font.jpg",
   typeCard: "/zhongshan-sticker.jpg",
   typeTablet: "/zhongshan-type-tablet.webm",
   color: "/zhongshan-color.webm",
@@ -302,10 +303,13 @@ export default function ZhongshanCaseStudy() {
               </LineMaskText>
 
               <div className="lg:row-start-3 lg:col-start-1 lg:h-[32.08vw] flex flex-col">
-                <Media
-                  src={ASSETS.color}
-                  alt="Zhongshan colour palette"
-                  className="w-full h-full object-cover rounded-lg md:rounded-[12px]"
+                <Img
+                  src={ASSETS.font}
+                  alt="Zhongshan typography specimen"
+                  ratio="aspect-square"
+                  parallax={false}
+                  fade
+                  className="w-full h-full object-cover"
                 />
               </div>
               <div className="lg:row-start-3 lg:col-start-2 lg:h-[32.08vw] flex flex-col">
