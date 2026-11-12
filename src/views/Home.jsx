@@ -812,6 +812,7 @@ export default function Home() {
         let geo = null
         let lastRowH = ""
         let lastStuck = -2
+        let lastPinned = null
         let raf = 0
         let idleTimer = 0
 
@@ -832,6 +833,7 @@ export default function Home() {
             const sy = window.scrollY
             geo = { heads: hs, rowH, top0, panelTops: ps.map((el) => el.getBoundingClientRect().top + sy) }
             lastStuck = -2 // force the highlight to be re-applied
+            lastPinned = null
         }
 
         const frame = () => {
@@ -845,6 +847,17 @@ export default function Home() {
             for (let i = 0; i < heads.length; i++) {
                 if (panelTops[i] - rowH - sy <= top0 + i * rowH + 1) stuck = i
             }
+
+            // Once the first panel has started to pass behind the first name, show the cover strip that
+            // hides the part of it that would stick out above the name (CSS, see the <style> block). It is
+            // attached to the name, so it moves and leaves with the stack natively; this only switches it on.
+            // A small lead means it is already on before any of the panel can show above the name.
+            const pinned = panelTops[0] - sy <= top0 + 48
+            if (pinned !== lastPinned) {
+                lastPinned = pinned
+                heads[0].setAttribute("data-pinned", pinned ? "true" : "false")
+            }
+
             if (stuck === lastStuck) return
             lastStuck = stuck
             for (let i = 0; i < heads.length; i++) heads[i].setAttribute("data-stuck", i === stuck ? "true" : "false")
@@ -1295,6 +1308,14 @@ export default function Home() {
             <style>{`
                 .svc-sticky-head .svc-num, .svc-sticky-head .svc-title-text { transition: color 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
                 .svc-sticky-head[data-stuck="true"] .svc-num, .svc-sticky-head[data-stuck="true"] .svc-title-text { color: #fff !important; }
+                /* Cover strip above the first name: hides the panel that slides up past it. Attached to the name,
+                   so it sticks, moves and leaves with it. Off until the panel is about to pass behind the name. */
+                .svc-sticky-head[data-pinned]::before {
+                    content: ""; position: absolute; left: 0; right: 0; bottom: 100%; pointer-events: none; opacity: 0;
+                    height: calc(var(--svc-stick-top, 76px) + 200px);
+                    background: var(--svc-head-bg, var(--bg-dark, #050505));
+                }
+                .svc-sticky-head[data-pinned="true"]::before { opacity: 1; }
                 @media (hover: hover) {
                     .svc-sticky-head:hover .svc-num, .svc-sticky-head:hover .svc-title-text { color: #fff !important; }
                 }
@@ -1347,6 +1368,7 @@ export default function Home() {
                                             : {
                                                   className: "svc-sticky-head sticky z-10",
                                                   "data-stuck": index === 0 ? "true" : "false",
+                                                  "data-pinned": index === 0 ? "false" : undefined,
                                                   style: {
                                                       top: `calc(var(--svc-stick-top, 76px) + ${index} * var(--svc-row-h, 84px))`,
                                                       // Native exit: sticky keeps the head's MARGIN box inside the list, so a
