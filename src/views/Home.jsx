@@ -503,26 +503,35 @@ const AccordionPanel = ({ active, children }) => {
 }
 
 // Only opacity and transform animate inside the panel, so nothing triggers extra layout.
-const ServiceAccordionImage = ({ src, alt, active }) => {
+// `depth` = how many names are stacked above this image when it reaches them (its own name + the ones
+// before it). Its scroll-driven "settle" (see .svc-par in the <style> block) ends exactly there.
+const ServiceAccordionImage = ({ src, alt, active, depth = 1 }) => {
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     return (
-        <div className="relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]">
-            <img
-                src={src}
-                alt={alt}
-                draggable={false}
-                decoding="async"
-                className="object-cover w-full h-full select-none pointer-events-none"
-                style={{
-                    opacity: active ? 1 : 0,
-                    transform: active ? "scale(1)" : "scale(1.04)",
-                    transition: reduce
-                        ? "none"
-                        : active
-                          ? `opacity ${ACCORDION_OPEN.fadeIn}s ${APPLE_EASE_CSS} 0.05s, transform ${ACCORDION_OPEN.duration + 0.2}s ${APPLE_EASE_CSS} 0.05s`
-                          : `opacity ${ACCORDION_CLOSE.fadeOut}s ease-out, transform ${ACCORDION_CLOSE.duration}s ${APPLE_EASE_CSS}`,
-                }}
-            />
+        <div
+            className="svc-par-box relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]"
+            // isolation + translateZ keep Safari from painting the moving image over the rounded corners
+            style={{ "--svc-n": depth, isolation: "isolate", transform: "translateZ(0)" }}
+        >
+            {/* The parallax moves this wrapper; the <img> keeps its own open/close scale + fade untouched. */}
+            <div className="svc-par">
+                <img
+                    src={src}
+                    alt={alt}
+                    draggable={false}
+                    decoding="async"
+                    className="object-cover w-full h-full select-none pointer-events-none"
+                    style={{
+                        opacity: active ? 1 : 0,
+                        transform: active ? "scale(1)" : "scale(1.04)",
+                        transition: reduce
+                            ? "none"
+                            : active
+                              ? `opacity ${ACCORDION_OPEN.fadeIn}s ${APPLE_EASE_CSS} 0.05s, transform ${ACCORDION_OPEN.duration + 0.2}s ${APPLE_EASE_CSS} 0.05s`
+                              : `opacity ${ACCORDION_CLOSE.fadeOut}s ease-out, transform ${ACCORDION_CLOSE.duration}s ${APPLE_EASE_CSS}`,
+                    }}
+                />
+            </div>
         </div>
     )
 }
@@ -1316,6 +1325,30 @@ export default function Home() {
                     background: var(--svc-head-bg, var(--bg-dark, #050505));
                 }
                 .svc-sticky-head[data-pinned="true"]::before { opacity: 1; }
+                /* Image "settle" parallax. The wrapper is taller than the frame by the travel distance (so no edge
+                   can show) and starts offset; it settles to rest by the time the image reaches the names above
+                   it. Pure CSS scroll-driven animation on a transform: no JS, no lag in Safari 26+/Chrome; older
+                   browsers simply show the image at rest. The timeline lives on the static frame (not on the
+                   moving wrapper) and its top inset is the bottom of the name stack, so nothing plays while the
+                   image is hidden behind the names. */
+                .svc-par { position: absolute; left: 0; right: 0; top: -36px; bottom: -36px; will-change: transform; }
+                @supports (animation-timeline: view()) {
+                    .svc-par-box {
+                        view-timeline-name: --svc-img;
+                        view-timeline-axis: block;
+                        view-timeline-inset: calc(var(--svc-stick-top, 76px) + var(--svc-n, 1) * var(--svc-row-h, 84px)) 0px;
+                    }
+                    .svc-par {
+                        animation: svc-settle linear both;
+                        animation-timeline: --svc-img;
+                        animation-range: entry 0% exit 0%;
+                    }
+                    @media (prefers-reduced-motion: reduce) { .svc-par { animation: none; } }
+                }
+                @keyframes svc-settle {
+                    from { transform: translate3d(0, 36px, 0); }
+                    to { transform: translate3d(0, 0, 0); }
+                }
                 @media (hover: hover) {
                     .svc-sticky-head:hover .svc-num, .svc-sticky-head:hover .svc-title-text { color: #fff !important; }
                 }
@@ -1481,6 +1514,7 @@ export default function Home() {
                                                                     src={service.image}
                                                                     alt={service.title}
                                                                     active={isActive}
+                                                                    depth={index + 1}
                                                                 />
                                                                 <div
                                                                     style={{
