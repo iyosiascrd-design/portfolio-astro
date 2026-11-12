@@ -247,7 +247,7 @@ function useVideoPlayback(videoRef, src, name, getTrigger) {
   }, [src, name]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-export function LoopingVideo({ src, alt, className, mediaProps = {} }) {
+export function LoopingVideo({ src, alt, className, mediaProps = {}, webmOnly = false }) {
   const ref = useRef(null)
   const mp4 = src.replace(/\.webm$/i, ".mp4")
 
@@ -276,15 +276,23 @@ export function LoopingVideo({ src, alt, className, mediaProps = {} }) {
       className={className}
       {...mediaProps}
     >
-      <source src={mp4} type="video/mp4" />
+      {!webmOnly && <source src={mp4} type="video/mp4" />}
       <source src={src} type="video/webm" />
     </video>
   )
 }
 
-export function Media({ src, alt, className, mediaProps = {}, lazy = true }) {
+export function Media({ src, alt, className, mediaProps = {}, lazy = true, webmOnly = false }) {
   if (isVideo(src)) {
-    return <LoopingVideo src={src} alt={alt} className={className} mediaProps={mediaProps} />
+    return (
+      <LoopingVideo
+        src={src}
+        alt={alt}
+        className={className}
+        mediaProps={mediaProps}
+        webmOnly={webmOnly}
+      />
+    )
   }
   return (
     // eslint-disable-next-line jsx-a11y/alt-text

@@ -27,7 +27,7 @@ const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
 // Type + colour frames: viewport-tall from md up. Top padding clears the fixed header,
 // both sides keep the page padding. Set --header-h in global CSS to the real header height.
-const CS_FULL_H = "md:h-[100dvh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
+const CS_FULL_H = "md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
 
 // File names in /public. Swap any name here if an image lands in the wrong frame.
 const ASSETS = {
@@ -315,7 +315,7 @@ export default function ZhongshanCaseStudy() {
 
           {/* Frame 4 — typography */}
           <section data-header-bg="light" className={`w-full flex flex-col pt-[48px] pb-0 ${CS_FULL_H}`}>
-            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0">
+            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0">
               <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-[48px]`}>
                 Technical By Nature<br className="max-md:hidden" />{" "}Editorial By Design
               </h2>
@@ -359,7 +359,7 @@ export default function ZhongshanCaseStudy() {
             <h2 className={`cs-f5-heading ${CS_HEADING} max-lg:mb-[48px] md:max-lg:mb-[64px] lg:mb-[72px]`}>
               Contrast With<br className="max-md:hidden" />{" "}Purpose
             </h2>
-            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0">
+            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0">
               <div className="lg:col-start-1 flex flex-col h-full">
                 <div className="w-full md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#eff5f5]">
                   <Media
@@ -375,9 +375,9 @@ export default function ZhongshanCaseStudy() {
                   src={ASSETS.colorTexture}
                   alt="Grey and blue fabric and timber material samples"
                   ratio="aspect-[357/345]"
-                  className="bg-[#d9d4cb] lg:!aspect-[357/345] w-full tablet-hide"
+                  className="bg-[#d9d4cb] lg:!aspect-auto lg:flex-1 lg:min-h-0 w-full tablet-hide"
                 />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-[12px] lg:mt-auto`}>
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-[12px] lg:mt-[var(--page-pad)]`}>
                   A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
                 </LineMaskText>
               </div>
@@ -388,7 +388,7 @@ export default function ZhongshanCaseStudy() {
                   alt="Worker in a teal Zhongshan Sourcing Technology hard hat"
                   ratio="aspect-none"
                   parallax={false}
-                  className="bg-[#0b3b4a] w-full lg:h-full object-cover"
+                  className="bg-[#0b3b4a] w-full lg:h-full object-cover" imgClassName="lg:object-top"
                 />
               </div>
             </div>

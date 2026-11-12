@@ -25,6 +25,10 @@ const FRAME_PB = "pb-0"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
+// Type + colour frames: viewport-tall from md up. Top padding clears the fixed header,
+// both sides keep the page padding. Set --header-h in global CSS to the real header height.
+const CS_FULL_H = "md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] md:pb-[var(--cs-gap)]"
+
 const HERO_POS_MOBILE = "50% 30%"
 const HERO_POS_DESKTOP = "50% 50%"
 
@@ -344,8 +348,8 @@ export default function OrigenCaseStudy() {
           </section>
 
           {/* Frame 4 */}
-          <section data-header-bg="light" className="w-full flex flex-col pt-[48px] lg:pt-[144px] pb-0 lg:pb-[16px] lg:min-h-[clamp(44vw,100dvh,64.95vw)]">
-            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,calc((100vw-64px)*0.321))] lg:flex-1">
+          <section data-header-bg="light" className={`w-full flex flex-col pt-[48px] pb-0 ${CS_FULL_H}`}>
+            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,calc((100vw-64px)*0.321))] md:flex-1 md:min-h-0">
               <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.234em] max-md:mb-[48px]`}>
                 Heritage Meets<br className="max-md:hidden" />{" "}Modernity
               </h2>
@@ -381,8 +385,8 @@ export default function OrigenCaseStudy() {
           </section>
 
           {/* Frame 5 */}
-          <section data-header-bg="light" className="w-full flex flex-col pt-[48px] lg:pt-[144px] pb-0 lg:pb-[16px] lg:h-[100dvh]">
-            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[12px] md:gap-x-[16px] gap-y-[12px] md:gap-y-[16px] lg:gap-y-0 lg:flex-1 lg:min-h-0">
+          <section data-header-bg="light" className={`w-full flex flex-col pt-[48px] pb-0 ${CS_FULL_H}`}>
+            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[12px] md:gap-x-[16px] gap-y-[12px] md:gap-y-[16px] lg:gap-y-0 md:flex-1 md:min-h-0">
               <h2 className={`cs-f5-heading ${CS_HEADING} md:col-span-2 lg:col-span-3 md:-mt-[0.234em] max-lg:order-1 max-lg:mb-[48px] md:max-lg:mb-[64px]`}>
                 Highland<br className="max-md:hidden" />{" "}Inspired Color
               </h2>
