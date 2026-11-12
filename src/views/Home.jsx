@@ -589,8 +589,9 @@ function buildLut() {
 function SunriseTransition({ children, anchorRef, onHeaderTone }) {
     const canvasRef = useRef(null)
     const { scrollY } = useScroll()
+    // Apple-style scrub: the gradient position is a direct function of scroll (no spring lag),
+    // so it moves exactly as far as you scroll, and reverses the instant you scroll back.
     const travel = useMotionValue(0)
-    const smooth = useSpring(travel, { stiffness: 80, damping: 40, mass: 1.2 })
 
     useEffect(() => {
         const update = () => {
@@ -701,19 +702,30 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         }
 
         resize()
-        draw(smooth.get())
-        const unsubscribe = smooth.on("change", draw)
+        draw(travel.get())
+
+        // Scroll can fire several times per frame; paint once per frame with the latest value.
+        let raf = 0
+        const schedule = () => {
+            if (raf) return
+            raf = requestAnimationFrame(() => {
+                raf = 0
+                draw(travel.get())
+            })
+        }
+        const unsubscribe = travel.on("change", schedule)
         const onResize = () => {
             resize()
-            draw(smooth.get())
+            draw(travel.get())
         }
         window.addEventListener("resize", onResize)
 
         return () => {
             unsubscribe()
+            if (raf) cancelAnimationFrame(raf)
             window.removeEventListener("resize", onResize)
         }
-    }, [smooth, onHeaderTone])
+    }, [travel, onHeaderTone])
 
     return (
         <div className="relative w-full">
@@ -815,6 +827,7 @@ export default function Home() {
         if (!list) return
         if (vp.isDesktop) {
             list.style.removeProperty("--svc-row-h")
+            list.removeAttribute("data-leaving")
             return
         }
 
@@ -822,6 +835,7 @@ export default function Home() {
         let lastRowH = ""
         let lastStuck = -2
         let lastPinned = null
+        let lastLeaving = null
         let raf = 0
         let idleTimer = 0
 
@@ -840,15 +854,23 @@ export default function Home() {
             }
             const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
             const sy = window.scrollY
-            geo = { heads: hs, rowH, top0, panelTops: ps.map((el) => el.getBoundingClientRect().top + sy) }
+            const rects = ps.map((el) => el.getBoundingClientRect())
+            geo = {
+                heads: hs,
+                rowH,
+                top0,
+                panelTops: rects.map((r) => r.top + sy),
+                lastPanelBottom: rects[rects.length - 1].bottom + sy,
+            }
             lastStuck = -2 // force the highlight to be re-applied
             lastPinned = null
+            lastLeaving = null
         }
 
         const frame = () => {
             raf = 0
             if (!geo) return
-            const { heads, rowH, top0, panelTops } = geo
+            const { heads, rowH, top0, panelTops, lastPanelBottom } = geo
             const sy = window.scrollY
             // A name is stuck once its natural top (= its panel's top minus its own height) reaches its
             // stuck position. The last such name is the highlighted one.
@@ -860,11 +882,21 @@ export default function Home() {
             // Once the first panel has started to pass behind the first name, show the cover strip that
             // hides the part of it that would stick out above the name (CSS, see the <style> block). It is
             // attached to the name, so it moves and leaves with the stack natively; this only switches it on.
-            // A small lead means it is already on before any of the panel can show above the name.
-            const pinned = panelTops[0] - sy <= top0 + 48
+            // The lead covers the frame the rAF runs behind a fast scroll; the strip switches on instantly (no fade).
+            const pinned = panelTops[0] - sy <= top0 + 72
             if (pinned !== lastPinned) {
                 lastPinned = pinned
                 heads[0].setAttribute("data-pinned", pinned ? "true" : "false")
+            }
+
+            // The names are solid only to hide the panels sliding behind them. Once the last panel is fully
+            // behind the stack (= the stack is about to leave), the panels fade out and the names turn
+            // transparent (CSS transitions on [data-leaving]), so the names leave over the sunrise gradient
+            // instead of as a black block. A short time-based fade, so a frame of scroll lag is invisible.
+            const leaving = lastPanelBottom - sy <= top0 + heads.length * rowH + 40
+            if (leaving !== lastLeaving) {
+                lastLeaving = leaving
+                list.setAttribute("data-leaving", leaving ? "true" : "false")
             }
 
             if (stuck === lastStuck) return
@@ -1325,6 +1357,22 @@ export default function Home() {
                     background: var(--svc-head-bg, var(--bg-dark, #050505));
                 }
                 .svc-sticky-head[data-pinned="true"]::before { opacity: 1; }
+                /* Leaving: the last panel is fully behind the stack. Panels fade out first, then the solid name
+                   backgrounds (and the cover strip) fade to transparent, so the names leave over the gradient.
+                   Coming back, the order is reversed (backgrounds first, panels after). */
+                .svc-sticky-head { transition: background-color 0.15s ease, box-shadow 0.15s ease; }
+                /* No fade on the way ON: a fade lets the image show above the name for a few frames. The fade
+                   only plays when the stack leaves (see the [data-leaving] rule below, which overrides this). */
+                .svc-sticky-head[data-pinned]::before { transition: none; }
+                .svc-panel { transition: opacity 0.15s ease 0.12s; }
+                [data-leaving="true"] .svc-panel { opacity: 0; transition: opacity 0.15s ease; }
+                [data-leaving="true"] .svc-sticky-head {
+                    background-color: transparent !important; box-shadow: none !important;
+                    transition: background-color 0.22s ease 0.14s, box-shadow 0.22s ease 0.14s;
+                }
+                [data-leaving="true"] .svc-sticky-head[data-pinned]::before {
+                    opacity: 0 !important; transition: opacity 0.22s ease 0.14s;
+                }
                 /* Image "settle" parallax. The wrapper is taller than the frame by the travel distance (so no edge
                    can show) and starts offset; it settles to rest by the time the image reaches the names above
                    it. Pure CSS scroll-driven animation on a transform: no JS, no lag in Safari 26+/Chrome; older
@@ -1361,7 +1409,7 @@ export default function Home() {
                     className="relative flex flex-col justify-between w-full min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
                 >
                     <div className="w-full h-full px-[var(--page-pad)] flex flex-col flex-1 m-0">
-                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[40px] w-full mb-[clamp(48px,8svh,80px)] md:flex-row md:justify-between md:items-start md:gap-[32px] m-0">
+                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[40px] sm:max-md:gap-[64px] w-full mb-[clamp(48px,8svh,80px)] md:flex-row md:justify-between md:items-start md:gap-[32px] m-0">
                             <MaskRevealText as="h2" mode="words" active={servicesHeadActive} className="cap-align H1 md:shrink-0 md:max-lg:!text-[clamp(56px,8vw,96px)] text-white m-0 uppercase">
                                 Services
                             </MaskRevealText>
@@ -1387,9 +1435,9 @@ export default function Home() {
                                     animate={servicesListActive ? "show" : "hidden"}
                                     className="flex flex-col m-0 p-0 list-none w-full"
                                 >
-                                    {/* Tablet/mobile: the stacked names have no background of their own. Panels that pass under
-                                        them are clipped away in JS (clipPanels), so there is nothing to hide with a solid colour
-                                        and no black bars can show over the sunrise gradient. */}
+                                    {/* Tablet/mobile: the stacked names have a solid background so panels slide behind them
+                                        (see the scroll effect). When the stack leaves, [data-leaving] fades the panels and
+                                        the backgrounds out so no black block is left over the sunrise gradient. */}
                                     {SERVICES_DATA.map((service, index) => {
                                         // Desktop: hover-selected. Tablet/mobile: every panel is always shown;
                                         // the name that is currently stacked/stuck is the highlighted one.
@@ -1473,7 +1521,7 @@ export default function Home() {
                                                         </motion.span>
                                                     </div>
 
-                                                    <div className="svc-keywords-cell min-w-0 overflow-hidden">
+                                                    <div className="svc-keywords-cell min-w-0 overflow-hidden lg:pl-[48px] xl:pl-[72px]">
                                                         {/* Desktop keeps the keywords in the row; tablet/mobile shows them inside the expanded panel instead. */}
                                                         {vp.isDesktop && (
                                                         <motion.div
@@ -1615,11 +1663,11 @@ export default function Home() {
                                     blocks={[
                                         {
                                             text: "Industries change; the standard doesn't. Over eight years, I have shaped brands across real estate, coffee, technology, consumer products, and social impact.",
-                                            className: "H3 about-text rwd-pretty sm:max-md:portrait:!text-[34px] sm:max-md:portrait:!leading-[1.1] w-full max-w-[900px] mb-[32px] md:mb-[48px] lg:mb-[64px] uppercase",
+                                            className: "H3 about-text rwd-pretty sm:max-md:portrait:!text-[42px] sm:max-md:portrait:!leading-[1.1] lg:max-xl:!text-[36px] lg:max-xl:!leading-[1.1] w-full max-w-[900px] mb-[32px] md:mb-[48px] lg:mb-[64px] uppercase",
                                         },
                                         {
                                             text: "Great brands win on distinction, not volume. I turn complex ideas into identities that define their category.",
-                                            className: "H3 about-text rwd-pretty sm:max-md:portrait:!text-[34px] sm:max-md:portrait:!leading-[1.1] w-full max-w-[900px] mb-[24px] uppercase",
+                                            className: "H3 about-text rwd-pretty sm:max-md:portrait:!text-[42px] sm:max-md:portrait:!leading-[1.1] lg:max-xl:!text-[36px] lg:max-xl:!leading-[1.1] w-full max-w-[900px] mb-[24px] uppercase",
                                         },
                                     ]}
                                 />
@@ -1692,7 +1740,7 @@ export default function Home() {
                                                     transition={{ duration: 0.45, ease: taylorEase }}
                                                     className="grid grid-cols-1 gap-[16px] md:grid-cols-2 md:gap-[24px] lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px] pt-[24px] pb-[48px] md:pt-[28px] md:pb-[56px] lg:pt-[clamp(16px,2.5svh,28px)] lg:pb-[clamp(24px,5svh,56px)] will-change-transform relative items-start"
                                                 >
-                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H2 expertise-title rwd-balance m-0 tracking-[-0.02em] uppercase !text-[28px] lg:!text-[44px] lg:transition-colors lg:duration-500">
+                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H2 expertise-title rwd-balance m-0 tracking-[-0.02em] uppercase !text-[28px] lg:!text-[30px] xl:!text-[44px] lg:transition-colors lg:duration-500">
                                                         {item.title}
                                                     </h3>
 
