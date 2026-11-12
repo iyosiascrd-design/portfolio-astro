@@ -114,7 +114,6 @@ export default function OrigenCaseStudy() {
   const outletCtx = useOutletContext()
   const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
   const heroFade = outletCtx?.heroFade
-  const lenisRef = outletCtx?.lenisRef
 
   const ready = usePageReady()
   const pageTransition = usePageTransition()
@@ -165,11 +164,10 @@ export default function OrigenCaseStudy() {
   useEffect(() => {
     setHeaderLight(false)
     window.scrollTo(0, 0)
-    lenisRef?.current?.scrollTo(0, { immediate: true })
     if (heroFade) {
       heroFade.set(1)
     }
-  }, [setHeaderLight, heroFade, lenisRef])
+  }, [setHeaderLight, heroFade])
 
   useLayoutEffect(() => {
     if (prefersReducedMotion()) return
@@ -200,7 +198,7 @@ export default function OrigenCaseStudy() {
   }, [ready])
 
   useIdlePreload(PRELOAD_SRCS, ready)
-  useCaseStudyReveal(rootRef, lenisRef)
+  useCaseStudyReveal(rootRef)
 
   return (
     <div ref={rootRef} data-page-transition="" className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">

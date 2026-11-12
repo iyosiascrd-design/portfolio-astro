@@ -147,12 +147,18 @@ export const socialVariants = {
 
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n))
 
+// Longest frame gap that still counts as real elapsed time. Anything longer (tab was in the
+// background, debugger pause, ...) is treated as a pause instead of a leap.
+const MAX_FRAME_DT = 0.1
+
 export function createTicker(viewport, track, cfg = TICKER_MOTION) {
-    const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    const motionQuery = typeof window !== "undefined" ? window.matchMedia?.("(prefers-reduced-motion: reduce)") : null
     const slides = Array.from(track.children)
-    const frames = slides.map((s) => s.querySelector("[data-ticker-parallax]"))
+    // With parallaxDepth 0 nothing ever writes to the per-slide frames, so don't promote each one
+    // to its own GPU layer (3 copies x every image) for no reason.
+    const frames = slides.map((s) => (cfg.parallaxDepth ? s.querySelector("[data-ticker-parallax]") : null))
     const perCopy = Math.round(slides.length / cfg.copies)
-    const baseSpeed = reduceMotion ? 0 : cfg.baseSpeed
+    let baseSpeed = motionQuery?.matches ? 0 : cfg.baseSpeed
 
     // GSAP's fastest write path: cached setters, no per-frame string building.
     gsap.set(track, { force3D: true, x: 0 })
@@ -169,7 +175,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     let lefts = []
     let widths = []
 
-    let x = 0        // wrapped position (painted)
+    let x = 0        // wrapped position, always in (-loopW, 0]
     let travel = 0   // unwrapped position (release velocity is measured from this)
 
     // ---- state: ONE velocity, made of two parts, both integrated here in tick() --------------
@@ -184,8 +190,12 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     let spring = cfg.resumeSpring
     let flick = 0
     let hoverTarget = 1
+    let userPaused = false           // the visible pause control (WCAG 2.2.2)
+    let focusHeld = false            // keyboard focus is inside: hold still so it can be read
     let pending = 0                  // finger movement received since the last frame (px)
     const decayRate = -Math.log(cfg.decelerationRate) * 1000 // 1/s
+
+    const targetSpeed = () => (userPaused || focusHeld ? 0 : hoverTarget)
 
     // Retarget the speed spring. Its current velocity is kept, so this never jerks.
     const aim = (to, s) => {
@@ -193,7 +203,10 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         cruiseTarget = to
         spring = s
     }
-    const aimHover = () => aim(hoverTarget, hoverTarget !== 1 ? cfg.stopSpring : cfg.resumeSpring)
+    const aimHover = () => {
+        const t = targetSpeed()
+        aim(t, t !== 1 ? cfg.stopSpring : cfg.resumeSpring)
+    }
 
     const takeOver = () => { // finger / trackpad owns motion now
         cruise = 0
@@ -275,11 +288,80 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         }
     }
 
-    const tick = () => {
-        if (!visible || !loopW) return
-        // deltaRatio is GSAP's lag-smoothed frame time: steady on 60/120/144Hz and after hitches.
-        // Capped at 1.5 frames so a late frame advances the ticker by a normal step, not a jump.
-        const dt = Math.min(gsap.ticker.deltaRatio(60), 1.5) / 60
+    // ---- compositor cruise ------------------------------------------------------------------
+    // Once the speed spring has settled and nothing is touching the ticker, steady drift is
+    // handed to a Web Animation on the track. The browser runs it on the compositor thread, so
+    // main-thread work elsewhere on the page (scroll handlers, React renders, image decode)
+    // cannot make it stutter. JavaScript takes the position back the instant anything needs
+    // it: finger, trackpad, hover, focus, pause, resize.
+    let anim = null
+    let glideDur = 0
+    let glideLoopW = 0
+
+    const canGlide = () =>
+        !anim &&
+        started &&
+        baseSpeed > 0 &&
+        loopW > 0 &&
+        typeof track.animate === "function" &&
+        !dragging && !wheelActive && !pressed &&
+        pending === 0 && flick === 0 &&
+        cruiseTarget > 0 &&
+        Math.abs(cruise - cruiseTarget) < 1e-3 &&
+        Math.abs(cruiseVel) < 2e-3
+
+    // ---- frame loop: the display's own timestamp, not a smoothed clock ----------------------
+    let rafId = 0
+    let lastT = 0
+    const loop = (ts) => {
+        rafId = requestAnimationFrame(loop)
+        tick(ts)
+    }
+    const startLoop = () => {
+        if (!rafId) rafId = requestAnimationFrame(loop)
+    }
+    const stopLoop = () => {
+        cancelAnimationFrame(rafId)
+        rafId = 0
+        lastT = 0
+    }
+
+    const toCompositor = () => {
+        cruise = cruiseTarget
+        cruiseVel = 0
+        glideLoopW = loopW
+        glideDur = (loopW / baseSpeed) * 1000
+        anim = track.animate(
+            [{ transform: "translate3d(0px, 0px, 0px)" }, { transform: `translate3d(${-loopW}px, 0px, 0px)` }],
+            { duration: glideDur, iterations: Infinity, easing: "linear" }
+        )
+        anim.currentTime = (-x / loopW) * glideDur
+        anim.playbackRate = cruise
+        stopLoop() // nothing left to do per frame
+    }
+
+    // Take the position back from the compositor, painted this very task so nothing flashes.
+    const toJS = () => {
+        if (!anim) return
+        const t = Number(anim.currentTime) || 0
+        const phase = (((t % glideDur) + glideDur) % glideDur) / glideDur
+        x = -phase * glideLoopW
+        anim.cancel()
+        anim = null
+        paintedX = NaN
+        paint()
+        startLoop()
+    }
+
+    const tick = (ts) => {
+        if (!visible || !loopW) {
+            lastT = 0
+            return
+        }
+        // Real elapsed time from the display's frame timestamp. A dropped frame therefore costs
+        // exactly the distance it should: the ticker keeps the true time, it never "slows down".
+        const dt = lastT ? clamp((ts - lastT) / 1000, 0, MAX_FRAME_DT) : 1 / 60
+        lastT = ts
 
         if (wheelActive && performance.now() - lastWheelT > 120) {
             wheelActive = false
@@ -318,6 +400,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
         wrap()
         paint()
+        if (canGlide()) toCompositor()
     }
 
     const proxy = document.createElement("div")
@@ -337,6 +420,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         cursor: "grab",
         activeCursor: "grabbing",
         onPress() {
+            toJS()
             pressed = true
             wheelActive = false
             pending = 0
@@ -371,11 +455,13 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
     const onEnter = (e) => {
         if (e.pointerType !== "mouse") return
+        toJS()
         hoverTarget = cfg.hoverFactor
         if (!pressed && !dragging && !wheelActive) aimHover()
     }
     const onLeave = (e) => {
         if (e.pointerType !== "mouse") return
+        toJS()
         hoverTarget = 1
         if (!pressed && !dragging && !wheelActive) aimHover()
     }
@@ -384,6 +470,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     const onWheel = (e) => {
         if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || dragging) return
         e.preventDefault()
+        toJS()
         let dx = e.deltaX
         if (e.deltaMode === 1) dx *= 16
         else if (e.deltaMode === 2) dx *= vpW
@@ -392,11 +479,62 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         pending -= dx
     }
 
+    // ---- keyboard / assistive tech ---------------------------------------------------------
+    // Slides can take focus. The viewport is overflow:hidden, so the browser may "scroll" it to
+    // a focused slide; the ticker is moved with transforms, so undo that and bring the slide
+    // into view by moving the track instead.
+    const ensureVisible = (el) => {
+        const i = slides.indexOf(el)
+        if (i < 0 || !loopW) return
+        toJS()
+        const left = lefts[i] + x
+        const w = widths[i]
+        if (left < 0) x -= left
+        else if (left + w > vpW) x -= left + w - vpW
+        wrap()
+        paint()
+    }
+    const onFocusIn = (e) => {
+        viewport.scrollLeft = 0
+        // Only keyboard focus holds the ticker; a mouse click must not move or stop anything.
+        if (!e.target.matches?.(":focus-visible")) return
+        toJS()
+        focusHeld = true
+        const slide = slides.find((s) => s.contains(e.target))
+        if (slide) ensureVisible(slide)
+        aimHover()
+    }
+    const onFocusOut = (e) => {
+        if (viewport.contains(e.relatedTarget)) return
+        if (!focusHeld) return
+        focusHeld = false
+        aimHover()
+    }
+    const onViewportScroll = () => {
+        if (viewport.scrollLeft) viewport.scrollLeft = 0
+    }
+
+    // The reduced-motion preference is honoured live, not just at creation.
+    const onMotionPref = () => {
+        toJS()
+        baseSpeed = motionQuery.matches ? 0 : cfg.baseSpeed
+        cruise = 0
+        cruiseVel = 0
+        aimHover()
+    }
+
     viewport.addEventListener("pointerenter", onEnter)
     viewport.addEventListener("pointerleave", onLeave)
     viewport.addEventListener("wheel", onWheel, { passive: false })
+    viewport.addEventListener("focusin", onFocusIn)
+    viewport.addEventListener("focusout", onFocusOut)
+    viewport.addEventListener("scroll", onViewportScroll, { passive: true })
+    motionQuery?.addEventListener?.("change", onMotionPref)
 
-    const ro = new ResizeObserver(measure)
+    const ro = new ResizeObserver(() => {
+        toJS() // keyframes depend on the loop width: rebuild them after a resize
+        measure()
+    })
     ro.observe(viewport)
     ro.observe(track)
 
@@ -406,7 +544,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     track.style.willChange = "transform"
     measure()
     paint()
-    gsap.ticker.add(tick)
+    startLoop()
 
     return {
         consumeDrag: () => suppressClick,
@@ -415,14 +553,25 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             started = true
             aimHover()
         },
+        setPaused(p) {
+            toJS()
+            userPaused = !!p
+            aimHover()
+        },
         destroy() {
-            gsap.ticker.remove(tick)
+            stopLoop()
+            anim?.cancel()
+            anim = null
             draggable.kill()
             ro.disconnect()
             io.disconnect()
             viewport.removeEventListener("pointerenter", onEnter)
             viewport.removeEventListener("pointerleave", onLeave)
             viewport.removeEventListener("wheel", onWheel)
+            viewport.removeEventListener("focusin", onFocusIn)
+            viewport.removeEventListener("focusout", onFocusOut)
+            viewport.removeEventListener("scroll", onViewportScroll)
+            motionQuery?.removeEventListener?.("change", onMotionPref)
             track.style.willChange = ""
             gsap.set(track, { clearProps: "transform" })
             frames.forEach((f) => { if (f) { f.style.willChange = ""; gsap.set(f, { clearProps: "transform" }) } })

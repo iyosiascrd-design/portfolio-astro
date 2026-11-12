@@ -198,7 +198,7 @@ function FitWidth({ children, className = "" }) {
 
 /* ------------------------------------------------------------------ */
 
-export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
+export default function Header({ opacity = 1, scrollToTarget }) {
     const navigate = useNavigate()
     const location = useLocation()
     const pageTransition = usePageTransition()
@@ -404,7 +404,6 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         /* ----- open ----- */
         if (menuOpen) {
             document.body.style.overflow = "hidden"
-            lenisRef?.current?.stop()
 
             // Swapped to expo.inOut for an Apple-like smooth expansion and increased duration slightly 
             const opts = { duration: 0.85, ease: "expo.inOut" }
@@ -461,7 +460,6 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
 
         /* ----- close ----- */
         document.body.style.overflow = ""
-        lenisRef?.current?.start()
 
         const finish = () => {
             gsap.set(menuEl, { display: "none" })
@@ -502,7 +500,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             gsap.to(lblClose, { autoAlpha: 0, duration: 0.15, delay: 0.05, ease: "none" })
             gsap.to(lblMenu, { autoAlpha: 1, duration: 0.15, delay: 0.2, ease: "none" })
         }
-    }, [menuOpen, lenisRef])
+    }, [menuOpen])
 
     // Close the menu on route change and when resizing up to the desktop header.
     useEffect(() => {
@@ -521,9 +519,8 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
     useEffect(() => {
         return () => {
             document.body.style.overflow = ""
-            lenisRef?.current?.start()
         }
-    }, [lenisRef])
+    }, [])
 
     /* ---------- arriving on the homepage from another page: land on the requested section ----------
        handleNavClick stores the target (e.g. "#services") before the route changes.
@@ -534,7 +531,7 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
           that shift, so the first jump is already exact and nothing is "fixed" later in front of the visitor.
        2. Land once, then re-correct only when the page height really changes (ResizeObserver),
           coalesced to one jump per frame. No fixed timers.
-       3. Lenis is stopped and the scroll-linked header is told to ignore the jump while we land.
+       3. The scroll-linked header is told to ignore the jump while we land.
        4. When settled (400ms with no layout change) we tell the overlay, which holds its reveal until then. */
 
     useLayoutEffect(() => {
@@ -550,7 +547,6 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             sessionStorage.removeItem(PENDING_SCROLL_KEY)
         } catch {}
 
-        const lenis = lenisRef?.current
         let cancelled = false
         let raf = 0
         let quietTimer = 0
@@ -569,12 +565,8 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
 
         const jump = (el) => {
             const y = Math.max(0, targetY(el))
-            if (lenis?.scrollTo) {
-                lenis.resize?.()
-                lenis.scrollTo(y, { immediate: true, force: true })
-            } else {
-                window.scrollTo({ top: y, behavior: "auto" })
-            }
+            // "instant" so a CSS scroll-behavior: smooth can never turn the landing jump into an animation
+            window.scrollTo({ top: y, behavior: "instant" })
         }
         const offBy = (el) => Math.abs(targetY(el) - window.scrollY)
 
@@ -589,7 +581,6 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
             ro?.disconnect()
             userEvents.forEach((ev) => window.removeEventListener(ev, finish))
             landingRef.current = false
-            lenis?.start()
             announcePageLanded()
         }
 
@@ -597,7 +588,6 @@ export default function Header({ opacity = 1, scrollToTarget, lenisRef }) {
         userEvents.forEach((ev) => window.addEventListener(ev, finish, { passive: true }))
 
         landingRef.current = true
-        lenis?.stop() // nothing can fight the jump
 
         // Re-correct only when the page actually changes height
         const watchLayout = (el) => {

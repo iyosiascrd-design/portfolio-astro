@@ -79,7 +79,6 @@ export default function ZhongshanCaseStudy() {
   const outletCtx = useOutletContext()
   const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
   const heroFade = outletCtx?.heroFade
-  const lenisRef = outletCtx?.lenisRef
 
   const ready = usePageReady()
   const pageTransition = usePageTransition()
@@ -129,11 +128,10 @@ export default function ZhongshanCaseStudy() {
   useEffect(() => {
     setHeaderLight(false)
     window.scrollTo(0, 0)
-    lenisRef?.current?.scrollTo(0, { immediate: true })
     if (heroFade) {
       heroFade.set(1)
     }
-  }, [setHeaderLight, heroFade, lenisRef])
+  }, [setHeaderLight, heroFade])
 
   useLayoutEffect(() => {
     if (prefersReducedMotion()) return
@@ -164,7 +162,7 @@ export default function ZhongshanCaseStudy() {
   }, [ready])
 
   useIdlePreload(PRELOAD_SRCS, ready)
-  useCaseStudyReveal(rootRef, lenisRef)
+  useCaseStudyReveal(rootRef)
 
   return (
     <div ref={rootRef} className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
@@ -264,7 +262,7 @@ export default function ZhongshanCaseStudy() {
             <Media
               src={ASSETS.suppliers}
               alt="Curved balconies and timber fins on a modern residential facade"
-              className="max-md:!aspect-[361/364] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw] w-full h-full object-cover"
+              className="max-md:!aspect-[361/364] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw] w-full h-full object-cover rounded-lg md:rounded-[12px]"
             />
           </section>
 
@@ -307,7 +305,7 @@ export default function ZhongshanCaseStudy() {
                 <Media
                   src={ASSETS.color}
                   alt="Zhongshan colour palette"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-lg md:rounded-[12px]"
                 />
               </div>
               <div className="lg:row-start-3 lg:col-start-2 lg:h-[32.08vw] flex flex-col">
@@ -324,7 +322,7 @@ export default function ZhongshanCaseStudy() {
                 <Media
                   src={ASSETS.typeTablet}
                   alt="Zhongshan product catalogue on a tablet over perforated metal"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-lg md:rounded-[12px]"
                 />
               </div>
             </div>
@@ -341,7 +339,7 @@ export default function ZhongshanCaseStudy() {
                   <Media
                     src={ASSETS.color}
                     alt="Zhongshan colour palette: Platinum, Pacific Blue, Prussian Blue, Dusty Grey and Shadow Grey"
-                    className="w-full h-full object-contain object-left-top"
+                    className="w-full h-full object-cover object-left-top"
                   />
                 </div>
               </div>

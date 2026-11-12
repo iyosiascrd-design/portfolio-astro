@@ -58,6 +58,7 @@ const flat = (str) => str.replace(/\n/g, " ")
 // on screen at once, so the first 4 slides load at high priority. Repeat slides share the
 // same URLs, so they need no hint of their own.
 const TICKER_PRIORITY_COUNT = 4
+const TICKER_START_DELAY = 1200 // ms after pageReady (preloader exit / page transition wipe still running)
 
 const SERVICES_DATA = [
     {
@@ -294,8 +295,9 @@ const ExpertiseCursorImage = ({ x, y, hoveredIndex, ratios }) => {
     )
 }
 
-const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
+const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone }) => {
     const slideRef = useRef(null)
+    const cardRef = useRef(null)
     const [reveal, setReveal] = useState(null)
     // The arrow nudge only runs while this slide is hovered. Before, every slide ran an
     // infinite framer-motion loop all the time (even while invisible), which competed
@@ -323,6 +325,40 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
         return () => cancelAnimationFrame(frame)
     }, [ready, reveal])
 
+    // Rise-in + fade as Web Animations: they run on the compositor, so the reveal can't stutter
+    // while the main thread is busy with the preloader hand-off, text reveals and image decode.
+    // Layout effect + fill "both" means there is never a frame showing the slide in its final
+    // state before the animation takes over.
+    useLayoutEffect(() => {
+        const el = cardRef.current
+        if (!reveal || reveal.instant || !el || typeof el.animate !== "function") return
+        const delay = reveal.delay * 1000
+        const dur = TICKER_REVEAL.duration * 1000
+        el.style.willChange = "transform, opacity"
+        const rise = el.animate(
+            [{ transform: `translateY(${TICKER_REVEAL.from})` }, { transform: "translateY(0%)" }],
+            { duration: dur, delay, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "both" }
+        )
+        const fade = el.animate([{ opacity: 0 }, { opacity: 1 }], {
+            duration: dur * 0.5,
+            delay,
+            easing: "ease-out",
+            fill: "both",
+        })
+        const settle = () => {
+            // end state == the element's normal style, so drop the animations and the layer
+            rise.cancel()
+            fade.cancel()
+            el.style.willChange = ""
+        }
+        Promise.all([rise.finished, fade.finished]).then(settle, () => {})
+        return () => {
+            rise.cancel()
+            fade.cancel()
+            el.style.willChange = ""
+        }
+    }, [reveal])
+
     const getSubtitle = (name) => {
         if (!name) return ""
         const lower = name.toLowerCase()
@@ -332,6 +368,23 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
         return project.category || "Branding"
     }
 
+    // The ticker repeats the same slides 3x to loop seamlessly. Only the first copy is exposed to
+    // keyboard and screen readers; the clones are decoration.
+    const interactive = !!project && !isClone
+    const a11y = interactive
+        ? {
+              role: "link",
+              tabIndex: 0,
+              "aria-label": `${project.name}, ${getSubtitle(project.name)}`,
+              onKeyDown: (e) => {
+                  if (e.key === "Enter") {
+                      e.preventDefault()
+                      onClick?.(e)
+                  }
+              },
+          }
+        : { "aria-hidden": true }
+
     return (
         <div
             ref={slideRef}
@@ -340,23 +393,19 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
                 if (e.pointerType === "mouse") setHovered(true)
             }}
             onPointerLeave={() => setHovered(false)}
-            className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group"
+            className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group outline-none"
+            {...a11y}
         >
-            <motion.div
-                style={{ height: TICKER_HEIGHT }}
-                initial={{ y: TICKER_REVEAL.from, opacity: 0 }}
-                animate={reveal ? { y: 0, opacity: 1 } : { y: TICKER_REVEAL.from, opacity: 0 }}
-                transition={
-                    reveal && !reveal.instant
-                        ? {
-                              y: { duration: TICKER_REVEAL.duration, ease: customEase, delay: reveal.delay },
-                              opacity: { duration: TICKER_REVEAL.duration * 0.5, ease: "easeOut", delay: reveal.delay },
-                          }
-                        : { duration: 0 }
-                }
+            <div
+                ref={cardRef}
+                // hidden until the reveal is decided; the Web Animation above takes over from here
+                style={{
+                    height: TICKER_HEIGHT,
+                    ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
+                }}
                 className="relative w-full overflow-hidden rounded-lg md:rounded-[12px] lg:rounded-[8px] bg-[var(--bg-surface-dark)]"
             >
-                <div data-ticker-parallax className="absolute inset-0 w-full h-full will-change-transform">
+                <div data-ticker-parallax className="absolute inset-0 w-full h-full">
                     <img
                         src={src}
                         alt={project ? project.name : "Portfolio Work"}
@@ -370,6 +419,8 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
                     />
                 </div>
                 <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+                {/* keyboard focus ring (inside the clipped card so the marquee never crops it) */}
+                <div className="absolute inset-0 rounded-[inherit] pointer-events-none ring-2 ring-inset ring-white opacity-0 group-focus-visible:opacity-100" />
 
                 {project && (
                     <div className="absolute inset-x-0 bottom-0 pointer-events-none">
@@ -405,7 +456,7 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority }) => {
                         </div>
                     </div>
                 )}
-            </motion.div>
+            </div>
         </div>
     )
 }
@@ -416,7 +467,8 @@ const TickerSlide = memo(
         a.src === b.src &&
         a.project === b.project &&
         a.ready === b.ready &&
-        a.fetchPriority === b.fetchPriority
+        a.fetchPriority === b.fetchPriority &&
+        a.isClone === b.isClone
 )
 
 const ACCORDION_OPEN = { duration: 0.85, ease: "expo.inOut", fadeIn: 0.5, fadeInDelay: 0.3 }
@@ -709,15 +761,13 @@ export default function Home() {
 
     const outletCtx = useOutletContext()
     const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
-    const lenisRef = outletCtx?.lenisRef
 
     // Arriving from a (scrolled) case study: start at the top, like the case studies do.
     // Skipped when the URL has a #hash so anchor links keep working.
     useEffect(() => {
         if (window.location.hash) return
         window.scrollTo(0, 0)
-        lenisRef?.current?.scrollTo(0, { immediate: true })
-    }, [lenisRef])
+    }, [])
 
     const [activeIndex, setActiveIndex] = useState(0)
     // Hover highlight for the accordion rows (tablet/mobile widths with a mouse or trackpad).
@@ -746,6 +796,14 @@ export default function Home() {
     const workSectionRef = useRef(null)
     const tickerEngine = useRef(null)
     const [tickerReady, setTickerReady] = useState(false)
+    const [tickerPaused, setTickerPaused] = useState(false)
+    const tickerPausedRef = useRef(false)
+    const toggleTickerPause = () => {
+        const next = !tickerPausedRef.current
+        tickerPausedRef.current = next
+        setTickerPaused(next)
+        tickerEngine.current?.setPaused(next)
+    }
     const pageReadyRef = useRef(pageReady)
     pageReadyRef.current = pageReady
 
@@ -756,6 +814,7 @@ export default function Home() {
             ...TICKER_MOTION,
             startPaused: true,
         })
+        if (tickerPausedRef.current) tickerEngine.current.setPaused(true)
         // If the page is already revealed (e.g. after a resize), start right away
         if (pageReadyRef.current) tickerEngine.current.start()
         setTickerReady(true)
@@ -766,8 +825,13 @@ export default function Home() {
     }, [vp.isMobile])
 
     // Start the ticker once the page is revealed (after the preloader / page transition)
+    // Held back until the reveal wipe has finished: starting it earlier piles the ticker's
+    // first frames on top of the mask wipe, the page slide and every slide's rise-in. The
+    // ticker springs up from rest, so a late start still looks like a smooth ease-in.
     useEffect(() => {
-        if (pageReady) tickerEngine.current?.start()
+        if (!pageReady) return
+        const id = setTimeout(() => tickerEngine.current?.start(), TICKER_START_DELAY)
+        return () => clearTimeout(id)
     }, [pageReady])
 
     useEffect(() => {
@@ -1070,8 +1134,19 @@ export default function Home() {
                     </div>
                 ) : (
                     <div ref={tickerWrapRef} className="relative flex-shrink-0 w-full pb-[16px] m-0 overflow-hidden will-change-transform">
+                        {/* Moving content needs a pause control (WCAG 2.2.2). Hidden until keyboard focus. */}
+                        <button
+                            type="button"
+                            onClick={toggleTickerPause}
+                            className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:right-[16px] focus-visible:top-[16px] focus-visible:z-10 focus-visible:rounded-full focus-visible:bg-white focus-visible:px-[14px] focus-visible:py-[8px] focus-visible:text-black Caption !text-[14px] uppercase !font-medium"
+                        >
+                            {tickerPaused ? "Play work gallery" : "Pause work gallery"}
+                        </button>
                         <div
                             ref={tickerViewportRef}
+                            role="region"
+                            aria-roledescription="carousel"
+                            aria-label="Selected work"
                             onClickCapture={(e) => {
                                 if (tickerEngine.current?.consumeDrag()) {
                                     e.stopPropagation()
@@ -1090,6 +1165,7 @@ export default function Home() {
                                             src={src}
                                             project={proj}
                                             ready={tickerReady && pageReady}
+                                            isClone={idx >= LOOPING_IMAGES.length}
                                             fetchPriority={idx < TICKER_PRIORITY_COUNT ? "high" : undefined}
                                             onClick={() => proj && handleProjectClickRef.current?.(proj.name)}
                                         />

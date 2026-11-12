@@ -100,7 +100,7 @@ function trackLoading(onProgress) {
     )
 }
 
-export default function Preloader({ lenisRef }) {
+export default function Preloader() {
     const ctxTransition = usePageTransition()
     const finishPreload = ctxTransition?.finishPreload
     const [show, setShow] = useState(shouldPreload)
@@ -117,8 +117,7 @@ export default function Preloader({ lenisRef }) {
         } catch {}
 
         document.body.style.overflow = "hidden"
-        const lockRaf = requestAnimationFrame(() => lenisRef?.current?.stop())
-        
+
         let ctx = gsap.context(() => {
             const overlay = overlayRef.current
             const findMain = () => document.querySelector("[data-page-transition]") || document.querySelector("main")
@@ -135,7 +134,6 @@ export default function Preloader({ lenisRef }) {
 
             const unlock = () => {
                 document.body.style.overflow = ""
-                lenisRef?.current?.start()
             }
 
             const reels = LETTERS.map(({ row }) => ({ y: rowPitch(row) }))
@@ -288,10 +286,9 @@ export default function Preloader({ lenisRef }) {
         })
 
         return () => {
-            cancelAnimationFrame(lockRaf)
             ctx.revert()
         }
-    }, [show, lenisRef, finishPreload])
+    }, [show, finishPreload])
 
     if (!show) return null
 

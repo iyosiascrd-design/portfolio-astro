@@ -23,7 +23,7 @@ export const prefersReducedMotion = () =>
   typeof window !== "undefined" &&
   !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
 
-export function useCaseStudyReveal(rootRef, lenisRef) {
+export function useCaseStudyReveal(rootRef) {
   useLayoutEffect(() => {
     if (prefersReducedMotion() || !rootRef.current) return
 
@@ -135,18 +135,14 @@ export function useCaseStudyReveal(rootRef, lenisRef) {
       })
     }, rootRef)
 
-    const lenis = lenisRef?.current
-    lenis?.on("scroll", ScrollTrigger.update)
-
     const onLoad = () => ScrollTrigger.refresh()
     window.addEventListener("load", onLoad)
 
     return () => {
       window.removeEventListener("load", onLoad)
-      lenis?.off("scroll", ScrollTrigger.update)
       dead = true
       revealIO?.disconnect()
       ctx.revert()
     }
-  }, [rootRef, lenisRef])
+  }, [rootRef])
 }

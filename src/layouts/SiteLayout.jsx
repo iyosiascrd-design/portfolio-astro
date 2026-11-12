@@ -3,7 +3,6 @@
 import React, { useRef, useEffect, useLayoutEffect, useState, useCallback } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { motion, useMotionValue, useTransform, useSpring, useReducedMotion, cubicBezier } from "framer-motion"
-import Lenis from "lenis"
 import { ArrowUp } from "lucide-react"
 
 import Header, { PENDING_SCROLL_KEY } from "../components/Header"
@@ -15,6 +14,36 @@ import Preloader from "../components/Preloader"
 
 import { useViewport, ViewportContext } from "../lib/viewport"
 import { RESPONSIVE_CSS } from "../lib/responsiveCss"
+
+// --- NATIVE SCROLL ---
+// Lenis (smooth-scroll hijacking) has been removed: the browser's own scrolling is used.
+// This tiny stand-in keeps the old `lenisRef.current?.scrollTo / stop / start / resize / on` calls
+// in other components (Preloader, Header, hooks) working without a Lenis instance.
+const prefersReducedMotion = () =>
+    typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+
+function nativeScrollTo(target, options = {}) {
+    if (typeof window === "undefined") return
+    const behavior = options.immediate || prefersReducedMotion() ? "auto" : "smooth"
+    if (typeof target === "number") {
+        window.scrollTo({ top: target, behavior })
+        return
+    }
+    const el = typeof target === "string" ? document.querySelector(target) : target
+    el?.scrollIntoView({ behavior })
+}
+
+const NATIVE_SCROLL = {
+    scrollTo: nativeScrollTo,
+    stop() { document.documentElement.style.overflow = "hidden" },
+    start() { document.documentElement.style.overflow = "" },
+    resize() {},
+    raf() {},
+    on() { return () => {} },
+    off() {},
+    destroy() {},
+    get scroll() { return typeof window === "undefined" ? 0 : window.scrollY },
+}
 
 // --- ERROR BOUNDARY TO PREVENT WHITE SCREENS ---
 class LayoutErrorBoundary extends React.Component {
@@ -331,7 +360,7 @@ function FooterLogoLink({ scrollToTarget }) {
 const FOOTER_LINK_CLASS = "H5 max-md:!text-[length:var(--fm-list-size)] text-white transition-colors duration-200 hover:text-white/80"
 
 // Footer navigation link. Same behaviour as the header links:
-// - on the homepage it smooth-scrolls (Lenis) to the section
+// - on the homepage it smooth-scrolls (native) to the section
 // - from any other page it plays the page transition, then lands on the section
 // Lives in its own component because usePageTransition() only works below <PageTransitionProvider>.
 function FooterNavLink({ href, label, scrollToTarget }) {
@@ -374,7 +403,7 @@ function SiteLayoutInternal() {
     const { pathname } = useLocation()
     const navigate = useNavigate()
     const footerTheme = FOOTER_THEMES[pathname] || FOOTER_THEMES.default
-    const lenisRef = useRef(null)
+    const lenisRef = useRef(NATIVE_SCROLL)
 
     const [headerLight, setHeaderLight] = useState(false)
     const [headerOnFooter, setHeaderOnFooter] = useState(false)
@@ -411,46 +440,12 @@ function SiteLayoutInternal() {
         const landingOnSection = !!window.location.hash
         if (!landingOnSection) {
             window.scrollTo(0, 0)
-            lenisRef.current?.scrollTo(0, { immediate: true })
         }
-        const t = setTimeout(() => { lenisRef.current?.resize() }, 150)
-        return () => clearTimeout(t)
     }, [pathname])
 
-    useEffect(() => {
-        if (typeof window === 'undefined' || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
-        try {
-            const lenis = new Lenis({ duration: 1.4, easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), smoothWheel: true })
-            lenisRef.current = lenis
-            let rafId = requestAnimationFrame(function raf(time) { lenis.raf(time); rafId = requestAnimationFrame(raf); })
-            return () => { cancelAnimationFrame(rafId); lenis.destroy(); lenisRef.current = null; }
-        } catch(e) {
-            console.error("Lenis initialization failed:", e)
-        }
-    }, [])
-
-    useEffect(() => {
-        let raf = null
-        const resize = () => {
-            if (raf !== null) return
-            raf = requestAnimationFrame(() => { raf = null; lenisRef.current?.resize(); })
-        }
-        const ro = new ResizeObserver(resize)
-        ro.observe(document.documentElement); ro.observe(document.body);
-        window.addEventListener("load", resize); window.addEventListener("resize", resize);
-        const t = setTimeout(resize, 600)
-        return () => {
-            if (raf !== null) cancelAnimationFrame(raf)
-            clearTimeout(t); ro.disconnect(); window.removeEventListener("load", resize); window.removeEventListener("resize", resize);
-        }
-    }, [])
-
+    // Native smooth scrolling (options such as { duration } are accepted but ignored).
     const scrollToTarget = useCallback((target, options = {}) => {
-        const lenis = lenisRef.current
-        if (lenis) { lenis.scrollTo(target, { duration: 1.4, ...options }); return; }
-        if (target === 0) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-        const el = typeof target === "string" ? document.querySelector(target) : target
-        el?.scrollIntoView({ behavior: "smooth" })
+        nativeScrollTo(target, options)
     }, [])
 
     useEffect(() => {

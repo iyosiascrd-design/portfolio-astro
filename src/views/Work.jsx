@@ -349,7 +349,6 @@ export default function Work() {
     const setHeaderLight = ctx?.setHeaderLight || NOOP
     setHeaderLight(false)
     window.scrollTo(0, 0)
-    ctx?.lenisRef?.current?.scrollTo(0, { immediate: true })
     if (ctx?.heroFade) ctx.heroFade.set(1)
   }, [])
 
