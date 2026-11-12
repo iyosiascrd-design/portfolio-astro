@@ -32,8 +32,8 @@ const CARD_BOTTOM = 72
 const CARD_RADIUS = "clamp(12px, 5vw, 20px)"
 
 const FLING_MIN_VELOCITY = 1.4
-const FLING_MAX_VELOCITY = 16
-const FLING_COAST = 0.55
+const FLING_MAX_VELOCITY = 10
+const FLING_COAST = 0.35
 const FLING_MIN_TIME = 0.5
 const FLING_MAX_TIME = 2.6
 const SNAP_TIME = 0.6
