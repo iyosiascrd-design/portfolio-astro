@@ -1406,7 +1406,7 @@ export default function Home() {
                     id="services"
                     // Rows resize while they animate; keep the browser from nudging scrollTop in response.
                     style={{ overflowAnchor: "none" }}
-                    className="relative flex flex-col justify-between w-full min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
+                    className="relative flex flex-col justify-between w-full min-h-[100svh] lg:min-h-0 pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
                 >
                     <div className="w-full h-full px-[var(--page-pad)] flex flex-col flex-1 m-0">
                         <div ref={servicesHeadRef} className="flex flex-col items-start gap-[40px] sm:max-md:gap-[64px] w-full mb-[clamp(48px,8svh,80px)] md:flex-row md:justify-between md:items-start md:gap-[32px] m-0">
