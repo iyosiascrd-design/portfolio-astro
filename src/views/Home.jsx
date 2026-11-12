@@ -1247,7 +1247,7 @@ export default function Home() {
                     className="relative flex flex-col justify-between w-full lg:min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
                 >
                     <div className="w-full h-full px-[var(--page-pad)] flex flex-col flex-1 m-0">
-                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[20px] w-full mb-[40px] md:mb-[56px] md:flex-row md:justify-between md:items-start md:gap-[32px] lg:mb-[clamp(48px,8svh,80px)] m-0">
+                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[48px] w-full mb-[64px] md:mb-[56px] md:flex-row md:justify-between md:items-start md:gap-[32px] lg:mb-[clamp(48px,8svh,80px)] m-0">
                             <MaskRevealText as="h2" mode="words" active={servicesHeadActive} className="cap-align H1 md:shrink-0 md:max-lg:!text-[clamp(56px,8vw,96px)] text-white m-0 uppercase">
                                 Services
                             </MaskRevealText>
