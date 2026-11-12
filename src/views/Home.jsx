@@ -795,10 +795,12 @@ export default function Home() {
     // row sticks to the top as you scroll past. Names stack in order (Brand Identity first, the next
     // below it, ...), so only passed services are reduced to their names.
     //
-    // When the last panel has scrolled out of view behind the stack, the whole stack of names leaves
-    // together. That is done natively by CSS sticky: each name has a bottom margin of (names after it) *
-    // row height, and the panel below pulls up by the same amount, so the names stop in stack order at the
-    // end of the list instead of overlapping. No JS moves them, so they cannot lag the scroll.
+    // This is pure CSS sticky, so the browser positions everything on the compositor and it cannot lag:
+    //  - every name has a SOLID background, so panels simply slide behind the stack (no masking, no JS);
+    //  - at the end of the list the names leave together: each name has a bottom margin of (names after
+    //    it) * row height and sticky keeps that margin box inside the list. The panel below pulls up by
+    //    the same amount, so the layout does not move.
+    // The only JS is the highlight: it measures once and sets data-stuck on the names (no React state).
     useLayoutEffect(() => {
         const list = servicesListRef.current
         if (!list) return
@@ -807,96 +809,47 @@ export default function Home() {
             return
         }
 
-        // PERF NOTES (why this was stuttering):
-        // 1. The old per-frame callback wrote a CSS custom property on the <ul> and then immediately read
-        //    getComputedStyle / getBoundingClientRect for every head and panel. Writing a custom property
-        //    invalidates style for the whole subtree, and the reads right after force a synchronous style
-        //    recalc + layout on every scroll frame (layout thrash), which is what drops frames on phones.
-        // 2. The exit of the stack was driven by JS (a transform updated per frame), so on phones the names
-        //    visibly trailed the scroll while leaving. It is now native sticky, see the JSX.
-        // Now geometry is measured ONCE (and on resize / font / image load / scroll-idle) and the per-frame
-        // work is pure arithmetic on window.scrollY plus writes that are skipped when nothing changed.
-        // The per-frame writes (transforms, attributes) never touch layout.
         let geo = null
         let lastRowH = ""
         let lastStuck = -2
+        let raf = 0
+        let idleTimer = 0
 
+        // Measured once (and on resize / font / image load / scroll-idle), never per scroll frame.
         const measure = () => {
             const hs = Array.from(list.querySelectorAll(".svc-sticky-head"))
             const ps = Array.from(list.querySelectorAll(".svc-panel"))
             if (!hs.length || hs.length !== ps.length || hs[0].offsetHeight <= 0) return
-            if (ps.some((p) => !p.closest("[data-svc-clip]"))) return
 
             // fractional: offsetHeight rounds and the error stacks
             const rowH = hs[0].getBoundingClientRect().height
-            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
-
             const rowHStr = `${rowH}px`
             if (rowHStr !== lastRowH) {
                 lastRowH = rowHStr
                 list.style.setProperty("--svc-row-h", rowHStr)
             }
-
+            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
             const sy = window.scrollY
-            geo = {
-                n: hs.length,
-                heads: hs,
-                rowH,
-                top0,
-                stackBottom: top0 + hs.length * rowH,
-                // bottom of the list (not sticky, so its document position is stable)
-                endTop: list.getBoundingClientRect().bottom + sy,
-                panels: ps.map((el) => {
-                    const r = el.getBoundingClientRect()
-                    // wrapper + panel move in opposite directions, so the panel's rect is unchanged
-                    return { el, clip: el.closest("[data-svc-clip]"), top: r.top + sy, h: r.height, state: null }
-                }),
-            }
+            geo = { heads: hs, rowH, top0, panelTops: ps.map((el) => el.getBoundingClientRect().top + sy) }
+            lastStuck = -2 // force the highlight to be re-applied
         }
 
         const frame = () => {
             raf = 0
             if (!geo) return
+            const { heads, rowH, top0, panelTops } = geo
             const sy = window.scrollY
-            const { n, heads, rowH, top0, stackBottom, endTop, panels } = geo
-
-            // The stack leaves together natively (see the head margins in the JSX); this is only the
-            // matching offset so the clip below knows where the stack's bottom edge is.
-            const d = Math.min(0, Math.round(endTop - sy - stackBottom))
-
-            // Last name that has reached its stuck position. A head's natural top is the top of its panel
-            // minus its own height (the panel sits directly under it).
-            let stuck = -1
-            for (let i = 0; i < n; i++) {
-                if (panels[i].top - rowH - sy <= top0 + i * rowH + 1) stuck = i
+            // A name is stuck once its natural top (= its panel's top minus its own height) reaches its
+            // stuck position. The last such name is the highlighted one.
+            let stuck = 0
+            for (let i = 0; i < heads.length; i++) {
+                if (panelTops[i] - rowH - sy <= top0 + i * rowH + 1) stuck = i
             }
-
-            // Mask every panel to the part really visible below the stack, so nothing can bleed through the
-            // divider lines on fractional device pixels. This is done with transforms only (no clip-path, no
-            // visibility toggling, so Safari has nothing to repaint): the clip wrapper moves DOWN by the
-            // covered amount while the panel inside moves UP by the same amount. The panel stays where it
-            // is, and the wrapper's overflow:hidden top edge sits exactly on the bottom of the stack.
-            const coverBottom = (stuck >= 0 ? top0 + (stuck + 1) * rowH : top0) + d
-            for (let i = 0; i < n; i++) {
-                const p = panels[i]
-                const hide = Math.min(p.h, Math.max(0, Math.ceil(coverBottom - (p.top - sy))))
-                if (hide === p.state) continue // nothing changed: no style write
-                p.state = hide
-                p.clip.style.transform = `translate3d(0, ${hide}px, 0)`
-                p.el.style.transform = `translate3d(0, ${-hide}px, 0)`
-            }
-
-            // Highlight the last name that has reached its stuck position. Plain attribute writes read by
-            // CSS: no React state, so scrolling never re-renders the whole page.
-            const current = Math.max(0, stuck)
-            if (current !== lastStuck) {
-                lastStuck = current
-                for (let i = 0; i < n; i++) heads[i].setAttribute("data-stuck", i === current ? "true" : "false")
-            }
+            if (stuck === lastStuck) return
+            lastStuck = stuck
+            for (let i = 0; i < heads.length; i++) heads[i].setAttribute("data-stuck", i === stuck ? "true" : "false")
         }
 
-        let raf = 0
-        let idleTimer = 0
         const schedule = () => {
             if (!raf) raf = requestAnimationFrame(frame)
         }
@@ -916,8 +869,6 @@ export default function Home() {
         frame()
         const ro = new ResizeObserver(remeasure)
         ro.observe(list)
-        const first = list.querySelector(".svc-sticky-head")
-        if (first) ro.observe(first)
         document.fonts?.ready?.then(remeasure)
         window.addEventListener("scroll", onScroll, { passive: true })
         window.addEventListener("resize", remeasure)
@@ -1403,6 +1354,11 @@ export default function Home() {
                                                       // stack order and leave with the page together. The panel below pulls up
                                                       // by the same amount (wrapper below), so the layout does not move.
                                                       marginBottom: `calc(${SERVICES_DATA.length - 1 - index} * var(--svc-row-h, 84px))`,
+                                                      // Solid, so panels sliding behind the stack are fully hidden. Set --svc-head-bg
+                                                      // if the section background is not --bg-dark. The 1px shadow overlaps the name
+                                                      // above, so a fractional device pixel can never open a seam between two names.
+                                                      background: "var(--svc-head-bg, var(--bg-dark, #050505))",
+                                                      boxShadow: "0 -1px 0 0 var(--svc-head-bg, var(--bg-dark, #050505))",
                                                   },
                                               }
 
@@ -1496,16 +1452,9 @@ export default function Home() {
                                                 </HeadWrap>
 
                                                 {!vp.isDesktop && (
-                                                    <div
-                                                        data-svc-clip=""
-                                                        style={{
-                                                            marginTop: `calc(${-(SERVICES_DATA.length - 1 - index)} * var(--svc-row-h, 84px))`,
-                                                            transform: "translate3d(0, 0, 0)",
-                                                            willChange: "transform",
-                                                        }}
-                                                    >
+                                                    <div style={{ marginTop: `calc(${-(SERVICES_DATA.length - 1 - index)} * var(--svc-row-h, 84px))` }}>
                                                     <AccordionPanel active={isActive}>
-                                                            <div className="svc-panel pb-[28px]" style={{ transform: "translate3d(0, 0, 0)", willChange: "transform" }}>
+                                                            <div className="svc-panel pb-[28px]">
                                                                 <ServiceAccordionImage
                                                                     src={service.image}
                                                                     alt={service.title}
