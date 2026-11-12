@@ -111,8 +111,8 @@ const EXPERTISE_DATA = [
         image: "/expertise-brand.png",
         tilt: -14,
         scale: 1,
-        mobileBoost: 1.4, 
-        mobileOffset: { x: 12, y: 16 }, 
+        mobileBoost: 1.4,
+        mobileOffset: { x: 12, y: 16 },
     },
     {
         title: "Web & UI Design",
@@ -129,8 +129,8 @@ const EXPERTISE_DATA = [
         image: "/expertise-pitch.png",
         tilt: -10,
         scale: 1,
-        desktopOffset: { x: 0, y: 40 }, 
-        mobileOffset: { x: 0, y: 16 }, 
+        desktopOffset: { x: 0, y: 40 },
+        mobileOffset: { x: 0, y: 16 },
     },
     {
         title: "3D & Motion",
@@ -477,95 +477,52 @@ const TickerSlide = memo(
         a.isClone === b.isClone
 )
 
-const ACCORDION_OPEN = { duration: 0.85, ease: "expo.inOut", fadeIn: 0.5, fadeInDelay: 0.3 }
-const ACCORDION_CLOSE = { duration: 0.75, ease: "expo.inOut", fadeOut: 0.3 }
+// iOS-style curve: leaves immediately, settles softly. One curve and one clock for the whole panel.
+const APPLE_EASE_CSS = "cubic-bezier(0.32, 0.72, 0, 1)"
+const ACCORDION_OPEN = { duration: 0.6, fadeIn: 0.45, fadeInDelay: 0.12 }
+const ACCORDION_CLOSE = { duration: 0.5, fadeOut: 0.18 }
 
+// Height is animated by the browser (grid 0fr -> 1fr), not measured and tweened in JS.
 const AccordionPanel = ({ active, children }) => {
-    const ref = useRef(null)
-    const mounted = useRef(false)
-
-    useLayoutEffect(() => {
-        const el = ref.current
-        if (!el) return
-        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-
-        if (!mounted.current) {
-            mounted.current = true
-            gsap.set(el, { height: active ? "auto" : 0 })
-            el.style.visibility = active ? "visible" : "hidden"
-            return
-        }
-
-        gsap.killTweensOf(el)
-        if (active) {
-            el.style.visibility = "visible"
-            gsap.to(el, {
-                height: "auto",
-                duration: reduce ? 0 : ACCORDION_OPEN.duration,
-                ease: ACCORDION_OPEN.ease,
-            })
-        } else {
-            gsap.to(el, {
-                height: 0,
-                duration: reduce ? 0 : ACCORDION_CLOSE.duration,
-                ease: ACCORDION_CLOSE.ease,
-                onComplete: () => {
-                    el.style.visibility = "hidden"
-                },
-            })
-        }
-    }, [active])
-
-    useEffect(() => () => gsap.killTweensOf(ref.current), [])
-
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    const dur = reduce ? 0 : active ? ACCORDION_OPEN.duration : ACCORDION_CLOSE.duration
     return (
-        <div ref={ref} aria-hidden={!active} className="overflow-hidden">
-            {children}
+        <div
+            aria-hidden={!active}
+            style={{
+                display: "grid",
+                gridTemplateRows: active ? "1fr" : "0fr",
+                // visibility flips at the end of a close so hidden rows can't be tabbed into
+                visibility: active ? "visible" : "hidden",
+                transition: `grid-template-rows ${dur}s ${APPLE_EASE_CSS}, visibility 0s linear ${active ? 0 : dur}s`,
+            }}
+        >
+            <div style={{ overflow: "hidden", minHeight: 0 }}>{children}</div>
         </div>
     )
 }
 
+// Only opacity and transform animate inside the panel, so nothing triggers extra layout.
 const ServiceAccordionImage = ({ src, alt, active }) => {
-    const ref = useRef(null)
-    const imgRef = useRef(null)
-    const mounted = useRef(false)
-
-    const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] })
-    const y = useTransform(scrollYProgress, [0, 1], ["-9%", "9%"])
-
-    useLayoutEffect(() => {
-        const frame = ref.current
-        const img = imgRef.current
-        if (!frame || !img) return
-        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-
-        if (!mounted.current) {
-            mounted.current = true
-            if (!active && !reduce) {
-                gsap.set(frame, { clipPath: "inset(0% 0% 100% 0%)" })
-                gsap.set(img, { scale: 1.15, transformOrigin: "50% 50%" })
-            }
-            return
-        }
-        if (reduce) return
-
-        gsap.killTweensOf([frame, img])
-        if (active) {
-            gsap.to(frame, { clipPath: "inset(0% 0% 0% 0%)", duration: 1.2, delay: 0.15, ease: "power3.out" })
-            gsap.to(img, { scale: 1, duration: 1.6, delay: 0.15, ease: "power3.out", onStart: () => { img.style.willChange = "transform" }, onComplete: () => { img.style.willChange = "" } })
-        } else {
-            gsap.to(frame, { clipPath: "inset(0% 0% 100% 0%)", duration: ACCORDION_CLOSE.duration * 0.8, ease: "expo.inOut" })
-            gsap.to(img, { scale: 1.15, duration: ACCORDION_CLOSE.duration, ease: "expo.inOut", onStart: () => { img.style.willChange = "transform" }, onComplete: () => { img.style.willChange = "" } })
-        }
-    }, [active])
-
-    useEffect(() => () => gsap.killTweensOf([ref.current, imgRef.current]), [])
-
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     return (
-        <div ref={ref} className="relative w-full aspect-[4/3] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]">
-            <motion.div style={{ y, top: "-12%", height: "124%" }} className="absolute left-0 w-full will-change-transform">
-                <img ref={imgRef} src={src} alt={alt} draggable={false} decoding="async" className="object-cover w-full h-full select-none pointer-events-none" />
-            </motion.div>
+        <div className="relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]">
+            <img
+                src={src}
+                alt={alt}
+                draggable={false}
+                decoding="async"
+                className="object-cover w-full h-full select-none pointer-events-none"
+                style={{
+                    opacity: active ? 1 : 0,
+                    transform: active ? "scale(1)" : "scale(1.04)",
+                    transition: reduce
+                        ? "none"
+                        : active
+                          ? `opacity ${ACCORDION_OPEN.fadeIn}s ${APPLE_EASE_CSS} 0.05s, transform ${ACCORDION_OPEN.duration + 0.2}s ${APPLE_EASE_CSS} 0.05s`
+                          : `opacity ${ACCORDION_CLOSE.fadeOut}s ease-out, transform ${ACCORDION_CLOSE.duration}s ${APPLE_EASE_CSS}`,
+                }}
+            />
         </div>
     )
 }
@@ -833,6 +790,119 @@ export default function Home() {
     // Touch input is ignored so taps still just toggle the row.
     const [hoveredRow, setHoveredRow] = useState(null)
     const [openIndexes, setOpenIndexes] = useState([0])
+
+    // Services (tablet/mobile): instead of an accordion, every service shows its full panel and its name
+    // row sticks to the top as you scroll past. Names stack in order (Brand Identity first, the next
+    // below it, ...), so only passed services are reduced to their names.
+    //
+    // When the last panel has scrolled out of view behind the stack, the whole stack of names leaves
+    // together, driven by --svc-leave. To keep CSS sticky from pushing the rows
+    // out one by one when the list ends (which made them overlap and hid "03"), the <ul> is extended by
+    // an invisible tail spacer (--svc-tail) and pulled back with a negative margin, so the sticky
+    // containing block always outlasts the content.
+    const [stackIndex, setStackIndex] = useState(0)
+    useLayoutEffect(() => {
+        const list = servicesListRef.current
+        if (!list) return
+        if (vp.isDesktop) {
+            list.style.removeProperty("--svc-row-h")
+            list.style.removeProperty("--svc-tail")
+            list.style.removeProperty("--svc-leave")
+            return
+        }
+        const heads = () => Array.from(list.querySelectorAll(".svc-sticky-head"))
+
+        // Every name row is stuck at top + index * rowHeight, so it needs the real row height.
+        const measureRow = () => {
+            const hs = heads()
+            const first = hs[0]
+            if (!first || first.offsetHeight <= 0) return
+            const rowH = first.getBoundingClientRect().height // fractional: offsetHeight rounds and the error stacks
+            const top0 = parseFloat(getComputedStyle(first).top) || 0
+            list.style.setProperty("--svc-row-h", `${rowH}px`)
+            list.style.setProperty("--svc-tail", `${Math.round(top0 + hs.length * rowH + 200)}px`)
+        }
+
+        // Move the whole stack up once the last panel is hidden behind it.
+        const updateLeave = () => {
+            const hs = heads()
+            const tail = list.querySelector("[data-svc-tail]")
+            if (!hs.length || !tail) return 0
+            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
+            const stackBottom = top0 + hs.length * hs[0].getBoundingClientRect().height
+            const d = Math.min(0, Math.round(tail.getBoundingClientRect().top - stackBottom))
+            list.style.setProperty("--svc-leave", `${d}px`)
+            return d
+        }
+
+        // Don't rely on opaque rows to hide the panels sliding under the stack: where two layers meet on a
+        // fractional device pixel (any zoom, 3x DPR, sub-pixel scroll) the antialiased edges let the image
+        // behind bleed through the divider lines. Instead clip every panel to the part that is really visible
+        // below the stack, and hide it entirely once it is fully covered, so there is nothing to leak.
+        const clipPanels = (stuck, d) => {
+            const hs = heads()
+            if (!hs.length) return
+            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
+            const rowH = hs[0].getBoundingClientRect().height
+            const coverBottom = (stuck >= 0 ? top0 + (stuck + 1) * rowH : top0) + d
+            list.querySelectorAll(".svc-panel").forEach((el) => {
+                const r = el.getBoundingClientRect()
+                const hide = Math.ceil(coverBottom - r.top)
+                if (hide <= 0) {
+                    el.style.clipPath = ""
+                    el.style.visibility = ""
+                } else if (hide >= r.height) {
+                    el.style.clipPath = ""
+                    el.style.visibility = "hidden"
+                } else {
+                    el.style.visibility = ""
+                    el.style.clipPath = `inset(${hide}px 0 0 0)`
+                }
+            })
+        }
+
+        // Highlight the last name that has reached its stuck position.
+        let raf = 0
+        const track = () => {
+            raf = 0
+            const d = updateLeave()
+            let current = 0
+            let stuck = -1
+            heads().forEach((el, i) => {
+                const stuckTop = parseFloat(getComputedStyle(el).top)
+                if (el.getBoundingClientRect().top <= stuckTop + 1) {
+                    current = i
+                    stuck = i
+                }
+            })
+            clipPanels(stuck, d)
+            setStackIndex((prev) => (prev === current ? prev : current))
+        }
+        const onScroll = () => {
+            if (!raf) raf = requestAnimationFrame(track)
+        }
+        measureRow()
+        track()
+        const ro = new ResizeObserver(() => {
+            measureRow()
+            onScroll()
+        })
+        const first = heads()[0]
+        if (first) ro.observe(first)
+        document.fonts?.ready?.then(() => {
+            measureRow()
+            onScroll()
+        })
+        window.addEventListener("scroll", onScroll, { passive: true })
+        window.addEventListener("resize", onScroll)
+        return () => {
+            if (raf) cancelAnimationFrame(raf)
+            window.removeEventListener("scroll", onScroll)
+            window.removeEventListener("resize", onScroll)
+            ro.disconnect()
+        }
+    }, [vp.isDesktop, pageReady])
+
     const [activeExpertise, setActiveExpertise] = useState(null)
 
     const expertiseRatios = useExpertiseRatios()
@@ -843,8 +913,8 @@ export default function Home() {
     const expertiseRefs = useRef([])
     const scrollIndexRef = useRef(null)
     const lastPointerRef = useRef({ x: -1, y: -1 })
-    const pointerRef = useRef(null) 
-    const hoverRef = useRef(null) 
+    const pointerRef = useRef(null)
+    const hoverRef = useRef(null)
     const isDesktopRef = useRef(vp.isDesktop)
     isDesktopRef.current = vp.isDesktop
     const transitionRef = useRef(null)
@@ -868,7 +938,7 @@ export default function Home() {
 
     useEffect(() => {
         if (!tickerViewportRef.current || !tickerRef.current) return
-        
+
         tickerEngine.current = createTicker(tickerViewportRef.current, tickerRef.current, {
             ...TICKER_MOTION,
             startPaused: true,
@@ -991,7 +1061,7 @@ export default function Home() {
             Array.from(rows[i]?.querySelectorAll("[data-exp-text]") || [])
         )
         const toolsLists = EXPERTISE_DATA.map((_, i) => rows[i]?.querySelector("[data-exp-tools]") || null)
-        
+
         const allTexts = texts.flat()
         const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
         const origin = vp.isMobile ? "100% 100%" : "50% 50%"
@@ -1013,7 +1083,7 @@ export default function Home() {
             if (tools) gsap.set(tools, { color: SITE_GREY })
         })
 
-        let current 
+        let current
 
         const apply = (idx) => {
             if (idx === current) return
@@ -1087,7 +1157,6 @@ export default function Home() {
 
     const handleRowPress = (index) => {
         if (vp.isDesktop) selectService(index)
-        else toggleAccordion(index)
     }
 
     const toggleAccordion = (index) => {
@@ -1244,10 +1313,12 @@ export default function Home() {
             <SunriseTransition anchorRef={transitionRef} onHeaderTone={setHeaderLight}>
                 <section
                     id="services"
-                    className="relative flex flex-col justify-between w-full lg:min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
+                    // Rows resize while they animate; keep the browser from nudging scrollTop in response.
+                    style={{ overflowAnchor: "none" }}
+                    className="relative flex flex-col justify-between w-full min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
                 >
                     <div className="w-full h-full px-[var(--page-pad)] flex flex-col flex-1 m-0">
-                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[48px] w-full mb-[64px] md:mb-[56px] md:flex-row md:justify-between md:items-start md:gap-[32px] lg:mb-[clamp(48px,8svh,80px)] m-0">
+                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[40px] w-full mb-[clamp(48px,8svh,80px)] md:flex-row md:justify-between md:items-start md:gap-[32px] m-0">
                             <MaskRevealText as="h2" mode="words" active={servicesHeadActive} className="cap-align H1 md:shrink-0 md:max-lg:!text-[clamp(56px,8vw,96px)] text-white m-0 uppercase">
                                 Services
                             </MaskRevealText>
@@ -1264,36 +1335,53 @@ export default function Home() {
                             </MaskRevealText>
                         </div>
 
-                        <div className="flex flex-col gap-[32px] w-full items-stretch lg:flex-row lg:items-start m-0 mt-auto">
+                        <div className="flex flex-col gap-[32px] w-full items-stretch lg:flex-row lg:items-start m-0">
                             <div className="svc-list flex-1 min-w-0 flex flex-col w-full lg:pr-[32px] m-0">
                                 <motion.ul
                                     ref={servicesListRef}
                                     variants={servicesListContainerVariants}
                                     initial="hidden"
                                     animate={servicesListActive ? "show" : "hidden"}
+                                    // Tablet/mobile: the invisible tail spacer (see below) makes the list taller than its
+                                    // content; pull the following content back up by the same amount.
+                                    style={!vp.isDesktop ? { marginBottom: "calc(-1 * var(--svc-tail, 0px))" } : undefined}
                                     className="flex flex-col m-0 p-0 list-none w-full"
                                 >
+                                    {/* Tablet/mobile: the stacked names have no background of their own. Panels that pass under
+                                        them are clipped away in JS (clipPanels), so there is nothing to hide with a solid colour
+                                        and no black bars can show over the sunrise gradient. */}
                                     {SERVICES_DATA.map((service, index) => {
-                                        const isActive = vp.isDesktop
-                                            ? activeIndex === index
-                                            : openIndexes.includes(index)
-                                        const isHighlighted = isActive || (!vp.isDesktop && hoveredRow === index)
+                                        // Desktop: hover-selected. Tablet/mobile: every panel is always shown;
+                                        // the name that is currently stacked/stuck is the highlighted one.
+                                        const isActive = vp.isDesktop ? activeIndex === index : true
+                                        const isHighlighted = vp.isDesktop ? isActive : stackIndex === index || hoveredRow === index
+                                        const HeadWrap = "div"
+                                        const headWrapProps = vp.isDesktop
+                                            ? { className: "contents" }
+                                            : {
+                                                  className: "svc-sticky-head sticky z-10",
+                                                  style: {
+                                                      top: `calc(var(--svc-stick-top, 76px) + ${index} * var(--svc-row-h, 84px))`,
+                                                      transform: "translate3d(0, var(--svc-leave, 0px), 0)",
+                                                  },
+                                              }
 
                                         return (
                                             <motion.li
                                                 key={service.id}
                                                 variants={servicesRowVariants}
-                                                className="flex flex-col w-full m-0 relative"
+                                                className={vp.isDesktop ? "flex flex-col w-full m-0 relative" : "contents"}
                                             >
+                                                <HeadWrap {...headWrapProps}>
                                                 <motion.div
                                                     variants={servicesDividerVariants}
                                                     className="w-full h-[1px] bg-[var(--border-dark)] origin-left"
                                                 />
 
                                                 <motion.div
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    aria-expanded={isActive}
+                                                    role={vp.isDesktop ? "button" : undefined}
+                                                    tabIndex={vp.isDesktop ? 0 : -1}
+                                                    aria-expanded={vp.isDesktop ? isActive : undefined}
                                                     onKeyDown={(e) => {
                                                         if (e.key === "Enter" || e.key === " ") {
                                                             e.preventDefault()
@@ -1333,6 +1421,8 @@ export default function Home() {
                                                     </div>
 
                                                     <div className="svc-keywords-cell min-w-0 overflow-hidden">
+                                                        {/* Desktop keeps the keywords in the row; tablet/mobile shows them inside the expanded panel instead. */}
+                                                        {vp.isDesktop && (
                                                         <motion.div
                                                             animate={{
                                                                 color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY,
@@ -1344,12 +1434,13 @@ export default function Home() {
                                                         >
                                                             {service.keywords}
                                                         </motion.div>
+                                                        )}
                                                     </div>
 
                                                     <span
                                                         aria-hidden="true"
                                                         className={`svc-icon relative block w-[14px] h-[14px] shrink-0 transition-opacity duration-300 ${
-                                                            isHighlighted ? "opacity-100" : "opacity-50"
+                                                            !vp.isDesktop ? "opacity-0" : isHighlighted ? "opacity-100" : "opacity-50"
                                                         }`}
                                                     >
                                                         <span className="absolute left-0 top-[6.25px] w-full h-[1.5px] bg-white" />
@@ -1360,10 +1451,11 @@ export default function Home() {
                                                         />
                                                     </span>
                                                 </motion.div>
+                                                </HeadWrap>
 
                                                 {!vp.isDesktop && (
                                                     <AccordionPanel active={isActive}>
-                                                            <div className="svc-panel">
+                                                            <div className="svc-panel pb-[28px]">
                                                                 <ServiceAccordionImage
                                                                     src={service.image}
                                                                     alt={service.title}
@@ -1372,10 +1464,16 @@ export default function Home() {
                                                                 <div
                                                                     style={{
                                                                         opacity: isActive ? 1 : 0,
-                                                                        transition: `opacity ${isActive ? ACCORDION_OPEN.fadeIn : ACCORDION_CLOSE.fadeOut}s ease ${isActive ? ACCORDION_OPEN.fadeInDelay : 0}s`,
+                                                                        transform: isActive ? "translate3d(0,0,0)" : "translate3d(0,8px,0)",
+                                                                        transition: isActive
+                                                                            ? `opacity ${ACCORDION_OPEN.fadeIn}s ${APPLE_EASE_CSS} ${ACCORDION_OPEN.fadeInDelay}s, transform ${ACCORDION_OPEN.fadeIn + 0.1}s ${APPLE_EASE_CSS} ${ACCORDION_OPEN.fadeInDelay}s`
+                                                                            : `opacity ${ACCORDION_CLOSE.fadeOut}s ease-out, transform ${ACCORDION_CLOSE.duration}s ${APPLE_EASE_CSS}`,
                                                                     }}
                                                                     className="svc-panel-text !pl-[48px]"
                                                                 >
+                                                                    <p className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] whitespace-pre-line m-0 mb-[16px]">
+                                                                        {service.keywords}
+                                                                    </p>
                                                                     <h4 className="Body rwd-balance !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-white m-0 font-semibold">
                                                                         {flat(service.captionTitle)}
                                                                     </h4>
@@ -1394,6 +1492,18 @@ export default function Home() {
                                         variants={servicesDividerVariants}
                                         className="w-full h-[1px] bg-[var(--border-dark)] origin-left"
                                     />
+
+                                    {/* Tablet/mobile: invisible tail that keeps the sticky containing block alive past the last
+                                        panel, so CSS never pushes the stacked names out one by one. The whole stack leaves via
+                                        --svc-leave instead. */}
+                                    {!vp.isDesktop && (
+                                        <li
+                                            aria-hidden="true"
+                                            data-svc-tail=""
+                                            className="m-0 p-0 list-none pointer-events-none"
+                                            style={{ height: "var(--svc-tail, 0px)" }}
+                                        />
+                                    )}
                                 </motion.ul>
                             </div>
 
