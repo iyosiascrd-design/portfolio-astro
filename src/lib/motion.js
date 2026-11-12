@@ -20,7 +20,7 @@ export const TICKER_REVEAL = {
 export const TICKER_MOTION = {
     copies: 3,
     baseSpeed: 80,
-    hoverFactor: 0,
+    hoverFactor: 0.15,                              // hover slows to 15% instead of freezing (0 = full stop)
 
     // ── Apple-style motion ─────────────────────────────────────────────────────────────────
     // 1. Finger tracking is strictly 1:1. No lag, no smoothing: the content is attached to your
@@ -32,16 +32,15 @@ export const TICKER_MOTION = {
     //    keeps its velocity when retargeted, so hover-stop, resume, or changing your mind halfway
     //    never jerks. Starting from rest therefore always eases in with zero initial jerk.
     decelerationRate: 0.998,                        // 0.998 = UIScrollView "normal", 0.99 = "fast"
-    stopSpring:   { response: 0.9, damping: 1 },    // hover in: eases to a stop (s, 1 = no overshoot)
-    resumeSpring: { response: 1.3, damping: 1 },    // hover out / after a flick: eases up to speed
+    stopSpring:   { response: 0.6, damping: 1 },    // hover in / pause: eases down (s, 1 = no overshoot)
+    resumeSpring: { response: 0.7, damping: 1 },    // hover out / after a flick: eases up to speed
     catchSpring:  { response: 0.3, damping: 1 },    // finger lands on a moving ticker
     catchRate: 22,            // 1/s, how quickly a coasting flick is caught when you touch it
     flickMax: 5000,           // px/s cap
     flickMinSpeed: 40,        // px/s, slower releases don't coast
     flingGain: 1,             // 1 = release speed equals finger speed
     velocityWindow: 80,       // ms of finger history used to measure release velocity
-    dragThreshold: 4,
-    parallaxDepth: 0, // test: 0 = no per-frame image parallax (was 0.12)
+    dragThreshold: 3,
 }
 
 export const ACCORDION = {
@@ -154,21 +153,12 @@ const MAX_FRAME_DT = 0.1
 export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     const motionQuery = typeof window !== "undefined" ? window.matchMedia?.("(prefers-reduced-motion: reduce)") : null
     const slides = Array.from(track.children)
-    // With parallaxDepth 0 nothing ever writes to the per-slide frames, so don't promote each one
-    // to its own GPU layer (3 copies x every image) for no reason.
-    const frames = slides.map((s) => (cfg.parallaxDepth ? s.querySelector("[data-ticker-parallax]") : null))
     const perCopy = Math.round(slides.length / cfg.copies)
     let baseSpeed = motionQuery?.matches ? 0 : cfg.baseSpeed
 
     // GSAP's fastest write path: cached setters, no per-frame string building.
     gsap.set(track, { force3D: true, x: 0 })
     const setTrackX = gsap.quickSetter(track, "x", "px")
-    const setFrameX = frames.map((f) => {
-        if (!f) return null
-        f.style.willChange = "transform"
-        gsap.set(f, { force3D: true, x: 0 })
-        return gsap.quickSetter(f, "x", "px")
-    })
 
     let loopW = 0
     let vpW = 0
@@ -205,8 +195,10 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         if (plan) takeFromPlan()
         cruiseTarget = to
         spring = s
-        if (loopW && canGlide()) buildPlan(nowMs())
-        else startLoop()
+        if (loopW && canGlide()) {
+            buildPlan(nowMs())
+            stopLoop()
+        } else startLoop()
     }
     const aimHover = () => {
         const t = targetSpeed()
@@ -281,16 +273,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         if (x === paintedX) return
         paintedX = x
         setTrackX(x)
-        if (!cfg.parallaxDepth) return // no parallax: skip the per-slide writes entirely
-        for (let i = 0; i < slides.length; i++) {
-            const set = setFrameX[i]
-            if (!set) continue
-            const w = widths[i]
-            const left = lefts[i] + x
-            if (left > vpW || left + w < 0) continue
-            const p = (left + w / 2 - vpW / 2) / ((vpW + w) / 2)
-            set(-p * cfg.parallaxDepth * w)
-        }
     }
 
     // ---- compositor motion plan -------------------------------------------------------------
@@ -364,6 +346,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     }
 
     const canGlide = () =>
+        !plan &&
         started &&
         baseSpeed > 0 &&
         loopW > 0 &&
@@ -372,6 +355,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         pending === 0 && flick === 0
 
     const buildPlan = (t0) => {
+        plan?.anims.forEach((a) => a.cancel()) // safety: only one plan may ever own the track
         wrap()
         const p = { t0, x0: x, c0: cruise, v0: cruiseVel, T: cruiseTarget, spring, base: baseSpeed }
         const keys = []
@@ -463,6 +447,10 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     }
 
     const tick = (ts) => {
+        if (plan) {
+            stopLoop()
+            return
+        }
         if (!visible || !loopW) {
             lastT = 0
             return
@@ -676,7 +664,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             motionQuery?.removeEventListener?.("change", onMotionPref)
             track.style.willChange = ""
             gsap.set(track, { clearProps: "transform" })
-            frames.forEach((f) => { if (f) { f.style.willChange = ""; gsap.set(f, { clearProps: "transform" }) } })
         },
     }
 }

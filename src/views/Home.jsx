@@ -405,7 +405,7 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
                 }}
                 className="relative w-full overflow-hidden rounded-lg md:rounded-[12px] lg:rounded-[8px] bg-[var(--bg-surface-dark)]"
             >
-                <div data-ticker-parallax className="absolute inset-0 w-full h-full">
+                <div className="absolute inset-0 w-full h-full">
                     <img
                         src={src}
                         alt={project ? project.name : "Portfolio Work"}
@@ -1154,7 +1154,7 @@ export default function Home() {
                                 }
                             }}
                             style={{ touchAction: "pan-y" }}
-                            className="w-full overflow-hidden select-none cursor-grab data-[dragging=true]:cursor-grabbing"
+                            className="w-full overflow-hidden select-none cursor-grab data-[dragging=true]:cursor-grabbing data-[dragging=true]:[&>div]:pointer-events-none"
                         >
                             <div ref={tickerRef} className="flex w-full">
                                 {Array.from({ length: TICKER_MOTION.copies }, () => LOOPING_IMAGES).flat().map((src, idx) => {
