@@ -796,17 +796,15 @@ export default function Home() {
     // below it, ...), so only passed services are reduced to their names.
     //
     // When the last panel has scrolled out of view behind the stack, the whole stack of names leaves
-    // together, driven by a transform written on the heads by the scroll effect. To keep CSS sticky from pushing the rows
-    // out one by one when the list ends (which made them overlap and hid "03"), the <ul> is extended by
-    // an invisible tail spacer (--svc-tail) and pulled back with a negative margin, so the sticky
-    // containing block always outlasts the content.
+    // together. That is done natively by CSS sticky: each name has a bottom margin of (names after it) *
+    // row height, and the panel below pulls up by the same amount, so the names stop in stack order at the
+    // end of the list instead of overlapping. No JS moves them, so they cannot lag the scroll.
     const [stackIndex, setStackIndex] = useState(0)
     useLayoutEffect(() => {
         const list = servicesListRef.current
         if (!list) return
         if (vp.isDesktop) {
             list.style.removeProperty("--svc-row-h")
-            list.style.removeProperty("--svc-tail")
             return
         }
 
@@ -815,67 +813,54 @@ export default function Home() {
         //    getComputedStyle / getBoundingClientRect for every head and panel. Writing a custom property
         //    invalidates style for the whole subtree, and the reads right after force a synchronous style
         //    recalc + layout on every scroll frame (layout thrash), which is what drops frames on phones.
-        // 2. --svc-leave was inherited by every descendant, so each change restyled them all.
+        // 2. The exit of the stack was driven by JS (a transform updated per frame), so on phones the names
+        //    visibly trailed the scroll while leaving. It is now native sticky, see the JSX.
         // Now geometry is measured ONCE (and on resize / font / image load / scroll-idle) and the per-frame
         // work is pure arithmetic on window.scrollY plus writes that are skipped when nothing changed.
-        // The per-frame writes (transform, clip-path, visibility) never touch layout.
+        // The per-frame writes (clip-path, visibility) never touch layout.
         let geo = null
         let lastRowH = ""
-        let lastTail = ""
-        let lastD = null
         let lastStuck = -2
 
         const measure = () => {
             const hs = Array.from(list.querySelectorAll(".svc-sticky-head"))
             const ps = Array.from(list.querySelectorAll(".svc-panel"))
-            const tail = list.querySelector("[data-svc-tail]")
-            if (!hs.length || hs.length !== ps.length || !tail || hs[0].offsetHeight <= 0) return
+            if (!hs.length || hs.length !== ps.length || hs[0].offsetHeight <= 0) return
 
             // fractional: offsetHeight rounds and the error stacks
             const rowH = hs[0].getBoundingClientRect().height
             const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
 
             const rowHStr = `${rowH}px`
-            const tailStr = `${Math.round(top0 + hs.length * rowH + 200)}px`
             if (rowHStr !== lastRowH) {
                 lastRowH = rowHStr
                 list.style.setProperty("--svc-row-h", rowHStr)
-            }
-            if (tailStr !== lastTail) {
-                lastTail = tailStr
-                list.style.setProperty("--svc-tail", tailStr)
             }
 
             const sy = window.scrollY
             geo = {
                 n: hs.length,
-                heads: hs,
                 rowH,
                 top0,
                 stackBottom: top0 + hs.length * rowH,
-                // the tail is not sticky, so its document position is stable
-                tailTop: tail.getBoundingClientRect().top + sy,
+                // bottom of the list (not sticky, so its document position is stable)
+                endTop: list.getBoundingClientRect().bottom + sy,
                 panels: ps.map((el) => {
                     const r = el.getBoundingClientRect()
                     return { el, top: r.top + sy, h: r.height, state: null }
                 }),
             }
-            lastD = null // force a re-apply with the new geometry
         }
 
         const frame = () => {
             raf = 0
             if (!geo) return
             const sy = window.scrollY
-            const { n, heads, rowH, top0, stackBottom, tailTop, panels } = geo
+            const { n, rowH, top0, stackBottom, endTop, panels } = geo
 
-            // Whole stack leaves together once the last panel is hidden behind it.
-            const d = Math.min(0, Math.round(tailTop - sy - stackBottom))
-            if (d !== lastD) {
-                lastD = d
-                const t = `translate3d(0, ${d}px, 0)`
-                for (let i = 0; i < n; i++) heads[i].style.transform = t
-            }
+            // The stack leaves together natively (see the head margins in the JSX); this is only the
+            // matching offset so the clip below knows where the stack's bottom edge is.
+            const d = Math.min(0, Math.round(endTop - sy - stackBottom))
 
             // Last name that has reached its stuck position. A head's natural top is the top of its panel
             // minus its own height (the panel sits directly under it).
@@ -1388,9 +1373,6 @@ export default function Home() {
                                     variants={servicesListContainerVariants}
                                     initial="hidden"
                                     animate={servicesListActive ? "show" : "hidden"}
-                                    // Tablet/mobile: the invisible tail spacer (see below) makes the list taller than its
-                                    // content; pull the following content back up by the same amount.
-                                    style={!vp.isDesktop ? { marginBottom: "calc(-1 * var(--svc-tail, 0px))" } : undefined}
                                     className="flex flex-col m-0 p-0 list-none w-full"
                                 >
                                     {/* Tablet/mobile: the stacked names have no background of their own. Panels that pass under
@@ -1408,9 +1390,11 @@ export default function Home() {
                                                   className: "svc-sticky-head sticky z-10",
                                                   style: {
                                                       top: `calc(var(--svc-stick-top, 76px) + ${index} * var(--svc-row-h, 84px))`,
-                                                      // the stack's exit offset is written straight to this transform by the scroll effect
-                                                      transform: "translate3d(0, 0, 0)",
-                                                      willChange: "transform",
+                                                      // Native exit: sticky keeps the head's MARGIN box inside the list, so a
+                                                      // bottom margin of (heads after it) * rowHeight makes the heads stop in
+                                                      // stack order and leave with the page together. The panel below pulls up
+                                                      // by the same amount (wrapper below), so the layout does not move.
+                                                      marginBottom: `calc(${SERVICES_DATA.length - 1 - index} * var(--svc-row-h, 84px))`,
                                                   },
                                               }
 
@@ -1502,6 +1486,7 @@ export default function Home() {
                                                 </HeadWrap>
 
                                                 {!vp.isDesktop && (
+                                                    <div style={{ marginTop: `calc(${-(SERVICES_DATA.length - 1 - index)} * var(--svc-row-h, 84px))` }}>
                                                     <AccordionPanel active={isActive}>
                                                             <div className="svc-panel pb-[28px]">
                                                                 <ServiceAccordionImage
@@ -1531,6 +1516,7 @@ export default function Home() {
                                                                 </div>
                                                             </div>
                                                     </AccordionPanel>
+                                                    </div>
                                                 )}
                                             </motion.li>
                                         )
@@ -1540,18 +1526,6 @@ export default function Home() {
                                         variants={servicesDividerVariants}
                                         className="w-full h-[1px] bg-[var(--border-dark)] origin-left"
                                     />
-
-                                    {/* Tablet/mobile: invisible tail that keeps the sticky containing block alive past the last
-                                        panel, so CSS never pushes the stacked names out one by one. The whole stack leaves via
-                                        a transform on the heads instead. */}
-                                    {!vp.isDesktop && (
-                                        <li
-                                            aria-hidden="true"
-                                            data-svc-tail=""
-                                            className="m-0 p-0 list-none pointer-events-none"
-                                            style={{ height: "var(--svc-tail, 0px)" }}
-                                        />
-                                    )}
                                 </motion.ul>
                             </div>
 
