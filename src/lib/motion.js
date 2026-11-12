@@ -200,8 +200,13 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     // Retarget the speed spring. Its current velocity is kept, so this never jerks.
     const aim = (to, s) => {
         if (!started) return
+        // A running plan is continued from its exact current state (position, speed, acceleration)
+        // and a new plan is built for the new target: no jump, and no per-frame JavaScript.
+        if (plan) takeFromPlan()
         cruiseTarget = to
         spring = s
+        if (loopW && canGlide()) buildPlan(nowMs())
+        else startLoop()
     }
     const aimHover = () => {
         const t = targetSpeed()
@@ -288,36 +293,152 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         }
     }
 
-    // ---- compositor cruise ------------------------------------------------------------------
-    // Once the speed spring has settled and nothing is touching the ticker, steady drift is
-    // handed to a Web Animation on the track. The browser runs it on the compositor thread, so
-    // main-thread work elsewhere on the page (scroll handlers, React renders, image decode)
-    // cannot make it stutter. JavaScript takes the position back the instant anything needs
-    // it: finger, trackpad, hover, focus, pause, resize.
-    let anim = null
-    let glideDur = 0
-    let glideLoopW = 0
+    // ---- compositor motion plan -------------------------------------------------------------
+    // Whenever nothing is touching the ticker (no finger, no trackpad, no coasting flick) its
+    // whole motion is handed to the compositor as a *plan*: the speed spring's ramp (slowing
+    // down or picking up) is simulated once, up front, and sent as a keyframed Web Animation, with
+    // a steady-drift loop queued right behind it. After that no JavaScript runs per frame, so
+    // nothing else on the page can make the ticker stutter, and slowing down / picking up is as
+    // smooth as the spring itself (the first version steered playbackRate every frame, which
+    // makes the compositor re-sync its position each time and was visibly notchy).
+    //
+    // Both animations are anchored to the same timeline time, so a plan is an exact function of
+    // time. That is what makes every hand-off seamless: to retarget (hover, pause, resume) or to
+    // take the position back (finger, trackpad, focus) we just evaluate the plan at "now" and
+    // continue from that exact state, instead of reading a position off a moving animation.
+    let plan = null
+
+    const SIM_H = 1 / 240        // s, spring integration step
+    const KEY_STEPS = 8          // one keyframe every 8 steps = 1/30 s (error < 0.05px)
+    const MAX_PLAN_S = 6
+    const SETTLE_C = 1e-3
+    const SETTLE_V = 2e-3
+    const nowMs = () => {
+        const t = typeof document !== "undefined" ? document.timeline?.currentTime : null
+        return t != null ? Number(t) : performance.now()
+    }
+    const fmt = (v) => `translate3d(${v.toFixed(3)}px, 0px, 0px)`
+
+    // Integrates the speed spring (same maths as stepCruise) and the position, from the state
+    // stored in `p`. Stops at `until` seconds or when settled. onKey gets (tau, x) every keyframe.
+    const simulate = (p, until, onKey) => {
+        const omega = (2 * Math.PI) / p.spring.response
+        let px = p.x0
+        let c = p.c0
+        let v = p.v0
+        let tau = 0
+        let step = 0
+        let settled = false
+        onKey?.(0, px)
+        while (tau < until && tau < MAX_PLAN_S) {
+            const h = Math.min(SIM_H, until - tau)
+            const accel = omega * omega * (p.T - c) - 2 * p.spring.damping * omega * v
+            v += accel * h
+            c += v * h
+            if (c < 0) { c = 0; v = 0 }
+            if (p.T === 0 && c < 0.002) { c = 0; v = 0 }
+            px -= p.base * c * h
+            tau += h
+            step++
+            if (Math.abs(c - p.T) < SETTLE_C && Math.abs(v) < SETTLE_V) {
+                c = p.T
+                v = 0
+                settled = true
+                if (onKey) onKey(tau, px)
+                break
+            }
+            if (onKey && step % KEY_STEPS === 0) onKey(tau, px)
+        }
+        return { x: px, c, v, tau, settled }
+    }
+
+    // Exact state of the plan at timeline time tMs.
+    const evalPlan = (pl, tMs) => {
+        const tau = Math.max(0, (tMs - pl.t0) / 1000)
+        if (tau >= pl.tEnd) {
+            const drift = pl.T > 0 ? pl.base * pl.T * (tau - pl.tEnd) : 0
+            return { x: pl.xEnd - drift, c: pl.T, v: 0 }
+        }
+        const r = simulate(pl, tau)
+        return { x: r.x, c: r.c, v: r.v }
+    }
 
     const canGlide = () =>
-        !anim &&
         started &&
         baseSpeed > 0 &&
         loopW > 0 &&
         typeof track.animate === "function" &&
         !dragging && !wheelActive && !pressed &&
-        pending === 0 && flick === 0 &&
-        cruiseTarget > 0 &&
-        Math.abs(cruise - cruiseTarget) < 1e-3 &&
-        Math.abs(cruiseVel) < 2e-3
+        pending === 0 && flick === 0
 
-    // ---- frame loop: the display's own timestamp, not a smoothed clock ----------------------
+    const buildPlan = (t0) => {
+        wrap()
+        const p = { t0, x0: x, c0: cruise, v0: cruiseVel, T: cruiseTarget, spring, base: baseSpeed }
+        const keys = []
+        const end = simulate(p, Infinity, (tau, px) => keys.push([tau, px]))
+        p.tEnd = end.tau
+        p.xEnd = end.x
+        const anims = []
+
+        // 1) the ramp (and, when the target is 0, the final hold: fill "forwards" never leaves a gap)
+        const A = track.animate(
+            keys.map(([tau, px], i) => ({
+                offset: i === keys.length - 1 ? 1 : tau / p.tEnd,
+                transform: fmt(px),
+            })),
+            { duration: p.tEnd * 1000, easing: "linear", fill: "forwards" }
+        )
+        A.startTime = t0
+        anims.push(A)
+
+        // 2) steady drift, starting exactly where the ramp ends (the loop is seamless: x - loopW
+        //    looks identical to x because the content repeats every loopW)
+        if (p.T > 0) {
+            let xw = p.xEnd % loopW
+            if (xw > 0) xw -= loopW
+            const B = track.animate([{ transform: fmt(xw) }, { transform: fmt(xw - loopW) }], {
+                duration: (loopW / (p.base * p.T)) * 1000,
+                delay: p.tEnd * 1000,
+                iterations: Infinity,
+                easing: "linear",
+                fill: "none",
+            })
+            B.startTime = t0
+            anims.push(B)
+        }
+        plan = { ...p, anims }
+    }
+
+    // Take the state back from the compositor: exact, and no painting yet (callers do that).
+    const takeFromPlan = () => {
+        if (!plan) return
+        const st = evalPlan(plan, nowMs())
+        plan.anims.forEach((a) => a.cancel())
+        plan = null
+        x = st.x
+        cruise = st.c
+        cruiseVel = st.v
+        wrap()
+    }
+
+    // JavaScript owns the position again, painted this very task so nothing flashes.
+    const toJS = () => {
+        if (!plan) return
+        takeFromPlan()
+        paintedX = NaN
+        paint()
+        startLoop()
+    }
+
+    // ---- frame loop (JavaScript-driven motion only: finger, trackpad, flick) -----------------
+    // The display's own frame timestamp, not a smoothed clock.
     let rafId = 0
     let lastT = 0
     const loop = (ts) => {
         rafId = requestAnimationFrame(loop)
         tick(ts)
     }
-    const startLoop = () => {
+    function startLoop() {
         if (!rafId) rafId = requestAnimationFrame(loop)
     }
     const stopLoop = () => {
@@ -326,31 +447,19 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         lastT = 0
     }
 
-    const toCompositor = () => {
-        cruise = cruiseTarget
-        cruiseVel = 0
-        glideLoopW = loopW
-        glideDur = (loopW / baseSpeed) * 1000
-        anim = track.animate(
-            [{ transform: "translate3d(0px, 0px, 0px)" }, { transform: `translate3d(${-loopW}px, 0px, 0px)` }],
-            { duration: glideDur, iterations: Infinity, easing: "linear" }
-        )
-        anim.currentTime = (-x / loopW) * glideDur
-        anim.playbackRate = cruise
-        stopLoop() // nothing left to do per frame
-    }
-
-    // Take the position back from the compositor, painted this very task so nothing flashes.
-    const toJS = () => {
-        if (!anim) return
-        const t = Number(anim.currentTime) || 0
-        const phase = (((t % glideDur) + glideDur) % glideDur) / glideDur
-        x = -phase * glideLoopW
-        anim.cancel()
-        anim = null
-        paintedX = NaN
-        paint()
-        startLoop()
+    // The speed spring: critically damped, response/damping like SwiftUI. Semi-implicit Euler
+    // in small sub-steps, stable on any frame rate.
+    const stepCruise = (dt) => {
+        const omega = (2 * Math.PI) / spring.response
+        const steps = Math.max(1, Math.ceil(dt / (1 / 120)))
+        const h = dt / steps
+        for (let i = 0; i < steps; i++) {
+            const accel = omega * omega * (cruiseTarget - cruise) - 2 * spring.damping * omega * cruiseVel
+            cruiseVel += accel * h
+            cruise += cruiseVel * h
+        }
+        if (cruise < 0) { cruise = 0; cruiseVel = 0 } // never drift backwards
+        if (cruiseTarget === 0 && cruise < 0.002) { cruise = 0; cruiseVel = 0 }
     }
 
     const tick = (ts) => {
@@ -380,18 +489,8 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             flick *= Math.exp(-(pressed ? cfg.catchRate : decayRate) * dt)
             if (Math.abs(flick) < 1) flick = 0
 
-            // 2) cruise: critically damped spring, response/damping like SwiftUI. Semi-implicit
-            //    Euler in small sub-steps, stable on any frame rate.
-            const omega = (2 * Math.PI) / spring.response
-            const steps = Math.max(1, Math.ceil(dt / (1 / 120)))
-            const h = dt / steps
-            for (let i = 0; i < steps; i++) {
-                const accel = omega * omega * (cruiseTarget - cruise) - 2 * spring.damping * omega * cruiseVel
-                cruiseVel += accel * h
-                cruise += cruiseVel * h
-            }
-            if (cruise < 0) { cruise = 0; cruiseVel = 0 } // never drift backwards
-            if (cruiseTarget === 0 && cruise < 0.002) { cruise = 0; cruiseVel = 0 }
+            // 2) cruise speed spring
+            stepCruise(dt)
 
             const vel = -baseSpeed * cruise + flick
             x += vel * dt
@@ -400,7 +499,13 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
         wrap()
         paint()
-        if (canGlide()) toCompositor()
+
+        // Nothing is touching it any more: hand the whole motion to the compositor, anchored to
+        // this frame's time (x above is exactly the position at ts).
+        if (canGlide()) {
+            buildPlan(ts)
+            stopLoop()
+        }
     }
 
     const proxy = document.createElement("div")
@@ -455,13 +560,11 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
     const onEnter = (e) => {
         if (e.pointerType !== "mouse") return
-        toJS()
         hoverTarget = cfg.hoverFactor
         if (!pressed && !dragging && !wheelActive) aimHover()
     }
     const onLeave = (e) => {
         if (e.pointerType !== "mouse") return
-        toJS()
         hoverTarget = 1
         if (!pressed && !dragging && !wheelActive) aimHover()
     }
@@ -554,14 +657,13 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             aimHover()
         },
         setPaused(p) {
-            toJS()
             userPaused = !!p
             aimHover()
         },
         destroy() {
             stopLoop()
-            anim?.cancel()
-            anim = null
+            plan?.anims.forEach((a) => a.cancel())
+            plan = null
             draggable.kill()
             ro.disconnect()
             io.disconnect()
