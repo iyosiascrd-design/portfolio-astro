@@ -400,7 +400,7 @@ export default function OrigenCaseStudy() {
                   src={ASSETS.emboss}
                   alt="Embossed Origen goat on cream leather"
                   ratio="aspect-[549/580]"
-                  className="bg-[#c6b984] lg:col-start-2 lg:row-start-3 lg:self-start lg:!aspect-[357/345] max-lg:order-4 tablet-hide"
+                  className="bg-[#c6b984] lg:col-start-2 lg:row-start-3 lg:self-start lg:!aspect-[357/345] lg:max-h-[400px] max-lg:order-4 tablet-hide"
                 />
                 <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] lg:col-start-2 lg:row-start-3 lg:self-end max-lg:order-2 max-lg:mb-[16px] md:max-lg:col-span-2`}>
                   While competitors defaulted to sterile minimalism, we rooted the brand in the warmth and history of its original landscape.
@@ -409,7 +409,8 @@ export default function OrigenCaseStudy() {
                   src={ASSETS.billboard}
                   alt="Origen billboard in a wildflower meadow: Coffee from the source"
                   ratio="aspect-[356/236]"
-                  className="max-md:!aspect-square bg-[#26301c] lg:col-start-3 lg:row-start-3 lg:self-stretch max-lg:order-5 tablet-hide" imgClassName="max-md:object-[50%_50%]" />
+                  parallax={false}
+                  className="max-md:!aspect-square bg-[#26301c] lg:col-start-3 lg:row-start-3 lg:self-stretch max-lg:order-5 tablet-hide" imgClassName="max-md:object-[50%_50%] lg:object-top" />
               </div>
             </div>
           </section>

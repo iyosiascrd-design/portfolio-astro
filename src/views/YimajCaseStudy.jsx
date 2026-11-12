@@ -380,7 +380,7 @@ export default function YimajCaseStudy() {
                   src={ASSETS.colorCard}
                   alt="Yimaj Heights colour card"
                   ratio="aspect-[357/345]"
-                  className="bg-[#8a5a2b] lg:!aspect-auto lg:flex-1 lg:min-h-0 w-full tablet-hide max-md:order-3"
+                  className="bg-[#8a5a2b] lg:!aspect-auto lg:flex-1 lg:min-h-0 lg:max-h-[400px] w-full tablet-hide max-md:order-3"
                 />
                 <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-0 md:mt-[12px] lg:mt-[var(--page-pad)] max-md:order-1 max-md:mb-[16px]`}>
                   Instead of following the cold, minimal language common in luxury real estate, Yimaj uses warm mineral tones to make the brand feel more human.

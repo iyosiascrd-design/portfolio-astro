@@ -334,7 +334,6 @@ export default function WeyraCaseStudy() {
                 <div className="w-full max-md:aspect-[1205/1162] md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#e1efdc]">
                   <Media
                     src={FRAME5_COLOR_SRC}
-                    webmOnly
                     alt="Weyra colour palette"
                     className="w-full h-full object-cover"
                   />
@@ -346,7 +345,7 @@ export default function WeyraCaseStudy() {
                   src="/weyra-wristbands.jpg"
                   alt="Weyra Branded Wristbands"
                   ratio="aspect-[357/345]"
-                  className="bg-[#0b1f14] lg:!aspect-auto lg:flex-1 lg:min-h-0 w-full tablet-hide max-md:order-3"
+                  className="bg-[#0b1f14] lg:!aspect-auto lg:flex-1 lg:min-h-0 lg:max-h-[400px] w-full tablet-hide max-md:order-3"
                 />
                 <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-0 md:mt-[12px] lg:mt-[var(--page-pad)] max-md:order-1 max-md:mb-[16px]`}>
                   Familiar Ethiopian colors bring warmth and youth to the palette, keeping the visual language grounded and true to its subject.

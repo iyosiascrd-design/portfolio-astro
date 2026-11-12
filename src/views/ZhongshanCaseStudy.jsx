@@ -375,7 +375,7 @@ export default function ZhongshanCaseStudy() {
                   src={ASSETS.colorTexture}
                   alt="Grey and blue fabric and timber material samples"
                   ratio="aspect-[357/345]"
-                  className="bg-[#d9d4cb] lg:!aspect-auto lg:flex-1 lg:min-h-0 w-full tablet-hide"
+                  className="bg-[#d9d4cb] lg:!aspect-auto lg:flex-1 lg:min-h-0 lg:max-h-[400px] w-full tablet-hide"
                 />
                 <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-[12px] lg:mt-[var(--page-pad)]`}>
                   A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
