@@ -15,6 +15,7 @@ import {
     useSpring,
     useMotionValue,
     useTransform,
+    useInView,
 } from "framer-motion"
 import { useNavigate, useOutletContext } from "react-router-dom"
 import gsap from "gsap"
@@ -769,6 +770,59 @@ export default function Home() {
         window.scrollTo(0, 0)
     }, [])
 
+    // ---- Services text reveal ------------------------------------------------------------------
+    // The reveal plays once the section is in view AND the page is actually showing it. Without
+    // this gate it fired while the page was still covered by the transition (cross-page link) or
+    // while the smooth scroll was still travelling (same-page link), so the visitor never saw it.
+    // The header announces "#services" links with a "header-anchor" event; while that scroll is
+    // still moving we hold the reveal, then release it ~160ms after the scroll goes quiet.
+    const servicesHeadRef = useRef(null)
+    const servicesListRef = useRef(null)
+    const servicesHeadInView = useInView(servicesHeadRef, SERVICES_VIEWPORT)
+    const servicesListInView = useInView(servicesListRef, SERVICES_VIEWPORT)
+    const [servicesHold, setServicesHold] = useState(false)
+    const servicesRevealedRef = useRef(false)
+    const servicesHeadActive = pageReady && servicesHeadInView && !servicesHold
+    const servicesListActive = pageReady && servicesListInView && !servicesHold
+    if (servicesHeadActive || servicesListActive) servicesRevealedRef.current = true
+
+    useEffect(() => {
+        let settleTimer = 0
+        let hardStop = 0
+        let listening = false
+        const release = () => {
+            window.removeEventListener("scroll", onScroll)
+            listening = false
+            clearTimeout(settleTimer)
+            clearTimeout(hardStop)
+            setServicesHold(false)
+        }
+        function onScroll() {
+            clearTimeout(settleTimer)
+            settleTimer = setTimeout(release, 160)
+        }
+        const onAnchor = (e) => {
+            if (e.detail !== "#services") return
+            if (servicesRevealedRef.current) return // already played: don't hide it again
+            setServicesHold(true)
+            if (!listening) {
+                window.addEventListener("scroll", onScroll, { passive: true })
+                listening = true
+            }
+            clearTimeout(settleTimer)
+            clearTimeout(hardStop)
+            settleTimer = setTimeout(release, 700) // the scroll has not started yet / nothing to scroll
+            hardStop = setTimeout(release, 3000) // never hold forever
+        }
+        window.addEventListener("header-anchor", onAnchor)
+        return () => {
+            window.removeEventListener("header-anchor", onAnchor)
+            window.removeEventListener("scroll", onScroll)
+            clearTimeout(settleTimer)
+            clearTimeout(hardStop)
+        }
+    }, [])
+
     const [activeIndex, setActiveIndex] = useState(0)
     // Hover highlight for the accordion rows (tablet/mobile widths with a mouse or trackpad).
     // Touch input is ignored so taps still just toggle the row.
@@ -1183,14 +1237,15 @@ export default function Home() {
                     className="relative flex flex-col justify-between w-full lg:min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
                 >
                     <div className="w-full h-full px-[var(--page-pad)] flex flex-col flex-1 m-0">
-                        <div className="flex flex-col items-start gap-[20px] w-full mb-[40px] md:mb-[56px] md:flex-row md:justify-between md:items-start md:gap-[32px] lg:mb-[clamp(48px,8svh,80px)] m-0">
-                            <MaskRevealText as="h2" mode="words" className="cap-align H1 md:shrink-0 md:max-lg:!text-[clamp(56px,8vw,96px)] text-white m-0 uppercase">
+                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[20px] w-full mb-[40px] md:mb-[56px] md:flex-row md:justify-between md:items-start md:gap-[32px] lg:mb-[clamp(48px,8svh,80px)] m-0">
+                            <MaskRevealText as="h2" mode="words" active={servicesHeadActive} className="cap-align H1 md:shrink-0 md:max-lg:!text-[clamp(56px,8vw,96px)] text-white m-0 uppercase">
                                 Services
                             </MaskRevealText>
 
                             <MaskRevealText
                                 as="p"
                                 mode="words"
+                                active={servicesHeadActive}
                                 stagger={0.02}
                                 delay={0.1}
                                 className="cap-align svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] w-full max-w-[500px] md:w-auto md:flex-none md:ml-auto md:self-end md:min-w-0 !text-[var(--text-dark-muted)] m-0"
@@ -1202,10 +1257,10 @@ export default function Home() {
                         <div className="flex flex-col gap-[32px] w-full items-stretch lg:flex-row lg:items-start m-0 mt-auto">
                             <div className="svc-list flex-1 min-w-0 flex flex-col w-full lg:pr-[32px] m-0">
                                 <motion.ul
+                                    ref={servicesListRef}
                                     variants={servicesListContainerVariants}
                                     initial="hidden"
-                                    whileInView="show"
-                                    viewport={SERVICES_VIEWPORT}
+                                    animate={servicesListActive ? "show" : "hidden"}
                                     className="flex flex-col m-0 p-0 list-none w-full"
                                 >
                                     {SERVICES_DATA.map((service, index) => {

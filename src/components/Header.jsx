@@ -667,6 +667,8 @@ export default function Header({ opacity = 1, scrollToTarget }) {
                 go("/" + targetId)
                 return
             }
+            // Tell the page a header link is about to scroll, so section reveals can wait for the landing
+            window.dispatchEvent(new CustomEvent("header-anchor", { detail: targetId }))
             if (scrollToTarget) {
                 scrollToTarget(targetId)
             } else {
