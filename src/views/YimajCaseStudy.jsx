@@ -23,11 +23,11 @@ gsap.registerPlugin(ScrollTrigger)
 const FRAME_PB = "pb-0"
 
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
-const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
+const CS_FRAME_PT = "max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pt-[96px] lg:pt-[144px]"
 
 // Type + colour frames: viewport-tall from md up. Top padding clears the fixed header,
 // both sides keep the page padding. Set --header-h in global CSS to the real header height.
-const CS_FULL_H = "md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
+const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] max-md:pb-[var(--page-pad)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
 
 const ASSETS = {
   hero: "/yimaj-hero.jpg",
@@ -76,7 +76,6 @@ const Video = (props) => (
   <SceneVideo
     name="yimaj"
     placeholder={MEDIA_PLACEHOLDER}
-    videoClassName="absolute inset-0 w-full h-full"
     {...props}
   />
 )
@@ -276,12 +275,15 @@ export default function YimajCaseStudy() {
         <div className="flex flex-col gap-[12px] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
 
           {/* Frame 2 */}
-          <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] items-end mb-[32px] md:mb-[48px] lg:mb-[72px]">
-              <h2 className={`${CS_HEADING} lg:col-span-7`}>
+          <section
+            data-header-bg="light"
+            className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--page-pad)] ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] items-end max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:flex max-md:flex-col max-md:flex-1">
+              <h2 className={`${CS_HEADING} lg:col-span-7 max-md:mb-auto max-md:pb-[32px]`}>
                 Selling More Than<br className="max-md:hidden" />{" "}Square Metre
               </h2>
-              <LineMaskText as="p" className={`${CS_PARA} md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
+              <LineMaskText as="p" className={`${CS_PARA} max-md:w-full max-md:self-stretch md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
                 Most developments sell square footage and location. Yimaj Heights sold a way of life focusing on family, luxury, and community. The identity started with two ideas: aspiration and continuity. The star represents the ambition behind owning a home and building a better future. The bridge connects that ambition across generations: what families have built, what they are building now, and what they hope to leave behind.
               </LineMaskText>
             </div>
@@ -289,7 +291,8 @@ export default function YimajCaseStudy() {
               src={ASSETS.logoAnimation}
               label="Yimaj Heights logo animation"
               ratio="aspect-[1472/581]"
-              className="max-md:!aspect-[361/364] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[250px] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
+              videoClassName="absolute inset-0 w-full h-full object-cover"
             />
           </section>
 
@@ -318,34 +321,37 @@ export default function YimajCaseStudy() {
           </section>
 
           {/* Frame 4 */}
-          <section data-header-bg="light" className={`w-full flex flex-col pt-[48px] pb-0 ${CS_FULL_H}`}>
-            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0">
-              <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-[48px]`}>
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
+            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
+              {/* Mobile: title + paragraph + specimen fill exactly one viewport; the gap between title and paragraph flexes. md+: wrapper is transparent so the grid is unchanged. */}
+              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
+              <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-auto max-md:pb-[32px]`}>
                 Precision Softened<br className="max-md:hidden" />{" "}By Warmth
               </h2>
 
-              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-end md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-0 md:mb-[24px] lg:mb-[64px] max-md:mb-[16px]`}>
+              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-end md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-0 md:mb-[24px] lg:mb-[64px] max-md:mb-[24px]`}>
                 Architectural precision sans serif meets timeless serif typography, creating a refined system that feels premium without feeling sterile.
               </LineMaskText>
 
-              <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col">
+              <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0 w-full">
                 <Img
                   src={ASSETS.typeSpecimen}
                   alt="Switzer Variable and Snell Roundhand type specimen"
                   ratio="aspect-square"
                   parallax={false}
                   fade
-                  className="w-full h-full object-cover"
+                  className="w-full h-full max-md:!aspect-auto" imgClassName="object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-2 md:h-full md:min-h-0 flex flex-col">
+              </div>
+              <div className="lg:row-start-3 lg:col-start-2 md:h-full md:min-h-0 flex flex-col w-full">
                 <Img
                   src={ASSETS.typeApplied}
                   alt="Yimaj Heights welcome signage with serif script"
                   ratio="aspect-square"
                   parallax={false}
                   fade
-                  className="w-full h-full object-cover"
+                  className="w-full h-full" imgClassName="object-cover"
                 />
               </div>
               <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col tablet-hide">
@@ -360,34 +366,43 @@ export default function YimajCaseStudy() {
           </section>
 
           {/* Frame 5 */}
-          <section data-header-bg="light" className={`w-full flex flex-col pt-[96px] pb-0 ${CS_FULL_H}`}>
-            <h2 className={`cs-f5-heading ${CS_HEADING} max-lg:mb-[48px] md:max-lg:mb-[64px] lg:mb-[72px]`}>
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
+            <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
               Luxury Paired<br className="max-md:hidden" />{" "}With Belonging
             </h2>
-            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0">
-              <div className="lg:col-start-1 flex flex-col h-full max-md:order-2">
-                <div className="w-full max-md:aspect-[1205/1162] md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#f2ede4]">
-                  <LazyImg
-                    src={ASSETS.color}
-                    alt="Yimaj Heights colour palette"
-                    className="w-full h-full object-cover object-left-top"
-                  />
+            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0 max-md:flex max-md:flex-col">
+              {/* Mobile only: title + paragraph + palette fill exactly one viewport; the gap between title and paragraph flexes. md+: wrapper is transparent and the originals below are used. */}
+              <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
+                <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
+                  Luxury Paired With Belonging
+                </h2>
+                <LineMaskText as="p" className={`${CS_PARA} md:hidden self-start mb-[24px]`}>
+                  Instead of following the cold, minimal language common in luxury real estate, Yimaj uses warm mineral tones to make the brand feel more human.
+                </LineMaskText>
+                <div className="lg:col-start-1 md:order-2 flex flex-col h-full max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0">
+                  <div className="w-full md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#f2ede4] max-md:h-full">
+                    <LazyImg
+                      src={ASSETS.color}
+                      alt="Yimaj Heights colour palette"
+                      className="w-full h-full object-cover object-left-top"
+                    />
+                  </div>
                 </div>
               </div>
-              
-              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 h-full max-md:contents">
+
+              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 md:order-1 h-full max-md:contents">
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-0 md:mt-[12px] lg:mt-[var(--page-pad)] max-md:hidden`}>
+                  Instead of following the cold, minimal language common in luxury real estate, Yimaj uses warm mineral tones to make the brand feel more human.
+                </LineMaskText>
                 <Img
                   src={ASSETS.colorCard}
                   alt="Yimaj Heights colour card"
                   ratio="aspect-[357/345]"
                   className="bg-[#8a5a2b] lg:!aspect-auto lg:flex-1 lg:min-h-0 lg:max-h-[400px] w-full tablet-hide max-md:order-3"
                 />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-0 md:mt-[12px] lg:mt-[var(--page-pad)] max-md:order-1 max-md:mb-[16px]`}>
-                  Instead of following the cold, minimal language common in luxury real estate, Yimaj uses warm mineral tones to make the brand feel more human.
-                </LineMaskText>
               </div>
-              
-              <div className="lg:col-start-3 flex flex-col h-full max-md:order-4">
+
+              <div className="lg:col-start-3 md:order-3 flex flex-col h-full max-md:order-4">
                 <Img
                   src={ASSETS.colorPoster}
                   alt="Yimaj Heights colour poster"
@@ -400,12 +415,15 @@ export default function YimajCaseStudy() {
           </section>
 
           {/* Frame 6 */}
-          <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <h2 className={`${CS_HEADING} mb-[32px] md:mb-[48px] lg:mb-[72px]`}>
-              Bring It To Life With<br className="max-md:hidden" />{" "}Warmth &amp; Legacy
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] lg:flex-1 lg:min-h-0">
-              <Img src={ASSETS.keytag} alt="Yimaj Heights leather key tag" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--page-pad)] ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
+              {/* Mobile: title + first image fill exactly one viewport */}
+              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
+                <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
+                  Bring It To Life With<br className="max-md:hidden" />{" "}Warmth &amp; Legacy
+                </h2>
+                <Img src={ASSETS.keytag} alt="Yimaj Heights leather key tag" ratio="aspect-[726/700]" className="max-md:!aspect-auto max-md:h-[45svh] max-md:min-h-[250px] max-md:shrink-0 lg:min-h-[31.7vw]" imgClassName="object-cover" />
+              </div>
               <Img src={ASSETS.businessCard} alt="Yimaj Heights embossed business card" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
             </div>
           </section>
@@ -456,15 +474,20 @@ export default function YimajCaseStudy() {
         <div className="relative z-10 w-full bg-[var(--bg-light)] flex flex-col gap-[12px] md:gap-[16px]">
 
         {/* Frame 12 */}
-        <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} ${FRAME_PB} lg:h-[100dvh]`}>
-          <h2 className={`${CS_HEADING} mb-[32px] md:mb-[48px] lg:mb-[72px]`}>
-            62 Million In Sale<br className="max-md:hidden" />{" "}Pre-Construction
-          </h2>
+        <section
+          data-header-bg="light"
+          className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} ${FRAME_PB} lg:h-[100dvh]`}
+        >
+          <div className="max-md:flex max-md:flex-col max-md:flex-1">
+            <h2 className={`${CS_HEADING} mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
+              62 Million In Sale<br className="max-md:hidden" />{" "}Pre-Construction
+            </h2>
+          </div>
           <Img
             src={ASSETS.living}
             alt="Yimaj Heights living room render"
             ratio="aspect-[1476/867]"
-            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:!aspect-auto max-md:h-[45svh] max-md:min-h-[250px] max-md:shrink-0 lg:flex-1 lg:min-h-0" imgClassName="object-cover max-md:object-[50%_50%]" />
         </section>
 
         {/* Frame 13 */}

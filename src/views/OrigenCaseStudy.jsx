@@ -27,7 +27,7 @@ const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
 // Type + colour frames: viewport-tall from md up. Top padding clears the fixed header,
 // both sides keep the page padding. Set --header-h in global CSS to the real header height.
-const CS_FULL_H = "md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] md:pb-[var(--cs-gap)]"
+const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] max-md:pb-[var(--cs-gap)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] md:pb-[var(--cs-gap)]"
 
 const HERO_POS_MOBILE = "50% 30%"
 const HERO_POS_DESKTOP = "50% 50%"
@@ -304,12 +304,12 @@ export default function OrigenCaseStudy() {
         <div className="flex flex-col gap-[12px] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
 
           {/* Frame 2 */}
-          <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} pb-0 lg:max-xl:pb-[16px] xl:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] items-end mb-[32px] md:mb-[48px] lg:mb-[4.23vw]">
-              <h2 className={`${CS_HEADING} lg:col-span-7`}>
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--cs-gap))] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:max-xl:pb-[16px] xl:pb-[16px] ${CS_FRAME_MIN_H}`}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] items-end mb-[32px] md:mb-[48px] lg:mb-[4.23vw] max-md:flex max-md:flex-col max-md:flex-1">
+              <h2 className={`${CS_HEADING} lg:col-span-7 max-md:mb-auto max-md:pb-[32px]`}>
                 Born in the<br className="max-md:hidden" />{" "}Highlands
               </h2>
-              <LineMaskText as="p" className={`${CS_PARA} md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
+              <LineMaskText as="p" className={`${CS_PARA} max-md:w-full max-md:self-stretch md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
                 Premium coffee shelves are full of the same quiet minimalism and no emphasis on origin. But Origen’s coffee comes from Ethiopia, coffee’s birthplace. So the identity had to look Ethiopian, not generic, and still hold its own on a Spanish specialty shelf.
               </LineMaskText>
             </div>
@@ -319,7 +319,7 @@ export default function OrigenCaseStudy() {
               ratio="aspect-[1472/581]"
               parallax={false}
               imgClassName="scale-[1.08]"
-              className="max-md:!aspect-[16/10] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
             />
           </section>
 
@@ -348,24 +348,30 @@ export default function OrigenCaseStudy() {
           </section>
 
           {/* Frame 4 */}
-          <section data-header-bg="light" className={`w-full flex flex-col pt-[48px] pb-0 ${CS_FULL_H}`}>
-            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,calc((100vw-64px)*0.321))] md:flex-1 md:min-h-0">
-              <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.234em] max-md:mb-[48px]`}>
-                Heritage Meets<br className="max-md:hidden" />{" "}Modernity
-              </h2>
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
+            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,calc((100vw-64px)*0.321))] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
+              {/* Mobile: title + paragraph + specimen fill exactly one viewport; the gap between title and paragraph flexes. md+: wrapper is transparent so the grid is unchanged. */}
+              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))] md:contents">
+                <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.234em] max-md:mb-auto max-md:pb-[32px]`}>
+                  Heritage Meets<br className="max-md:hidden" />{" "}Modernity
+                </h2>
 
-              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-3 md:max-w-[490px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[24px] md:mb-[24px] lg:mb-[3.7vw] max-md:mb-[16px]`}>
-                Cormorant Garamond brings historical weight and editorial elegance, anchoring the identity in craft and origin storytelling through its high-contrast serif structure. DM Sans provides a clean, modern counterweight, delivering geometric precision and sharp legibility across product labels, origin specs, and roasting profiles.
-              </LineMaskText>
+                <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-3 md:max-w-[490px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[24px] md:mb-[24px] lg:mb-[3.7vw] max-md:mb-[24px]`}>
+                  Cormorant Garamond brings historical weight and editorial elegance, anchoring the identity in craft and origin storytelling through its high-contrast serif structure. DM Sans provides a clean, modern counterweight, delivering geometric precision and sharp legibility across product labels, origin specs, and roasting profiles.
+                </LineMaskText>
 
-              <Img
-                src={ASSETS.typeTreatment}
-                alt="Taste the difference typography treatment over pouring coffee"
-                ratio="aspect-[405/417] md:aspect-[755/727]"
-                parallax={false}
-                fade
-                className="lg:row-start-4"
-              />
+                <div className="lg:row-start-4 max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0 w-full aspect-[405/417] md:aspect-auto">
+                  <Img
+                    src={ASSETS.typeTreatment}
+                    alt="Taste the difference typography treatment over pouring coffee"
+                    ratio="aspect-[405/417] md:aspect-[755/727]"
+                    parallax={false}
+                    fade
+                    className="w-full h-full" imgClassName="object-cover"
+                  />
+                </div>
+              </div>
+
               <Img
                 src={ASSETS.packaging}
                 alt="Hands holding two Origen coffee pouches"
@@ -385,16 +391,27 @@ export default function OrigenCaseStudy() {
           </section>
 
           {/* Frame 5 */}
-          <section data-header-bg="light" className={`w-full flex flex-col pt-[48px] pb-0 ${CS_FULL_H}`}>
-            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[12px] md:gap-x-[16px] gap-y-[12px] md:gap-y-[16px] lg:gap-y-0 md:flex-1 md:min-h-0">
-              <h2 className={`cs-f5-heading ${CS_HEADING} md:col-span-2 lg:col-span-3 md:-mt-[0.234em] max-lg:order-1 max-lg:mb-[48px] md:max-lg:mb-[64px]`}>
-                Highland<br className="max-md:hidden" />{" "}Inspired Color
-              </h2>
-              <InViewGif
-                src={ASSETS.color}
-                alt="Origen colour palette"
-                className="cs-f5-gif bg-[#262511] aspect-[1205/1162] lg:aspect-auto lg:col-start-1 lg:row-start-3 max-lg:order-3"
-              />
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
+            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[12px] md:gap-x-[16px] gap-y-[12px] md:gap-y-[16px] lg:gap-y-0 md:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
+              {/* Mobile only: title + paragraph + palette fill exactly one viewport; the gap between title and paragraph flexes. */}
+              <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))]">
+                <h2 className={`cs-f5-heading ${CS_HEADING} md:col-span-2 lg:col-span-3 md:-mt-[0.234em] max-lg:order-1 max-md:mb-auto max-md:pb-[32px] md:max-lg:mb-[64px]`}>
+                  Highland<br className="max-md:hidden" />{" "}Inspired Color
+                </h2>
+                
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:hidden self-start mb-[24px] max-lg:order-2`}>
+                  While competitors defaulted to sterile minimalism, we rooted the brand in the warmth and history of its original landscape.
+                </LineMaskText>
+
+                <div className="lg:col-start-1 lg:row-start-3 max-lg:order-3 flex flex-col h-full max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0">
+                  <InViewGif
+                    src={ASSETS.color}
+                    alt="Origen colour palette"
+                    className="cs-f5-gif bg-[#262511] w-full h-full aspect-[1205/1162] md:aspect-[1205/1162] lg:aspect-auto"
+                  />
+                </div>
+              </div>
+
               <div className="cs-f5-wrap contents">
                 <Img
                   src={ASSETS.emboss}
@@ -402,7 +419,7 @@ export default function OrigenCaseStudy() {
                   ratio="aspect-[549/580]"
                   className="bg-[#c6b984] lg:col-start-2 lg:row-start-3 lg:self-start lg:!aspect-[357/345] lg:max-h-[400px] max-lg:order-4 tablet-hide"
                 />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] lg:col-start-2 lg:row-start-3 lg:self-end max-lg:order-2 max-lg:mb-[16px] md:max-lg:col-span-2`}>
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] lg:col-start-2 lg:row-start-3 lg:self-end max-lg:order-2 max-lg:mb-[16px] md:max-lg:col-span-2 max-md:hidden`}>
                   While competitors defaulted to sterile minimalism, we rooted the brand in the warmth and history of its original landscape.
                 </LineMaskText>
                 <Img
@@ -418,14 +435,16 @@ export default function OrigenCaseStudy() {
         </div>
 
         {/* Frame 6 */}
-        <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} pb-0`}>
-          <h2 className={`${CS_HEADING} md:-mt-[0.234em] mb-[12px] md:mb-[16px] lg:mb-[10.8vw]`}>
-            A Premium<br className="max-md:hidden" />{" "}Presence
-          </h2>
-
-          <div className="flex flex-col gap-[12px] md:gap-[16px]">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px]">
-              <Img src={ASSETS.iced} alt="Origen iced coffee on a branded coaster" ratio="aspect-[340/308]" className="lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
+        <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--cs-gap)] ${CS_FRAME_PT} pb-0`}>
+          
+          <div className="flex flex-col gap-[12px] md:gap-[16px] max-md:flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] max-md:flex max-md:flex-col">
+              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))] md:contents">
+                <h2 className={`${CS_HEADING} md:col-span-2 md:-mt-[0.234em] mb-[12px] md:mb-[16px] lg:mb-[10.8vw] max-md:mb-auto max-md:pb-[32px]`}>
+                  A Premium<br className="max-md:hidden" />{" "}Presence
+                </h2>
+                <Img src={ASSETS.iced} alt="Origen iced coffee on a branded coaster" ratio="aspect-[340/308]" className="max-md:!aspect-auto max-md:h-[45svh] max-md:min-h-[250px] max-md:shrink-0 lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
+              </div>
               <Img src={ASSETS.pouchWood} alt="Hand holding an Origen coffee pouch on a wooden shelf" ratio="aspect-[340/308]" className="lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
             </div>
 
