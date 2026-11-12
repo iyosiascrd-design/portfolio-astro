@@ -796,7 +796,7 @@ export default function Home() {
     // below it, ...), so only passed services are reduced to their names.
     //
     // When the last panel has scrolled out of view behind the stack, the whole stack of names leaves
-    // together, driven by --svc-leave. To keep CSS sticky from pushing the rows
+    // together, driven by a transform written on the heads by the scroll effect. To keep CSS sticky from pushing the rows
     // out one by one when the list ends (which made them overlap and hid "03"), the <ul> is extended by
     // an invisible tail spacer (--svc-tail) and pulled back with a negative margin, so the sticky
     // containing block always outlasts the content.
@@ -807,98 +807,144 @@ export default function Home() {
         if (vp.isDesktop) {
             list.style.removeProperty("--svc-row-h")
             list.style.removeProperty("--svc-tail")
-            list.style.removeProperty("--svc-leave")
             return
         }
-        const heads = () => Array.from(list.querySelectorAll(".svc-sticky-head"))
 
-        // Every name row is stuck at top + index * rowHeight, so it needs the real row height.
-        const measureRow = () => {
-            const hs = heads()
-            const first = hs[0]
-            if (!first || first.offsetHeight <= 0) return
-            const rowH = first.getBoundingClientRect().height // fractional: offsetHeight rounds and the error stacks
-            const top0 = parseFloat(getComputedStyle(first).top) || 0
-            list.style.setProperty("--svc-row-h", `${rowH}px`)
-            list.style.setProperty("--svc-tail", `${Math.round(top0 + hs.length * rowH + 200)}px`)
-        }
+        // PERF NOTES (why this was stuttering):
+        // 1. The old per-frame callback wrote a CSS custom property on the <ul> and then immediately read
+        //    getComputedStyle / getBoundingClientRect for every head and panel. Writing a custom property
+        //    invalidates style for the whole subtree, and the reads right after force a synchronous style
+        //    recalc + layout on every scroll frame (layout thrash), which is what drops frames on phones.
+        // 2. --svc-leave was inherited by every descendant, so each change restyled them all.
+        // Now geometry is measured ONCE (and on resize / font / image load / scroll-idle) and the per-frame
+        // work is pure arithmetic on window.scrollY plus writes that are skipped when nothing changed.
+        // The per-frame writes (transform, clip-path, visibility) never touch layout.
+        let geo = null
+        let lastRowH = ""
+        let lastTail = ""
+        let lastD = null
+        let lastStuck = -2
 
-        // Move the whole stack up once the last panel is hidden behind it.
-        const updateLeave = () => {
-            const hs = heads()
+        const measure = () => {
+            const hs = Array.from(list.querySelectorAll(".svc-sticky-head"))
+            const ps = Array.from(list.querySelectorAll(".svc-panel"))
             const tail = list.querySelector("[data-svc-tail]")
-            if (!hs.length || !tail) return 0
-            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
-            const stackBottom = top0 + hs.length * hs[0].getBoundingClientRect().height
-            const d = Math.min(0, Math.round(tail.getBoundingClientRect().top - stackBottom))
-            list.style.setProperty("--svc-leave", `${d}px`)
-            return d
-        }
+            if (!hs.length || hs.length !== ps.length || !tail || hs[0].offsetHeight <= 0) return
 
-        // Don't rely on opaque rows to hide the panels sliding under the stack: where two layers meet on a
-        // fractional device pixel (any zoom, 3x DPR, sub-pixel scroll) the antialiased edges let the image
-        // behind bleed through the divider lines. Instead clip every panel to the part that is really visible
-        // below the stack, and hide it entirely once it is fully covered, so there is nothing to leak.
-        const clipPanels = (stuck, d) => {
-            const hs = heads()
-            if (!hs.length) return
-            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
+            // fractional: offsetHeight rounds and the error stacks
             const rowH = hs[0].getBoundingClientRect().height
-            const coverBottom = (stuck >= 0 ? top0 + (stuck + 1) * rowH : top0) + d
-            list.querySelectorAll(".svc-panel").forEach((el) => {
-                const r = el.getBoundingClientRect()
-                const hide = Math.ceil(coverBottom - r.top)
-                if (hide <= 0) {
-                    el.style.clipPath = ""
-                    el.style.visibility = ""
-                } else if (hide >= r.height) {
-                    el.style.clipPath = ""
-                    el.style.visibility = "hidden"
-                } else {
-                    el.style.visibility = ""
-                    el.style.clipPath = `inset(${hide}px 0 0 0)`
-                }
-            })
+            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
+
+            const rowHStr = `${rowH}px`
+            const tailStr = `${Math.round(top0 + hs.length * rowH + 200)}px`
+            if (rowHStr !== lastRowH) {
+                lastRowH = rowHStr
+                list.style.setProperty("--svc-row-h", rowHStr)
+            }
+            if (tailStr !== lastTail) {
+                lastTail = tailStr
+                list.style.setProperty("--svc-tail", tailStr)
+            }
+
+            const sy = window.scrollY
+            geo = {
+                n: hs.length,
+                heads: hs,
+                rowH,
+                top0,
+                stackBottom: top0 + hs.length * rowH,
+                // the tail is not sticky, so its document position is stable
+                tailTop: tail.getBoundingClientRect().top + sy,
+                panels: ps.map((el) => {
+                    const r = el.getBoundingClientRect()
+                    return { el, top: r.top + sy, h: r.height, state: null }
+                }),
+            }
+            lastD = null // force a re-apply with the new geometry
         }
 
-        // Highlight the last name that has reached its stuck position.
-        let raf = 0
-        const track = () => {
+        const frame = () => {
             raf = 0
-            const d = updateLeave()
-            let current = 0
+            if (!geo) return
+            const sy = window.scrollY
+            const { n, heads, rowH, top0, stackBottom, tailTop, panels } = geo
+
+            // Whole stack leaves together once the last panel is hidden behind it.
+            const d = Math.min(0, Math.round(tailTop - sy - stackBottom))
+            if (d !== lastD) {
+                lastD = d
+                const t = `translate3d(0, ${d}px, 0)`
+                for (let i = 0; i < n; i++) heads[i].style.transform = t
+            }
+
+            // Last name that has reached its stuck position. A head's natural top is the top of its panel
+            // minus its own height (the panel sits directly under it).
             let stuck = -1
-            heads().forEach((el, i) => {
-                const stuckTop = parseFloat(getComputedStyle(el).top)
-                if (el.getBoundingClientRect().top <= stuckTop + 1) {
-                    current = i
-                    stuck = i
+            for (let i = 0; i < n; i++) {
+                if (panels[i].top - rowH - sy <= top0 + i * rowH + 1) stuck = i
+            }
+
+            // Clip every panel to the part really visible below the stack, and hide it once fully covered,
+            // so nothing can bleed through the divider lines on fractional device pixels.
+            const coverBottom = (stuck >= 0 ? top0 + (stuck + 1) * rowH : top0) + d
+            for (let i = 0; i < n; i++) {
+                const p = panels[i]
+                const hide = Math.ceil(coverBottom - (p.top - sy))
+                const state = hide <= 0 ? 0 : hide >= p.h ? -1 : hide
+                if (state === p.state) continue // nothing changed: no style write, no repaint
+                p.state = state
+                if (state === 0) {
+                    p.el.style.clipPath = ""
+                    p.el.style.visibility = ""
+                } else if (state === -1) {
+                    p.el.style.clipPath = ""
+                    p.el.style.visibility = "hidden"
+                } else {
+                    p.el.style.visibility = ""
+                    p.el.style.clipPath = `inset(${state}px 0 0 0)`
                 }
-            })
-            clipPanels(stuck, d)
-            setStackIndex((prev) => (prev === current ? prev : current))
+            }
+
+            const current = Math.max(0, stuck)
+            if (current !== lastStuck) {
+                lastStuck = current
+                setStackIndex(current)
+            }
+        }
+
+        let raf = 0
+        let idleTimer = 0
+        const schedule = () => {
+            if (!raf) raf = requestAnimationFrame(frame)
+        }
+        const remeasure = () => {
+            measure()
+            schedule()
         }
         const onScroll = () => {
-            if (!raf) raf = requestAnimationFrame(track)
+            schedule()
+            // Safety net: if layout shifted while scrolling (late image, page transition), correct it once
+            // scrolling stops, off the hot path.
+            clearTimeout(idleTimer)
+            idleTimer = setTimeout(remeasure, 200)
         }
-        measureRow()
-        track()
-        const ro = new ResizeObserver(() => {
-            measureRow()
-            onScroll()
-        })
-        const first = heads()[0]
+
+        measure()
+        frame()
+        const ro = new ResizeObserver(remeasure)
+        ro.observe(list)
+        const first = list.querySelector(".svc-sticky-head")
         if (first) ro.observe(first)
-        document.fonts?.ready?.then(() => {
-            measureRow()
-            onScroll()
-        })
+        document.fonts?.ready?.then(remeasure)
         window.addEventListener("scroll", onScroll, { passive: true })
-        window.addEventListener("resize", onScroll)
+        window.addEventListener("resize", remeasure)
+        window.addEventListener("load", remeasure)
         return () => {
             if (raf) cancelAnimationFrame(raf)
+            clearTimeout(idleTimer)
             window.removeEventListener("scroll", onScroll)
-            window.removeEventListener("resize", onScroll)
+            window.removeEventListener("resize", remeasure)
+            window.removeEventListener("load", remeasure)
             ro.disconnect()
         }
     }, [vp.isDesktop, pageReady])
@@ -1362,7 +1408,9 @@ export default function Home() {
                                                   className: "svc-sticky-head sticky z-10",
                                                   style: {
                                                       top: `calc(var(--svc-stick-top, 76px) + ${index} * var(--svc-row-h, 84px))`,
-                                                      transform: "translate3d(0, var(--svc-leave, 0px), 0)",
+                                                      // the stack's exit offset is written straight to this transform by the scroll effect
+                                                      transform: "translate3d(0, 0, 0)",
+                                                      willChange: "transform",
                                                   },
                                               }
 
@@ -1495,7 +1543,7 @@ export default function Home() {
 
                                     {/* Tablet/mobile: invisible tail that keeps the sticky containing block alive past the last
                                         panel, so CSS never pushes the stacked names out one by one. The whole stack leaves via
-                                        --svc-leave instead. */}
+                                        a transform on the heads instead. */}
                                     {!vp.isDesktop && (
                                         <li
                                             aria-hidden="true"
