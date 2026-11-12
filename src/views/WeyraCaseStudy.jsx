@@ -25,6 +25,10 @@ const FRAME_PB = "pb-0"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
+// Type + colour frames: viewport-tall from md up. Top padding clears the fixed header,
+// both sides keep the page padding. Set --header-h in global CSS to the real header height.
+const CS_FULL_H = "md:h-[100dvh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
+
 const PRELOAD_SRCS = [
   "/weyra-story.jpg",
   "/weyra-pin.jpg",
@@ -283,24 +287,24 @@ export default function WeyraCaseStudy() {
           </section>
 
           {/* Frame 4 */}
-          <section data-header-bg="light" className="w-full flex flex-col pt-[48px] lg:pt-[144px] pb-0 lg:pb-[16px]">
-            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_auto_auto] lg:flex-1 lg:min-h-0">
+          <section data-header-bg="light" className={`w-full flex flex-col pt-[48px] pb-0 ${CS_FULL_H}`}>
+            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0">
               <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-[48px]`}>
                 A Clear Voice<br className="max-md:hidden" />{" "}Everywhere
               </h2>
 
-              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-start md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[12.5vw] md:mb-[24px] lg:mb-[64px] max-md:mb-[16px]`}>
+              <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-end md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-0 md:mb-[24px] lg:mb-[64px] max-md:mb-[16px]`}>
                 Acumin Variable Concept suits signage, social media, and editorial layouts. It is geometric, clear, and approachable.
               </LineMaskText>
 
-              <div className="lg:row-start-3 lg:col-start-1 lg:h-[32.08vw] flex flex-col aspect-square lg:aspect-auto">
+              <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col aspect-square md:aspect-auto">
                 <Media
                   src="/weyra-type-treatment.webm"
                   alt="Beyond Conflict Typography Treatment"
                   className="w-full h-full object-cover rounded-lg md:rounded-[12px]"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-2 lg:h-[32.08vw] flex flex-col aspect-square lg:aspect-auto">
+              <div className="lg:row-start-3 lg:col-start-2 md:h-full md:min-h-0 flex flex-col aspect-square md:aspect-auto">
                 <Img
                   src="/weyra-type.jpg"
                   alt="Acumin Variable Concept Specimen"
@@ -310,7 +314,7 @@ export default function WeyraCaseStudy() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-3 lg:h-[32.08vw] flex flex-col tablet-hide aspect-square lg:aspect-auto">
+              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col tablet-hide aspect-square md:aspect-auto">
                 <Media
                   src="/Weyra-iphone.webm"
                   alt="Weyra Mobile App Mockup"
@@ -321,13 +325,13 @@ export default function WeyraCaseStudy() {
           </section>
 
           {/* Frame 5 */}
-          <section data-header-bg="light" className={`w-full flex flex-col ${CS_FRAME_PT} pb-0 lg:pb-[16px]`}>
+          <section data-header-bg="light" className={`w-full flex flex-col pt-[96px] pb-0 ${CS_FULL_H}`}>
             <h2 className={`cs-f5-heading ${CS_HEADING} max-lg:mb-[48px] md:max-lg:mb-[64px] lg:mb-[72px]`}>
               Familiarly<br className="max-md:hidden" />{" "}Ethiopian
             </h2>
-            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] gap-[12px] md:gap-[16px] lg:items-stretch lg:flex-1">
+            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0">
               <div className="lg:col-start-1 flex flex-col h-full max-md:order-2">
-                <div className="w-full max-md:aspect-[1205/1162] lg:h-[40.35vw] overflow-hidden rounded-lg md:rounded-[12px] bg-[#e1efdc]">
+                <div className="w-full max-md:aspect-[1205/1162] md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#e1efdc]">
                   <Media
                     src={FRAME5_COLOR_SRC}
                     alt="Weyra colour palette"
@@ -336,7 +340,7 @@ export default function WeyraCaseStudy() {
                 </div>
               </div>
               
-              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 h-full lg:h-[40.35vw] max-md:contents">
+              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 h-full max-md:contents">
                 <Img
                   src="/weyra-wristbands.jpg"
                   alt="Weyra Branded Wristbands"
@@ -354,7 +358,7 @@ export default function WeyraCaseStudy() {
                   alt="Weyra branded clothing"
                   ratio="aspect-none"
                   parallax={false}
-                  className="bg-[#e1efdc] w-full lg:h-[40.35vw] object-cover"
+                  className="bg-[#e1efdc] w-full lg:h-full object-cover"
                 />
               </div>
             </div>

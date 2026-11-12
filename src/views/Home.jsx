@@ -40,7 +40,7 @@ import {
 
 import { WORK_PROJECTS, LOOPING_IMAGES } from "../lib/projects"
 import { FETCH_PRIORITY_KEY, whenIdle } from "../lib/loadingHints"
-import { prefetchHero, heroSlugFor, warmAllHeroes } from "../lib/heroPrefetch"
+import { prefetchHero, heroSlugFor, warmAllHeroes } from "../lib/heroPrefetch.js"
 
 import MaskRevealText from "../components/MaskRevealText"
 import ServiceImageStage from "../components/ServiceImageStage"
