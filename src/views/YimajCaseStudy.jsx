@@ -1,6 +1,6 @@
 // src/pages/YimajCaseStudy.jsx
 
-import React, { useEffect, useLayoutEffect, useRef } from "react"
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { useOutletContext } from "react-router-dom"
 import { ArrowDown } from "lucide-react"
@@ -12,6 +12,7 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import { Img as BaseImg, SceneVideo, LazyImg, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
+import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
@@ -88,6 +89,7 @@ export default function YimajCaseStudy() {
 
   const rootRef = useRef(null)
   const heroRef = useRef(null)
+  const [heroLoaded, setHeroLoaded] = useState(false)
 
   useLayoutEffect(() => {
     const hero = heroRef.current
@@ -144,11 +146,26 @@ export default function YimajCaseStudy() {
   }, [])
 
   useEffect(() => {
-    if (prefersReducedMotion()) return
-    const ctx = gsap.context(() => {
-      gsap.to("[data-hero-img]", { scale: 1, duration: 2, ease: "power3.out" })
-    }, heroRef)
-    return () => ctx.revert()
+    // The zoom waits for the hero to be decoded, so it never plays on an empty frame. Once the
+    // hero has arrived (or 4s have passed) the idle preload of the remaining media is released.
+    const img = heroRef.current?.querySelector("[data-hero-img]")
+    let cancelled = false
+    let tween = null
+    const settled = () => {
+      if (cancelled) return
+      setHeroLoaded(true)
+      if (img && !prefersReducedMotion()) {
+        tween = gsap.to(img, { scale: 1, duration: 2, ease: "power3.out" })
+      }
+    }
+    const decoded = img?.decode ? img.decode() : Promise.resolve()
+    decoded.then(settled, settled)
+    const fallback = setTimeout(() => { if (!cancelled) setHeroLoaded(true) }, 4000)
+    return () => {
+      cancelled = true
+      clearTimeout(fallback)
+      tween?.kill()
+    }
   }, [])
 
   useEffect(() => {
@@ -165,7 +182,7 @@ export default function YimajCaseStudy() {
     return () => t.kill()
   }, [ready])
 
-  useIdlePreload(PRELOAD_SRCS, ready)
+  useIdlePreload(PRELOAD_SRCS, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
 
   return (
@@ -180,6 +197,7 @@ export default function YimajCaseStudy() {
         <img
           data-hero-img
           {...HERO_IMG_PROPS}
+          {...{ [FETCH_PRIORITY_KEY]: "high" }}
           src={ASSETS.hero}
           alt="Yimaj Heights lobby interior"
           className="absolute inset-0 w-full h-full object-cover object-[35%_30%] md:object-center z-0 will-change-transform"

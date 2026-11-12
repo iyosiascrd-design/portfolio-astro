@@ -12,6 +12,7 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import { Img, Media, isVideo, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
+import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
@@ -120,6 +121,7 @@ export default function OrigenCaseStudy() {
 
   const rootRef = useRef(null)
   const heroRef = useRef(null)
+  const [heroLoaded, setHeroLoaded] = useState(false)
 
   useLayoutEffect(() => {
     const hero = heroRef.current
@@ -176,11 +178,26 @@ export default function OrigenCaseStudy() {
   }, [])
 
   useEffect(() => {
-    if (prefersReducedMotion()) return
-    const ctx = gsap.context(() => {
-      gsap.to("[data-hero-img]", { scale: 1, duration: 2, ease: "power3.out" })
-    }, heroRef)
-    return () => ctx.revert()
+    // The zoom waits for the hero to be decoded, so it never plays on an empty frame. Once the
+    // hero has arrived (or 4s have passed) the idle preload of the remaining media is released.
+    const img = heroRef.current?.querySelector("[data-hero-img]")
+    let cancelled = false
+    let tween = null
+    const settled = () => {
+      if (cancelled) return
+      setHeroLoaded(true)
+      if (img && !prefersReducedMotion()) {
+        tween = gsap.to(img, { scale: 1, duration: 2, ease: "power3.out" })
+      }
+    }
+    const decoded = img?.decode ? img.decode() : Promise.resolve()
+    decoded.then(settled, settled)
+    const fallback = setTimeout(() => { if (!cancelled) setHeroLoaded(true) }, 4000)
+    return () => {
+      cancelled = true
+      clearTimeout(fallback)
+      tween?.kill()
+    }
   }, [])
 
   useEffect(() => {
@@ -197,7 +214,7 @@ export default function OrigenCaseStudy() {
     return () => t.kill()
   }, [ready])
 
-  useIdlePreload(PRELOAD_SRCS, ready)
+  useIdlePreload(PRELOAD_SRCS, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
 
   return (
@@ -213,7 +230,7 @@ export default function OrigenCaseStudy() {
         <Media
           src={ASSETS.hero}
           alt="Origen latte in a ceramic cup"
-          mediaProps={{ "data-hero-img": "", ...HERO_IMG_PROPS }}
+          mediaProps={{ "data-hero-img": "", ...HERO_IMG_PROPS, [FETCH_PRIORITY_KEY]: "high" }}
           className="absolute inset-0 w-full h-full object-cover [object-position:var(--hero-pos-m)] md:[object-position:var(--hero-pos-d)] z-0 will-change-transform"
         />
         <div className={CS_HERO_SCRIM} aria-hidden="true" />

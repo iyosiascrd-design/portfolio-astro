@@ -40,6 +40,7 @@ import {
 
 import { WORK_PROJECTS, LOOPING_IMAGES } from "../lib/projects"
 import { FETCH_PRIORITY_KEY, whenIdle } from "../lib/loadingHints"
+import { prefetchHero, heroSlugFor, warmAllHeroes } from "../lib/heroPrefetch"
 
 import MaskRevealText from "../components/MaskRevealText"
 import ServiceImageStage from "../components/ServiceImageStage"
@@ -391,7 +392,11 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
             ref={slideRef}
             onClick={onClick}
             onPointerEnter={(e) => {
+                if (project) prefetchHero(heroSlugFor(project.name)) // start the case-study hero early
                 if (e.pointerType === "mouse") setHovered(true)
+            }}
+            onPointerDown={() => {
+                if (project) prefetchHero(heroSlugFor(project.name))
             }}
             onPointerLeave={() => setHovered(false)}
             className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group outline-none"
@@ -908,6 +913,9 @@ export default function Home() {
         return whenIdle(() => rest.forEach((src) => warm(src, "low")), 2000)
     }, [])
 
+    // Warm every case-study hero once the homepage is idle (4 images, low priority).
+    useEffect(() => whenIdle(() => warmAllHeroes(), 2500), [])
+
     useEffect(() => {
         if (!vp.isDesktop) return
         const onMove = (e) => {
@@ -1106,6 +1114,8 @@ export default function Home() {
                   ? "/work/zhongshan"
                   : null
         if (!dest) return
+
+        prefetchHero(heroSlugFor(projectName)) // no-op if already warmed
 
         if (pageTransition?.triggerTransition) {
             pageTransition.triggerTransition(dest)
