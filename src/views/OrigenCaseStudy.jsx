@@ -25,8 +25,6 @@ const FRAME_PB = "pb-0"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
-// Type + colour frames: viewport-tall from md up. Top padding clears the fixed header,
-// both sides keep the page padding. Set --header-h in global CSS to the real header height.
 const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] max-md:pb-[var(--cs-gap)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] md:pb-[var(--cs-gap)]"
 
 const HERO_POS_MOBILE = "50% 30%"
@@ -70,7 +68,6 @@ function InViewGif({ src, alt, className = "", threshold = 0.35, rounded = true 
       return
     }
 
-    // Start fetching one viewport ahead so the video is cached by the time it is shown.
     let warmIo
     if (!isVideo(src)) {
       warmIo = new IntersectionObserver(
@@ -87,7 +84,6 @@ function InViewGif({ src, alt, className = "", threshold = 0.35, rounded = true 
       warmIo.observe(el)
     }
 
-    // Begin playback (render the video) only once it is actually on screen.
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -151,7 +147,6 @@ export default function OrigenCaseStudy() {
         TITLE.length * TITLE_LETTER_SPACING_EM * 100
       if (!w100 || !avail) return
       title.style.letterSpacing = `${TITLE_LETTER_SPACING_EM}em`
-      // Changed multiplier from 0.99 to 0.90 to respect padding
       title.style.fontSize = `${Math.floor((avail / w100) * 100 * 0.90)}px`
     }
 
@@ -182,8 +177,6 @@ export default function OrigenCaseStudy() {
   }, [])
 
   useEffect(() => {
-    // The zoom waits for the hero to be decoded, so it never plays on an empty frame. Once the
-    // hero has arrived (or 4s have passed) the idle preload of the remaining media is released.
     const img = heroRef.current?.querySelector("[data-hero-img]")
     let cancelled = false
     let tween = null
@@ -223,8 +216,6 @@ export default function OrigenCaseStudy() {
 
   return (
     <div ref={rootRef} data-page-transition="" className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
-
-      {/* Frame 1 — hero */}
       <section
         data-header-bg="dark"
         ref={heroRef}
@@ -300,10 +291,7 @@ export default function OrigenCaseStudy() {
       </section>
 
       <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--cs-gap)] md:px-[var(--cs-gap)] lg:px-[var(--cs-gap)] flex flex-col gap-[12px] md:gap-[16px]">
-
         <div className="flex flex-col gap-[12px] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
-
-          {/* Frame 2 */}
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--cs-gap))] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:max-xl:pb-[16px] xl:pb-[16px] ${CS_FRAME_MIN_H}`}>
             <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] items-end mb-[32px] md:mb-[48px] lg:mb-[4.23vw] max-md:flex max-md:flex-col max-md:flex-1">
               <h2 className={`${CS_HEADING} lg:col-span-7 max-md:mb-auto max-md:pb-[32px]`}>
@@ -318,12 +306,11 @@ export default function OrigenCaseStudy() {
               alt="Origen logo over roasted coffee beans"
               ratio="aspect-[1472/581]"
               parallax={false}
-              imgClassName="scale-[1.08]"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
+              imgClassName="scale-[1.08] max-md:object-cover"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
             />
           </section>
 
-          {/* Frame 3 */}
           <section
             data-header-bg="light"
             className="w-full flex flex-col pt-0 pb-0 max-md:h-auto portrait:max-xl:h-auto landscape:md:max-xl:h-[100dvh] xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
@@ -347,10 +334,8 @@ export default function OrigenCaseStudy() {
             </div>
           </section>
 
-          {/* Frame 4 */}
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
             <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,calc((100vw-64px)*0.321))] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
-              {/* Mobile: title + paragraph + specimen fill exactly one viewport; the gap between title and paragraph flexes. md+: wrapper is transparent so the grid is unchanged. */}
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))] md:contents">
                 <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.234em] max-md:mb-auto max-md:pb-[32px]`}>
                   Heritage Meets<br className="max-md:hidden" />{" "}Modernity
@@ -360,7 +345,7 @@ export default function OrigenCaseStudy() {
                   Cormorant Garamond brings historical weight and editorial elegance, anchoring the identity in craft and origin storytelling through its high-contrast serif structure. DM Sans provides a clean, modern counterweight, delivering geometric precision and sharp legibility across product labels, origin specs, and roasting profiles.
                 </LineMaskText>
 
-                <div className="lg:row-start-4 max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0 w-full aspect-[405/417] md:aspect-auto">
+                <div className="lg:row-start-4 max-md:h-auto max-md:shrink-0 w-full aspect-[405/417] md:aspect-auto">
                   <Img
                     src={ASSETS.typeTreatment}
                     alt="Taste the difference typography treatment over pouring coffee"
@@ -390,10 +375,8 @@ export default function OrigenCaseStudy() {
             </div>
           </section>
 
-          {/* Frame 5 */}
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
             <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[12px] md:gap-x-[16px] gap-y-[12px] md:gap-y-[16px] lg:gap-y-0 md:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
-              {/* Mobile only: title + paragraph + palette fill exactly one viewport; the gap between title and paragraph flexes. */}
               <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))]">
                 <h2 className={`cs-f5-heading ${CS_HEADING} md:col-span-2 lg:col-span-3 md:-mt-[0.234em] max-lg:order-1 max-md:mb-auto max-md:pb-[32px] md:max-lg:mb-[64px]`}>
                   Highland<br className="max-md:hidden" />{" "}Inspired Color
@@ -403,11 +386,11 @@ export default function OrigenCaseStudy() {
                   While competitors defaulted to sterile minimalism, we rooted the brand in the warmth and history of its original landscape.
                 </LineMaskText>
 
-                <div className="lg:col-start-1 lg:row-start-3 max-lg:order-3 flex flex-col h-full max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0">
+                <div className="lg:col-start-1 lg:row-start-3 max-lg:order-3 flex flex-col h-full max-md:h-auto max-md:shrink-0">
                   <InViewGif
                     src={ASSETS.color}
                     alt="Origen colour palette"
-                    className="cs-f5-gif bg-[#262511] w-full h-full aspect-[1205/1162] md:aspect-[1205/1162] lg:aspect-auto"
+                    className="cs-f5-gif bg-[#262511] w-full max-md:h-auto md:h-full aspect-[1205/1162] lg:aspect-auto"
                   />
                 </div>
               </div>
@@ -427,50 +410,44 @@ export default function OrigenCaseStudy() {
                   alt="Origen billboard in a wildflower meadow: Coffee from the source"
                   ratio="aspect-[356/236]"
                   parallax={false}
-                  className="max-md:!aspect-square bg-[#26301c] lg:col-start-3 lg:row-start-3 lg:self-stretch max-lg:order-5 tablet-hide" imgClassName="max-md:object-[50%_50%] lg:object-top" />
+                  className="max-md:h-auto bg-[#26301c] lg:col-start-3 lg:row-start-3 lg:self-stretch max-lg:order-5 tablet-hide" imgClassName="max-md:object-[50%_50%] lg:object-top" />
               </div>
             </div>
           </section>
-
         </div>
 
-        {/* Frame 6 */}
         <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--cs-gap)] ${CS_FRAME_PT} pb-0`}>
-          
           <div className="flex flex-col gap-[12px] md:gap-[16px] max-md:flex-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] max-md:flex max-md:flex-col">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))] md:contents">
                 <h2 className={`${CS_HEADING} md:col-span-2 md:-mt-[0.234em] mb-[12px] md:mb-[16px] lg:mb-[10.8vw] max-md:mb-auto max-md:pb-[32px]`}>
                   A Premium<br className="max-md:hidden" />{" "}Presence
                 </h2>
-                <Img src={ASSETS.iced} alt="Origen iced coffee on a branded coaster" ratio="aspect-[340/308]" className="max-md:!aspect-auto max-md:h-[45svh] max-md:min-h-[250px] max-md:shrink-0 lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
+                <Img src={ASSETS.iced} alt="Origen iced coffee on a branded coaster" ratio="aspect-[340/308]" className="max-md:h-auto lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
               </div>
               <Img src={ASSETS.pouchWood} alt="Hand holding an Origen coffee pouch on a wooden shelf" ratio="aspect-[340/308]" className="lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
             </div>
 
-            <Img src={ASSETS.box} alt="Origen drip coffee box: Where coffee began" ratio="aspect-[686/438]" className="max-md:!aspect-square lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" imgClassName="max-md:object-[50%_50%]" />
+            <Img src={ASSETS.box} alt="Origen drip coffee box: Where coffee began" ratio="aspect-[686/438]" className="max-md:h-auto lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" imgClassName="max-md:object-[50%_50%]" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px]">
               <Img src={ASSETS.wax} alt="Origen wax seal" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
               <Img src={ASSETS.cup} alt="Origen paper cup under an espresso machine" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
             </div>
 
-            <Img src={ASSETS.wallposter} alt="Three Origen wall posters" ratio="aspect-[686/438]" className="max-md:!aspect-square lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" imgClassName="max-md:object-[50%_50%]" />
+            <Img src={ASSETS.wallposter} alt="Three Origen wall posters" ratio="aspect-[686/438]" className="max-md:h-auto lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" imgClassName="max-md:object-[50%_50%]" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px]">
               <Img src={ASSETS.barista} alt="Barista wearing an Origen t-shirt" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
               <Img src={ASSETS.tote} alt="Origen tote bag on grass" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
             </div>
 
-            <Img src={ASSETS.mountain} alt="Origen stamp cards over the Ethiopian highlands" ratio="aspect-[686/438]" className="max-md:!aspect-square lg:!h-[clamp(30vw,calc(100dvh-236px),49.3vw)]" imgClassName="max-md:object-[50%_50%]" />
+            <Img src={ASSETS.mountain} alt="Origen stamp cards over the Ethiopian highlands" ratio="aspect-[686/438]" className="max-md:h-auto lg:!h-[clamp(30vw,calc(100dvh-236px),49.3vw)]" imgClassName="max-md:object-[50%_50%]" />
           </div>
-
         </section>
 
         <div className="w-full h-[48px] lg:h-[144px]" aria-hidden="true" />
-
         <NextProject current="origen" />
-
       </main>
     </div>
   )

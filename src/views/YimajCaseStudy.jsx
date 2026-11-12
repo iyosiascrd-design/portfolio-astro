@@ -25,8 +25,6 @@ const FRAME_PB = "pb-0"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pt-[96px] lg:pt-[144px]"
 
-// Type + colour frames: viewport-tall from md up. Top padding clears the fixed header,
-// both sides keep the page padding. Set --header-h in global CSS to the real header height.
 const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] max-md:pb-[var(--page-pad)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
 
 const ASSETS = {
@@ -67,7 +65,6 @@ const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([
 const HERO_TEXT =
   "Designing the brand identity and 3D visuals that resulted in 62 Million in sales before a single brick was laid."
 
-// Shared media primitives live in components/CaseStudyMedia.jsx
 const MEDIA_PLACEHOLDER = "bg-[#ece7df]"
 
 const Img = (props) => <BaseImg placeholder={MEDIA_PLACEHOLDER} hideOnError {...props} />
@@ -118,7 +115,6 @@ export default function YimajCaseStudy() {
         5 * YIMAJ_LETTER_SPACING_EM * 100
       if (!w100 || !avail) return
       title.style.letterSpacing = `${YIMAJ_LETTER_SPACING_EM}em`
-      // Changed multiplier from 0.99 to 0.90 to respect padding
       title.style.fontSize = `${Math.floor((avail / w100) * 100 * 0.90)}px`
     }
 
@@ -149,8 +145,6 @@ export default function YimajCaseStudy() {
   }, [])
 
   useEffect(() => {
-    // The zoom waits for the hero to be decoded, so it never plays on an empty frame. Once the
-    // hero has arrived (or 4s have passed) the idle preload of the remaining media is released.
     const img = heroRef.current?.querySelector("[data-hero-img]")
     let cancelled = false
     let tween = null
@@ -190,8 +184,6 @@ export default function YimajCaseStudy() {
 
   return (
     <div ref={rootRef} className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
-
-      {/* Frame 1 — hero */}
       <section
         data-header-bg="dark"
         ref={heroRef}
@@ -271,10 +263,7 @@ export default function YimajCaseStudy() {
       </section>
 
       <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[12px] md:gap-[16px]">
-
         <div className="flex flex-col gap-[12px] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
-
-          {/* Frame 2 */}
           <section
             data-header-bg="light"
             className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--page-pad)] ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}
@@ -291,12 +280,11 @@ export default function YimajCaseStudy() {
               src={ASSETS.logoAnimation}
               label="Yimaj Heights logo animation"
               ratio="aspect-[1472/581]"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[250px] md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
               videoClassName="absolute inset-0 w-full h-full object-cover"
             />
           </section>
 
-          {/* Frame 3 */}
           <section
             data-header-bg="light"
             className="w-full flex flex-col pt-0 pb-0 max-md:h-auto portrait:max-xl:h-auto landscape:md:max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
@@ -320,10 +308,8 @@ export default function YimajCaseStudy() {
             </div>
           </section>
 
-          {/* Frame 4 */}
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
             <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
-              {/* Mobile: title + paragraph + specimen fill exactly one viewport; the gap between title and paragraph flexes. md+: wrapper is transparent so the grid is unchanged. */}
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
               <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-auto max-md:pb-[32px]`}>
                 Precision Softened<br className="max-md:hidden" />{" "}By Warmth
@@ -333,14 +319,14 @@ export default function YimajCaseStudy() {
                 Architectural precision sans serif meets timeless serif typography, creating a refined system that feels premium without feeling sterile.
               </LineMaskText>
 
-              <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0 w-full">
+              <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col max-md:h-auto w-full">
                 <Img
                   src={ASSETS.typeSpecimen}
                   alt="Switzer Variable and Snell Roundhand type specimen"
                   ratio="aspect-square"
                   parallax={false}
                   fade
-                  className="w-full h-full max-md:!aspect-auto" imgClassName="object-cover"
+                  className="w-full max-md:h-auto md:h-full" imgClassName="object-cover"
                 />
               </div>
               </div>
@@ -354,7 +340,7 @@ export default function YimajCaseStudy() {
                   className="w-full h-full" imgClassName="object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col tablet-hide">
+              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col tablet-hide w-full">
                 <Video
                   src={ASSETS.socials}
                   label="Yimaj Heights social media stories"
@@ -365,13 +351,11 @@ export default function YimajCaseStudy() {
             </div>
           </section>
 
-          {/* Frame 5 */}
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
             <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
               Luxury Paired<br className="max-md:hidden" />{" "}With Belonging
             </h2>
             <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0 max-md:flex max-md:flex-col">
-              {/* Mobile only: title + paragraph + palette fill exactly one viewport; the gap between title and paragraph flexes. md+: wrapper is transparent and the originals below are used. */}
               <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
                 <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
                   Luxury Paired With Belonging
@@ -379,12 +363,13 @@ export default function YimajCaseStudy() {
                 <LineMaskText as="p" className={`${CS_PARA} md:hidden self-start mb-[24px]`}>
                   Instead of following the cold, minimal language common in luxury real estate, Yimaj uses warm mineral tones to make the brand feel more human.
                 </LineMaskText>
-                <div className="lg:col-start-1 md:order-2 flex flex-col h-full max-md:h-[40svh] max-md:min-h-[250px] max-md:shrink-0">
-                  <div className="w-full md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#f2ede4] max-md:h-full">
+                
+                <div className="lg:col-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
+                  <div className="w-full md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#f2ede4]">
                     <LazyImg
                       src={ASSETS.color}
                       alt="Yimaj Heights colour palette"
-                      className="w-full h-full object-cover object-left-top"
+                      className="w-full max-md:h-auto max-md:aspect-[602/581] md:h-full object-cover object-left-top"
                     />
                   </div>
                 </div>
@@ -414,66 +399,55 @@ export default function YimajCaseStudy() {
             </div>
           </section>
 
-          {/* Frame 6 */}
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--page-pad)] ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
-              {/* Mobile: title + first image fill exactly one viewport */}
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
                 <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
                   Bring It To Life With<br className="max-md:hidden" />{" "}Warmth &amp; Legacy
                 </h2>
-                <Img src={ASSETS.keytag} alt="Yimaj Heights leather key tag" ratio="aspect-[726/700]" className="max-md:!aspect-auto max-md:h-[45svh] max-md:min-h-[250px] max-md:shrink-0 lg:min-h-[31.7vw]" imgClassName="object-cover" />
+                <Img src={ASSETS.keytag} alt="Yimaj Heights leather key tag" ratio="aspect-[726/700]" className="max-md:h-auto lg:min-h-[31.7vw]" imgClassName="object-cover" />
               </div>
               <Img src={ASSETS.businessCard} alt="Yimaj Heights embossed business card" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
             </div>
           </section>
-
         </div>
 
-        {/* Frame 7 */}
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src={ASSETS.brochure}
             alt="Woman reading the Yimaj Heights brochure"
             ratio="aspect-[1472/867]"
-            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[65%_50%]" />
+            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[65%_50%]" />
         </section>
 
-        {/* Frame 8 */}
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
           <Img src={ASSETS.wayfinding} alt="Yimaj Heights wayfinding signs" ratio="aspect-[726/867]" />
           <Img src={ASSETS.iphone} alt="Yimaj Heights 3D logo on a phone" ratio="aspect-[726/867]" />
         </section>
 
-        {/* Frame 9 */}
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src={ASSETS.billboard}
             alt="Where Luxury Meets Community billboard"
             ratio="aspect-[1472/867]"
-            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        {/* Frame 10 */}
         <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
           <Img src={ASSETS.folder} alt="Yimaj Heights sales folder" ratio="aspect-[726/867]" />
           <Img src={ASSETS.envelope} alt="Yimaj Heights envelope on marble" ratio="aspect-[726/867]" className="bg-[#e8e1d8]" />
         </section>
 
-        {/* Frame 11 */}
         <section data-header-bg="light" className={`sticky top-0 z-0 w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src={ASSETS.presentation}
             alt="Yimaj Heights investor presentation on a monitor"
             ratio="aspect-[1476/792]"
             parallax={false}
-            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        {/* Frames 12 to 18 scroll over the pinned Frame 11 */}
         <div className="relative z-10 w-full bg-[var(--bg-light)] flex flex-col gap-[12px] md:gap-[16px]">
-
-        {/* Frame 12 */}
         <section
           data-header-bg="light"
           className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} ${FRAME_PB} lg:h-[100dvh]`}
@@ -487,25 +461,22 @@ export default function YimajCaseStudy() {
             src={ASSETS.living}
             alt="Yimaj Heights living room render"
             ratio="aspect-[1476/867]"
-            className="max-md:!aspect-auto max-md:h-[45svh] max-md:min-h-[250px] max-md:shrink-0 lg:flex-1 lg:min-h-0" imgClassName="object-cover max-md:object-[50%_50%]" />
+            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="object-cover max-md:object-[50%_50%]" />
         </section>
 
-        {/* Frame 13 */}
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src={ASSETS.exterior}
             alt="Yimaj Heights towers exterior render"
             ratio="aspect-[1472/867]"
-            className="max-md:!aspect-[3/2] lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        {/* Frame 14 */}
         <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
           <Img src={ASSETS.bedroom} alt="Yimaj Heights bedroom render" ratio="aspect-[726/867]" />
           <Img src={ASSETS.kitchen} alt="Yimaj Heights kitchen and dining render" ratio="aspect-[726/867]" />
         </section>
 
-        {/* Frame 15 */}
         <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src={ASSETS.sitePlan}
@@ -517,35 +488,29 @@ export default function YimajCaseStudy() {
           />
         </section>
 
-        {/* Frame 16 */}
         <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
           <Img src={ASSETS.courtyard} alt="Yimaj Heights courtyard and amenity block" ratio="aspect-[726/867]" />
           <Img src={ASSETS.football} alt="Yimaj Heights rooftop football court from above" ratio="aspect-[726/867]" />
         </section>
 
-        {/* Frame 17 */}
         <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src={ASSETS.pool}
             alt="Yimaj Heights indoor swimming pool"
             ratio="aspect-[1476/867]"
-            className="max-md:!aspect-square lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        {/* Frame 18 */}
         <section data-header-bg="dark" className="w-full">
           <Img
             src={ASSETS.floorplan}
             alt="Yimaj Heights isometric apartment floor plan"
             ratio="aspect-[1476/798]"
-            className="max-md:!aspect-[3/2] lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
+            className="max-md:h-auto lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        {/* Closing frame: preview of the next project */}
         <NextProject current="yimaj" />
-
         </div>
-
       </main>
     </div>
   )
