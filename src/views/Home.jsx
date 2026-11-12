@@ -799,7 +799,6 @@ export default function Home() {
     // together. That is done natively by CSS sticky: each name has a bottom margin of (names after it) *
     // row height, and the panel below pulls up by the same amount, so the names stop in stack order at the
     // end of the list instead of overlapping. No JS moves them, so they cannot lag the scroll.
-    const [stackIndex, setStackIndex] = useState(0)
     useLayoutEffect(() => {
         const list = servicesListRef.current
         if (!list) return
@@ -817,7 +816,7 @@ export default function Home() {
         //    visibly trailed the scroll while leaving. It is now native sticky, see the JSX.
         // Now geometry is measured ONCE (and on resize / font / image load / scroll-idle) and the per-frame
         // work is pure arithmetic on window.scrollY plus writes that are skipped when nothing changed.
-        // The per-frame writes (clip-path, visibility) never touch layout.
+        // The per-frame writes (transforms, attributes) never touch layout.
         let geo = null
         let lastRowH = ""
         let lastStuck = -2
@@ -826,6 +825,7 @@ export default function Home() {
             const hs = Array.from(list.querySelectorAll(".svc-sticky-head"))
             const ps = Array.from(list.querySelectorAll(".svc-panel"))
             if (!hs.length || hs.length !== ps.length || hs[0].offsetHeight <= 0) return
+            if (ps.some((p) => !p.closest("[data-svc-clip]"))) return
 
             // fractional: offsetHeight rounds and the error stacks
             const rowH = hs[0].getBoundingClientRect().height
@@ -840,6 +840,7 @@ export default function Home() {
             const sy = window.scrollY
             geo = {
                 n: hs.length,
+                heads: hs,
                 rowH,
                 top0,
                 stackBottom: top0 + hs.length * rowH,
@@ -847,7 +848,8 @@ export default function Home() {
                 endTop: list.getBoundingClientRect().bottom + sy,
                 panels: ps.map((el) => {
                     const r = el.getBoundingClientRect()
-                    return { el, top: r.top + sy, h: r.height, state: null }
+                    // wrapper + panel move in opposite directions, so the panel's rect is unchanged
+                    return { el, clip: el.closest("[data-svc-clip]"), top: r.top + sy, h: r.height, state: null }
                 }),
             }
         }
@@ -856,7 +858,7 @@ export default function Home() {
             raf = 0
             if (!geo) return
             const sy = window.scrollY
-            const { n, rowH, top0, stackBottom, endTop, panels } = geo
+            const { n, heads, rowH, top0, stackBottom, endTop, panels } = geo
 
             // The stack leaves together natively (see the head margins in the JSX); this is only the
             // matching offset so the clip below knows where the stack's bottom edge is.
@@ -869,31 +871,27 @@ export default function Home() {
                 if (panels[i].top - rowH - sy <= top0 + i * rowH + 1) stuck = i
             }
 
-            // Clip every panel to the part really visible below the stack, and hide it once fully covered,
-            // so nothing can bleed through the divider lines on fractional device pixels.
+            // Mask every panel to the part really visible below the stack, so nothing can bleed through the
+            // divider lines on fractional device pixels. This is done with transforms only (no clip-path, no
+            // visibility toggling, so Safari has nothing to repaint): the clip wrapper moves DOWN by the
+            // covered amount while the panel inside moves UP by the same amount. The panel stays where it
+            // is, and the wrapper's overflow:hidden top edge sits exactly on the bottom of the stack.
             const coverBottom = (stuck >= 0 ? top0 + (stuck + 1) * rowH : top0) + d
             for (let i = 0; i < n; i++) {
                 const p = panels[i]
-                const hide = Math.ceil(coverBottom - (p.top - sy))
-                const state = hide <= 0 ? 0 : hide >= p.h ? -1 : hide
-                if (state === p.state) continue // nothing changed: no style write, no repaint
-                p.state = state
-                if (state === 0) {
-                    p.el.style.clipPath = ""
-                    p.el.style.visibility = ""
-                } else if (state === -1) {
-                    p.el.style.clipPath = ""
-                    p.el.style.visibility = "hidden"
-                } else {
-                    p.el.style.visibility = ""
-                    p.el.style.clipPath = `inset(${state}px 0 0 0)`
-                }
+                const hide = Math.min(p.h, Math.max(0, Math.ceil(coverBottom - (p.top - sy))))
+                if (hide === p.state) continue // nothing changed: no style write
+                p.state = hide
+                p.clip.style.transform = `translate3d(0, ${hide}px, 0)`
+                p.el.style.transform = `translate3d(0, ${-hide}px, 0)`
             }
 
+            // Highlight the last name that has reached its stuck position. Plain attribute writes read by
+            // CSS: no React state, so scrolling never re-renders the whole page.
             const current = Math.max(0, stuck)
             if (current !== lastStuck) {
                 lastStuck = current
-                setStackIndex(current)
+                for (let i = 0; i < n; i++) heads[i].setAttribute("data-stuck", i === current ? "true" : "false")
             }
         }
 
@@ -1341,6 +1339,15 @@ export default function Home() {
                 )}
             </section>
 
+            {/* Tablet/mobile: the stacked name that is currently stuck is white; written as an attribute by the
+                scroll effect so no React render happens while scrolling. */}
+            <style>{`
+                .svc-sticky-head .svc-num, .svc-sticky-head .svc-title-text { transition: color 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
+                .svc-sticky-head[data-stuck="true"] .svc-num, .svc-sticky-head[data-stuck="true"] .svc-title-text { color: #fff !important; }
+                @media (hover: hover) {
+                    .svc-sticky-head:hover .svc-num, .svc-sticky-head:hover .svc-title-text { color: #fff !important; }
+                }
+            `}</style>
             <SunriseTransition anchorRef={transitionRef} onHeaderTone={setHeaderLight}>
                 <section
                     id="services"
@@ -1382,12 +1389,13 @@ export default function Home() {
                                         // Desktop: hover-selected. Tablet/mobile: every panel is always shown;
                                         // the name that is currently stacked/stuck is the highlighted one.
                                         const isActive = vp.isDesktop ? activeIndex === index : true
-                                        const isHighlighted = vp.isDesktop ? isActive : stackIndex === index || hoveredRow === index
+                                        const isHighlighted = vp.isDesktop ? isActive : hoveredRow === index
                                         const HeadWrap = "div"
                                         const headWrapProps = vp.isDesktop
                                             ? { className: "contents" }
                                             : {
                                                   className: "svc-sticky-head sticky z-10",
+                                                  "data-stuck": index === 0 ? "true" : "false",
                                                   style: {
                                                       top: `calc(var(--svc-stick-top, 76px) + ${index} * var(--svc-row-h, 84px))`,
                                                       // Native exit: sticky keeps the head's MARGIN box inside the list, so a
@@ -1435,7 +1443,8 @@ export default function Home() {
                                                     className="svc-row cursor-pointer group w-full m-0 select-none"
                                                 >
                                                     <motion.span
-                                                        animate={{ color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 }}
+                                                        animate={vp.isDesktop ? { color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 } : undefined}
+                                                        style={vp.isDesktop ? undefined : { color: SERVICE_INACTIVE_GREY }}
                                                         transition={{ duration: 0.25, ease: taylorEase }}
                                                         className="svc-num Caption font-semibold transition-colors select-none"
                                                     >
@@ -1444,7 +1453,8 @@ export default function Home() {
 
                                                     <div className="svc-title relative overflow-hidden">
                                                         <motion.span
-                                                            animate={{ color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 }}
+                                                            animate={vp.isDesktop ? { color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 } : undefined}
+                                                            style={vp.isDesktop ? undefined : { color: SERVICE_INACTIVE_GREY }}
                                                             transition={{ duration: 0.25, ease: taylorEase }}
                                                             className="svc-title-text H2 block tracking-[-0.02em] group-hover:text-white uppercase"
                                                         >
@@ -1486,9 +1496,16 @@ export default function Home() {
                                                 </HeadWrap>
 
                                                 {!vp.isDesktop && (
-                                                    <div style={{ marginTop: `calc(${-(SERVICES_DATA.length - 1 - index)} * var(--svc-row-h, 84px))` }}>
+                                                    <div
+                                                        data-svc-clip=""
+                                                        style={{
+                                                            marginTop: `calc(${-(SERVICES_DATA.length - 1 - index)} * var(--svc-row-h, 84px))`,
+                                                            transform: "translate3d(0, 0, 0)",
+                                                            willChange: "transform",
+                                                        }}
+                                                    >
                                                     <AccordionPanel active={isActive}>
-                                                            <div className="svc-panel pb-[28px]">
+                                                            <div className="svc-panel pb-[28px]" style={{ transform: "translate3d(0, 0, 0)", willChange: "transform" }}>
                                                                 <ServiceAccordionImage
                                                                     src={service.image}
                                                                     alt={service.title}
