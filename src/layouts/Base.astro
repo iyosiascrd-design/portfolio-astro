@@ -1,3 +1,4 @@
+
 ---
 import "../index.css"
 
@@ -24,7 +25,7 @@ const {
   jsonLd = [],
 } = Astro.props
 
-// Site-wide Person data. Always uses the site bio, never the page description.
+// Site-wide Person data
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "Person",
@@ -58,13 +59,14 @@ const structuredData = {
 const canonicalURL = new URL(Astro.url.pathname, Astro.site)
 const ogImage = new URL(image, Astro.site)
 
-// Derive the image MIME type from the file extension
+// Derive image MIME type from file extension
 const IMAGE_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
 }
+
 const ext = ogImage.pathname.split(".").pop()?.toLowerCase() ?? ""
 const ogImageType = IMAGE_TYPES[ext] ?? "image/png"
 ---
@@ -74,18 +76,25 @@ const ogImageType = IMAGE_TYPES[ext] ?? "image/png"
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
     <title>{title}</title>
     <meta name="description" content={description} />
+
     <link rel="canonical" href={canonicalURL} />
     <link rel="sitemap" href="/sitemap-index.xml" />
 
     <!-- Favicons -->
-    <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="/favicon-96x96.png"
+      sizes="96x96"
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
-    <!-- Open Graph (Telegram, WhatsApp, Facebook, LinkedIn) -->
+    <!-- Open Graph -->
     <meta property="og:type" content={type} />
     <meta property="og:site_name" content="Iyosias" />
     <meta property="og:title" content={title} />
@@ -95,8 +104,18 @@ const ogImageType = IMAGE_TYPES[ext] ?? "image/png"
     <meta property="og:image:type" content={ogImageType} />
     <meta property="og:image:alt" content={title} />
 
-    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
-    {jsonLd.map((data) => <script type="application/ld+json" set:html={JSON.stringify(data)} />)}
+    <!-- Structured Data -->
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify(structuredData)}
+    />
+
+    {jsonLd.map((data) => (
+      <script
+        type="application/ld+json"
+        set:html={JSON.stringify(data)}
+      />
+    ))}
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -105,8 +124,16 @@ const ogImageType = IMAGE_TYPES[ext] ?? "image/png"
     <meta name="twitter:image" content={ogImage} />
 
     <!-- Preload hero image on work pages -->
-    {hero && <link rel="preload" as="image" href={hero} fetchpriority="high" />}
+    {hero && (
+      <link
+        rel="preload"
+        as="image"
+        href={hero}
+        fetchpriority="high"
+      />
+    )}
   </head>
+
   <body>
     <slot />
   </body>
