@@ -174,7 +174,9 @@ const DrumCard = ({ project, index, count, pos, cardW, onActivate }) => {
         return d.on("change", (v) => setBand(bandOf(v)))
     }, [d])
 
-    const [loaded, setLoaded] = useState(false)
+    // The first card is the LCP image: show it the moment it paints instead of
+    // waiting for the onLoad -> setState round trip and a fade-in. The other cards keep the fade.
+    const [loaded, setLoaded] = useState(index === 0)
     const imgRef = useRef(null)
     const isNeighbour = index === 0 || index === 1 || index === count - 1
     const priority = index === 0 ? "high" : isNeighbour ? "auto" : "low"
@@ -268,7 +270,9 @@ const DrumCard = ({ project, index, count, pos, cardW, onActivate }) => {
                         onLoad={() => setLoaded(true)}
                         onError={() => setLoaded(true)}
                         style={{ opacity: loaded ? 1 : 0 }}
-                        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover transition-opacity duration-500 ease-out"
+                        className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover ${
+                            index === 0 ? "" : "transition-opacity duration-500 ease-out"
+                        }`}
                     />
 
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />

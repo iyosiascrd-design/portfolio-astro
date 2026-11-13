@@ -1,4 +1,3 @@
-
 ---
 import "../index.css"
 
@@ -57,6 +56,13 @@ const structuredData = {
 }
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site)
+
+// Home page: the mobile LCP image is the first carousel card (Weyra).
+// It is rendered by React, so the browser can't discover it from the HTML.
+// Preloading it lets the download start immediately, while JS is still loading.
+// Note: the space in the file name must be written as %20 here.
+const isHome = Astro.url.pathname === "/"
+const HOME_MOBILE_HERO = "/weyra%20home.jpeg"
 const ogImage = new URL(image, Astro.site)
 
 // Derive image MIME type from file extension
@@ -122,6 +128,17 @@ const ogImageType = IMAGE_TYPES[ext] ?? "image/png"
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+
+    <!-- Preload the mobile LCP image on the home page -->
+    {isHome && (
+      <link
+        rel="preload"
+        as="image"
+        href={HOME_MOBILE_HERO}
+        media="(max-width: 767px)"
+        fetchpriority="high"
+      />
+    )}
 
     <!-- Preload hero image on work pages -->
     {hero && (
