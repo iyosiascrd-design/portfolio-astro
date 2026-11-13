@@ -9,7 +9,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger"
 
 import MaskRevealText from "../components/MaskRevealText"
 import LineMaskText from "../components/LineMaskText"
-import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
+import { usePageReady, usePageHeroReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import MobileImageGroups, { useIsMobile } from "../components/MobileImageGroups"
 import { Img, Media, isVideo, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
@@ -142,6 +142,7 @@ export default function OrigenCaseStudy() {
   const isMobile = useIsMobile()
   const mobileGap = isMobile ? { gap: "var(--cs-gap)" } : undefined
   const ready = usePageReady()
+  const heroReady = usePageHeroReady()
   const pageTransition = usePageTransition()
 
   const rootRef = useRef(null)
@@ -204,24 +205,32 @@ export default function OrigenCaseStudy() {
   useEffect(() => {
     const img = heroRef.current?.querySelector("[data-hero-img]")
     let cancelled = false
-    let tween = null
+    
     const settled = () => {
       if (cancelled) return
       setHeroLoaded(true)
-      if (img && !prefersReducedMotion()) {
-        tween = gsap.to(img, { scale: 1, duration: 2, ease: "power3.out" })
-      }
     }
+    
     const decoded = img?.decode ? img.decode() : Promise.resolve()
     decoded.then(settled, settled)
     const fallback = setTimeout(() => { if (!cancelled) setHeroLoaded(true) }, 4000)
+    
     return () => {
       cancelled = true
       clearTimeout(fallback)
-      tween?.kill()
     }
   }, [])
 
+  // Hero image scales down in sync with the overlay lifting (heroReady = mask wipe start)
+  useEffect(() => {
+    if (!heroReady || prefersReducedMotion()) return
+    const ctx = gsap.context(() => {
+      gsap.to("[data-hero-img]", { scale: 1, duration: 2, ease: "power3.out" })
+    }, heroRef)
+    return () => ctx.revert()
+  }, [heroReady])
+
+  // Meta row fades in after the text has begun (ready = overlay mostly cleared)
   useEffect(() => {
     if (!ready || prefersReducedMotion()) return
     const ctx = gsap.context(() => {

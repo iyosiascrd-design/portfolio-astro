@@ -23,7 +23,9 @@ const T = {
     revealEase: "power4.out", // reveal: starts quick, then slows down a lot at the end
     oldPageTravel: 0.3, // old page moves UP by 30% of the viewport height
     newPageOffset: 0.2, // new page starts 20% of the viewport height DOWN and slides up
-    contentDelay: 0.55, // s after the reveal starts before page content may animate in
+    contentDelay: 0.55, // s after the reveal starts before page TEXT may animate in
+    // The hero image (scale 1.25 -> 1) is NOT gated by contentDelay: it starts on the same
+    // frame as the mask wipe, so it settles in sync with the overlay lifting.
     maskDelay: 0.07, // s: old page gets a tiny head start
     maskColor: "#ffffff",
 
@@ -100,6 +102,23 @@ export function usePageReady() {
     }, [ready])
 
     return gated.current ? ready : true
+}
+
+/**
+ * Same gating as usePageReady, but flips true the moment the mask wipe begins (no
+ * contentDelay). Use it for things that should move WITH the overlay lifting, like the
+ * hero background scaling down. Text and meta stay on usePageReady so they follow.
+ */
+export function usePageHeroReady() {
+    const ctx = useContext(PageTransitionContext)
+    const heroReady = ctx ? ctx.heroReady : true
+
+    const gated = useRef(!heroReady)
+    useEffect(() => {
+        if (heroReady) gated.current = false
+    }, [heroReady])
+
+    return gated.current ? heroReady : true
 }
 
 /**
@@ -204,6 +223,7 @@ export function PageTransitionProvider({ children }) {
     const [preloading] = useState(shouldPreload)
     const preloadingRef = useRef(preloading)
     const [ready, setReady] = useState(!preloading)
+    const [heroReady, setHeroReady] = useState(!preloading)
 
     const busy = useRef(false)
     const mounted = useRef(true)
@@ -223,6 +243,7 @@ export function PageTransitionProvider({ children }) {
     const finishPreload = useCallback(() => {
         preloadingRef.current = false
         setReady(true)
+        setHeroReady(true)
     }, [])
 
     useEffect(() => {
@@ -241,6 +262,7 @@ export function PageTransitionProvider({ children }) {
         const done = () => {
             preloadingRef.current = false
             setReady(true)
+            setHeroReady(true)
         }
         window.addEventListener(PRELOAD_DONE_EVENT, done)
         const noPreloader = setTimeout(() => {
@@ -269,6 +291,7 @@ export function PageTransitionProvider({ children }) {
 
             busy.current = true
             setReady(false)
+            setHeroReady(false)
 
             const s = proxy.current
             const H = window.innerHeight
@@ -373,6 +396,7 @@ export function PageTransitionProvider({ children }) {
                 if (mounted.current) {
                     setActive(false)
                     setReady(true)
+                    setHeroReady(true)
                 }
             }
 
@@ -442,6 +466,13 @@ export function PageTransitionProvider({ children }) {
                 const lettersGone = lettersOut()
                 await wait(T.revealLead * 1000)
                 if (!mounted.current) return
+                // Hero image starts scaling on the same frame the mask wipe starts. One
+                // frame is awaited so React has committed heroReady and the page's GSAP
+                // tween exists before the wipe begins; both then run in lockstep.
+                setHeroReady(true)
+                await nextFrame()
+                if (!mounted.current) return
+                // Text / meta follow once the overlay has mostly cleared
                 gsap.delayedCall(T.contentDelay, () => mounted.current && setReady(true))
                 await Promise.all([
                     lettersGone,
@@ -460,8 +491,8 @@ export function PageTransitionProvider({ children }) {
     )
 
     const value = useMemo(
-        () => ({ triggerTransition, pageY, ready, finishPreload }),
-        [triggerTransition, pageY, ready, finishPreload]
+        () => ({ triggerTransition, pageY, ready, heroReady, finishPreload }),
+        [triggerTransition, pageY, ready, heroReady, finishPreload]
     )
 
     return (

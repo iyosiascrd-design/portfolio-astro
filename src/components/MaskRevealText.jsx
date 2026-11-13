@@ -10,9 +10,6 @@ gsap.registerPlugin(ScrollTrigger)
 
 const LINES_FROM = { md: 768, lg: 1024 }
 const PAD_Y = "0.14em"
-// Horizontal room inside the mask so glyph overhang (and trailing negative
-// letter-spacing) isn't cut off by overflow-hidden. Offset by a negative
-// margin so layout doesn't shift.
 const PAD_X = "0.08em"
 
 const maskStyle = {
@@ -20,12 +17,6 @@ const maskStyle = {
     margin: `0 -${PAD_X} -${PAD_Y}`,
 }
 
-// mode: "words" (default) | "lines" | "letters"
-//
-// children can be a plain string OR mixed JSX, e.g.
-//   An Olive<br className="md:hidden" />{" "}Branch<br />From A New
-// Words get masked; <br> (and any other element) is rendered untouched, so
-// responsive line breaks keep working.
 export default function MaskRevealText({
     children,
     as = "div",
@@ -50,7 +41,6 @@ export default function MaskRevealText({
         (!linesFrom || viewportWidth >= (LINES_FROM[linesFrom] ?? 0))
     const useLetters = mode === "letters"
 
-    // Flatten children into word / space / node tokens.
     const tokens = useMemo(() => {
         const out = []
         const parts = React.Children.toArray(children)
@@ -73,7 +63,6 @@ export default function MaskRevealText({
                 out.push({ type: "node", node: child, key: child.key ?? `n${ci}` })
             }
         })
-        // Plain strings: drop leading/trailing whitespace.
         if (isString) {
             while (out[0]?.type === "space") out.shift()
             while (out[out.length - 1]?.type === "space") out.pop()
@@ -81,13 +70,10 @@ export default function MaskRevealText({
         return out
     }, [children, useLines, isString])
 
-    // Stable string so the animation effect doesn't re-run (and reset) when
-    // the parent re-renders with a new-but-identical children array.
     const contentKey = tokens
         .map((t) => (t.type === "node" ? `<${t.key}>` : t.type === "space" ? " " : t.text))
         .join("|")
 
-    // useLayoutEffect: hide the text before the browser paints, so it never flashes visible first
     useLayoutEffect(() => {
         const el = containerRef.current
         if (!el) return
@@ -100,7 +86,7 @@ export default function MaskRevealText({
         const animConfig = {
             y: "0%",
             opacity: 1,
-            duration: 0.9,
+            duration: 1.2, // INCREASED FROM 0.9
             stagger: stagger,
             delay: delay,
             ease: "power3.out",
