@@ -1,1153 +1,1809 @@
-// src/pages/Work.jsx
+// src/pages/Home.jsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
-import { Link, useNavigate, useOutletContext } from "react-router-dom"
+import React, {
+    useState,
+    useRef,
+    useEffect,
+    useLayoutEffect,
+    useContext,
+    memo,
+} from "react"
+import {
+    motion,
+    AnimatePresence,
+    useScroll,
+    useSpring,
+    useMotionValue,
+    useTransform,
+    useInView,
+} from "framer-motion"
+import { useNavigate, useOutletContext } from "react-router-dom"
 import gsap from "gsap"
+import { ArrowRight } from "lucide-react"
 
-import FlipbookCarousel from "../components/FlipbookCarousel"
+import { ViewportContext } from "../lib/viewport"
+import {
+    customEase,
+    taylorEase,
+    TICKER_HEIGHT,
+    TICKER_REVEAL,
+    servicesContainerVariants,
+    taylorServiceRowVariants,
+    dividerVariants,
+    servicesListContainerVariants,
+    servicesRowVariants,
+    servicesDividerVariants,
+    SERVICES_VIEWPORT,
+    TICKER_MOTION,
+    createTicker,
+} from "../lib/motion"
+
+import { WORK_PROJECTS, LOOPING_IMAGES } from "../lib/projects"
+import { FETCH_PRIORITY_KEY, whenIdle } from "../lib/loadingHints"
+import { prefetchHero, heroSlugFor, warmAllHeroes } from "../lib/heroPrefetch.js"
+
+import MaskRevealText from "../components/MaskRevealText"
+import ServiceImageStage from "../components/ServiceImageStage"
+import ScrollFillGroup from "../components/ScrollFillGroup"
+import FlipbookCarousel from "../components/FlipbookCarousel.jsx"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
-import { WORK_PROJECTS } from "../lib/projects"
 
-// Card images sit directly in the project's /public folder, which is served from "/".
-// If you move them into a subfolder (e.g. public/work/), change this to "/work/".
-const IMAGE_BASE = "/"
+const glueLastWords = (str) => {
+    const i = str.lastIndexOf(" ")
+    if (i === -1) return str
+    return str.slice(0, i) + "\u00A0" + str.slice(i + 1)
+}
 
-// Order updated to match the design (Yimaj first). `match` finds the project in WORK_PROJECTS (for its image).
-// `alt` is the accessible description of the image: tweak the wording to match the artwork.
-const CARDS = [
-  { name: "Yimaj", match: "yimaj", image: IMAGE_BASE + "yimaj-color-card.jpg", alt: "Yimaj brand colour card, shown as a 3D visual", to: "/work/yimaj", tags: ["Brand Identity", "3D Visuals"] },
-  { name: "Zhongshan", match: "zhongshan", image: IMAGE_BASE + "zhongshan-cargo.jpg", alt: "Zhongshan brand identity on cargo packaging, shown as a 3D visual", to: "/work/zhongshan", tags: ["Brand Identity", "3D Visuals"] },
-  { name: "Origen", match: "origen", image: IMAGE_BASE + "origen-totebag.jpg", alt: "Origen brand identity printed on a tote bag", to: "/work/origen", tags: ["Brand Identity"] },
-  { name: "Weyra", match: "weyra", image: IMAGE_BASE + "weyra-badge.jpg", alt: "Weyra brand identity on a badge", to: "/work/weyra", tags: ["Brand Identity"] },
+const flat = (str) => str.replace(/\n/g, " ")
+
+// Ticker image loading: LOOPING_IMAGES repeats the same 4 files, and on desktop all 4 are
+// on screen at once, so the first 4 slides load at high priority. Repeat slides share the
+// same URLs, so they need no hint of their own.
+const TICKER_PRIORITY_COUNT = 4
+const TICKER_START_DELAY = 1200 // ms after pageReady (preloader exit / page transition wipe still running)
+
+const SERVICES_DATA = [
+    {
+        id: "01",
+        title: "Brand Identity",
+        keywords: "Strategy, positioning, identity\nsystems and guidelines",
+        image: "/brand-identity.jpeg",
+        captionTitle: "Make your\nDifference Visible",
+        captionText:
+            "Every business has an edge. I sharpen yours into a brand people recognize",
+    },
+    {
+        id: "02",
+        title: "Digital Design",
+        keywords: "Websites, landing pages and\ndigital experiences",
+        image: "/digital-design.jpeg",
+        captionTitle: "Make your website\nwork harder",
+        captionText:
+            "Create digital experiences people enjoy, turning curious visitors into customers",
+    },
+    {
+        id: "03",
+        title: "Communication",
+        keywords: "Pitch decks, presentations\nand campaign design",
+        image: "/communication.jpeg",
+        captionTitle: "Turn information\ninto influence",
+        captionText:
+            "From pitch decks to campaigns, turn complex ideas into clear visuals that get people to act",
+    },
+    {
+        id: "04",
+        title: "3D Visuals",
+        keywords: "Product visualization,\narch visualization and motion",
+        image: "/3d-visuals.jpg",
+        captionTitle: "Make products feel\npremium before launch",
+        captionText:
+            "High-fidelity renders that build desire and make the future instantly tangible",
+    },
 ]
 
-// Same cards in the shape the mobile flipbook expects (same order, so card indexes match CARDS)
-const FLIP_PROJECTS = CARDS.map((c) => ({ id: c.match, name: c.name, image: c.image }))
+const SERVICE_IMAGES = SERVICES_DATA.map((s) => s.image)
 
-// Triple the cards for the infinite scrolling treadmill effect (carousel only)
-const LOOPED_CARDS = [...CARDS, ...CARDS, ...CARDS]
-const N = CARDS.length
-
-// Phone only: height the availability footnote needs below the flipbook (2 text lines + bottom padding).
-// The flipbook shrinks just enough that this always fits on screen.
-const PHONE_FOOTER_H = 64
-
-const SERVICES = ["Brand Identity", "Digital Design", "Communication", "3D Visual"]
-
-// Clicking a service slides the carousel to the first matching card (clicking it again steps to the
-// next match). Services without an entry here stay plain text until cards use their tag.
-//   tag:  the card tag to look for
-//   only: true = match only cards whose tags are JUST this one (no other tags)
-// Add e.g. "Digital Design": { tag: "Digital Design" } once a card has that tag.
-const SERVICE_TAGS = {
-  "Brand Identity": { tag: "Brand Identity", only: true }, // Origen, Weyra
-  "3D Visual": { tag: "3D Visuals" }, // Yimaj, Zhongshan
-}
-
-// Availability badge (bottom left). Change these to update the status text and the clock.
-const AVAILABILITY_TEXT = "Available for opportunities" // keep this in sync with your real availability
-const TIME_ZONE = "Africa/Addis_Ababa"
-const TIME_ABBR = "EAT"
-const TIME_PLACE = "Addis Ababa"
-
-/* ---------- images ---------- */
-const IMAGE_W = 800 // intrinsic ratio hint (4:5) so the browser reserves space before load
-const IMAGE_H = 1000
-// Upper bound of the card width (portrait tablets use up to 46vw). Cards can be smaller when the window is
-// short, which only means the browser may fetch a slightly larger file than needed, never a blurry one.
-const IMAGE_SIZES = "(min-width: 768px) 46vw, 100vw"
-// Flip to true once you have exported responsive copies next to each original, named
-//   <name>-640.webp  <name>-960.webp  <name>-1280.webp  <name>-1600.webp  <name>-1920.webp   (and the same with .avif)
-// e.g. zhongshan-cargo-640.avif. The original JPG stays as the fallback <img>.
-// Leave false until the files exist: a <source> that 404s does NOT fall back to the <img>.
-const USE_RESPONSIVE_IMAGES = false
-// 1600 and 1920 cover 2x displays on big monitors (a card can reach ~800 CSS px wide there).
-const IMAGE_WIDTHS = [640, 960, 1280, 1600, 1920]
-const srcSetFor = (src, ext) =>
-  IMAGE_WIDTHS.map((w) => `${src.replace(/\.[^.]+$/, "")}-${w}.${ext} ${w}w`).join(", ")
-const IMAGE_WAIT_MAX = 1500 // ms: never hold the intro longer than this waiting for images to decode
-
-// Motion feel: Apple-style. Dragging is 1:1 (the row is glued to your finger, no lag). Letting go keeps
-// your exact finger velocity, projects where a flick would coast to (UIScrollView's deceleration maths),
-// snaps to the nearest card, and gets there on a critically damped spring that starts at that velocity.
-const DECELERATION_RATE = 0.994 // slightly shorter coast than before: with velocity-biased paging, flicks settle sooner
-const SNAP_RESPONSE = 0.38 // s: SwiftUI-style spring response for settling on a card after a release (smaller = snappier)
-const REDUCED_SNAP_RESPONSE = 0.25 // prefers-reduced-motion
-const CATCH_SMOOTH = 0.04 // s: how fast a gliding row is caught when you touch it
-const SLACK_RATE = 18 // 1/s: eases out any leftover offset between row and finger (drags now rebase at the threshold, so this is normally 0)
-const VELOCITY_WINDOW = 60 // ms of finger history used to measure release velocity
-const FLICK_MIN = 250 // px/s: any flick faster than this always advances at least one card (like UIScrollView paging)
-const GLIDE_SMOOTH = 0.3 // programmatic moves (arrow keys, service click, intro slide): long soft glide, in seconds
-const REDUCED_GLIDE_SMOOTH = 0.14
-const MAX_THROW = 5 // max cards a single flick can travel (the loop is endless, so a hard flick can go far)
-const FLICK_GAIN = 0.7 // extra distance for the fastest flicks (0 = pure projection). Faster flick = disproportionately farther
-const FLICK_FAST = 3000 // px/s: flick speed at which the gain and the long glide are fully applied
-const MAX_FLICK_SMOOTH = 0.7 // s: softest spring a fast flick may use (longer = a longer, more luxurious slow-down)
-const STACK_SCALE = 0.15 // how much a card shrinks while it stacks (0 for reduced motion)
-const SHADE_MAX = 0.4 // max strength of the stacking gradient (0 = none, 1 = solid black at the dark edge)
-const WHEEL_SNAP_DELAY = 90 // ms after the last wheel/trackpad event before settling on a card
-// Intro animation (carousel). Times in ms.
-const INTRO_DELAY = 250 // wait before the first card starts (raise this if a page-transition overlay is still covering the page)
-const INTRO_DURATION = 1100 // how long each card takes to glide in
-const INTRO_STAGGER = 130 // gap between one card starting and the next
-const INTRO_EASE = "cubic-bezier(0.16, 1, 0.3, 1)" // strong ease-out: fast start, long soft landing
-// One-card hint: right after the cards land, the row glides exactly one card to the left, once, and stays there.
-// Speed is governed by GLIDE_SMOOTH above (raise it for a slower, softer slide).
-const USE_INTRO_SLIDE = true
-const SNAP = true // settle exactly on a card after release (set false for free-floating)
-const DRAG_THRESHOLD = 5 // px of movement before a press counts as a drag, not a click
-// Auto-scroll (carousel): a slow constant-speed drift to the left that stops while the mouse is over the row.
-// It rides the same critically damped spring as everything else, so it eases in from rest and eases out to a stop.
-// Off by default: the row only moves when the visitor moves it (plus the one-card intro slide above).
-const USE_AUTO_SCROLL = false
-const AUTO_SPEED = 0.1 // cards per second (0.1 is about 45px/s at the design size)
-const AUTO_SMOOTH = 0.6 // s: spring softness while drifting (bigger = longer, gentler ease-in)
-const HOVER_RESUME_DELAY = 800 // ms the row rests after the mouse leaves before it eases back into motion
-const AUTO_RESUME_DELAY = 3000 // ms of calm after a touch, wheel or key interaction before drifting again
-
-// Layout measurements taken from the design. Tweak these to fine-tune.
-// The two --type-* lines bump the small text on this page (Label / Caption) to 14px
-// using the site's own tokens, so the classes in index.css keep doing the styling.
-const TITLE_GAP = 80 // px between the bottom of the card labels and the top of the WORK title
-const LABELS_H = 48 // px reserved under the images for the name/tag labels (12px margin + 2 lines)
-const TITLE_RATIO = 0.293 // WORK font-size as a fraction of the card width (same as 9.2vw / 31.4vw)
-
-// ONE source of truth for the card shape. Keep in sync with the aspect-[4/5] class on the image box below.
-const CARD_ASPECT = 1.25 // card height / card width (4:5)
-
-// The card width shrinks on short windows so the title always fits below the cards with the full gap.
-// (dvh, not vh, so mobile browser chrome doesn't throw the size off)
-const FIT = CARD_ASPECT + 0.8 * TITLE_RATIO // 1.484
-
-// Smallest card the height rule may produce. Below the window height where this floor is reached the
-// page stops squeezing and scrolls instead of clipping the WORK title (see --min-page-h).
-const MIN_CARD_W = 200
-
-// Left column and cards origin follow the card width (same ratios as the 31.4vw / 30vw / 34.2vw design),
-// so when a short window shrinks the cards the whole composition shrinks with them.
-const LEFT_COL_RATIO = 30 / 31.4
-const CARDS_LEFT_RATIO = 34.2 / 31.4
-
-// Portrait tablets: let the card grow (the height rule still caps it).
-const buildLayoutVars = (portrait) => ({
-  "--work-top": "clamp(96px, 9.2vw, 140px)",
-  "--card-w": `min(${portrait ? "max(260px, 46vw)" : "max(260px, 31.4vw)"}, max(${MIN_CARD_W}px, calc((100dvh - var(--work-top) - ${LABELS_H + TITLE_GAP}px - var(--page-pad)) / ${FIT})))`,
-  "--card-h": `calc(var(--card-w) * ${CARD_ASPECT})`,
-  "--left-col-w": portrait ? "max(220px, 30vw)" : `max(220px, calc(var(--card-w) * ${LEFT_COL_RATIO}))`,
-  "--cards-left": portrait ? "max(240px, 34.2vw)" : `max(240px, calc(var(--card-w) * ${CARDS_LEFT_RATIO}))`,
-  "--type-label-size": "14px",
-  "--type-caption-size": "14px",
-  "--title-top": `calc(var(--work-top) + var(--card-h) + ${LABELS_H + TITLE_GAP}px)`,
-  "--title-h": `calc(var(--card-w) * ${TITLE_RATIO} * 0.8)`,
-  // Window height at which MIN_CARD_W is reached: never make the page shorter than this on tablet/desktop
-  "--min-page-h": `calc(var(--work-top) + ${MIN_CARD_W * FIT}px + ${LABELS_H + TITLE_GAP}px + var(--page-pad))`,
-})
-
-// Giant WORK title: sits exactly TITLE_GAP below the labels, sized relative to the cards
-const TITLE_STYLE = {
-  top: `var(--title-top)`,
-  fontSize: `calc(var(--card-w) * ${TITLE_RATIO})`,
-  lineHeight: 0.8,
-}
-
-// Left column small text (services) is 20px. Set as a token so .Caption keeps styling it.
-const LEFT_TEXT_VARS = { "--type-caption-size": "20px" }
-
-// Corner radius of the project images. Change this one value to match the rest of the site.
-// Scales with the card (12px at the smallest, about 14px at the 452px design size, 24px max).
-const CARD_RADIUS = "clamp(12px, calc(var(--card-w) * 0.03), 24px)"
-
-const NOOP = () => {} // stable identity, so effects never re-fire because of a fallback function
-
-const CAROUSEL_QUERY = "(min-width: 768px)" // 768px triggers the fluid tablet/desktop carousel
-const PHONE_QUERY = "(max-width: 767px)" // the flipbook is strictly for phones
-
-// Subscribes to a media query without re-running anything on every resize event
-function useMediaQuery(query) {
-  const subscribe = useCallback(
-    (cb) => {
-      const m = window.matchMedia(query)
-      m.addEventListener("change", cb)
-      return () => m.removeEventListener("change", cb)
+const EXPERTISE_DATA = [
+    {
+        title: "Brand Identity",
+        description: "Complete positioning, visual systems,\nand brand guideline",
+        tools: ["Adobe Illustrator", "Adobe Photoshop", "Adobe InDesign"],
+        image: "/expertise-brand.png",
+        tilt: -14,
+        scale: 1,
+        mobileBoost: 1.4,
+        mobileOffset: { x: 12, y: 16 },
     },
-    [query]
-  )
-  return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => false)
+    {
+        title: "Web & UI Design",
+        description: "High-converting landing pages and responsive Framer sites",
+        tools: ["Figma", "Framer", "Webflow"],
+        image: "/expertise-web.png",
+        tilt: 6,
+        scale: 1.25,
+    },
+    {
+        title: "Pitch & Presentation",
+        description: "Decks that win clients,\nfunding, and board approval",
+        tools: ["Canva", "PowerPoint", "Keynote"],
+        image: "/expertise-pitch.png",
+        tilt: -10,
+        scale: 1,
+        desktopOffset: { x: 0, y: 40 },
+        mobileOffset: { x: 0, y: 16 },
+    },
+    {
+        title: "3D & Motion",
+        description: "High-impact 3D visuals,\nproduct renders, and video motion",
+        tools: ["Blender", "After Effects", "DaVinci"],
+        image: "/expertise-3d.png",
+        tilt: 12,
+        scale: 1,
+    },
+]
+
+const EXPERTISE_SIZE = {
+    desktop: { area: 38000, maxSide: 290 },
+    tablet: { area: 20000, maxSide: 210 },
+    mobile: { area: 14000, maxSide: 160 },
 }
 
-const clamp = (n, a, b) => Math.min(b, Math.max(a, n))
-
-// Critically damped spring (the "SmoothDamp" used in game engines).
-// Velocity is continuous, so you get a real ease-in when you start dragging
-// and a real ease-out when you let go.
-const smoothDamp = (current, goal, vel, smoothTime, dt) => {
-  const omega = 2 / smoothTime
-  const k = omega * dt
-  const decay = 1 / (1 + k + 0.48 * k * k + 0.235 * k * k * k)
-  const change = current - goal
-  const temp = (vel + omega * change) * dt
-  return [goal + (change + temp) * decay, (vel - omega * temp) * decay]
+const fitByArea = (ratio, { area, maxSide }) => {
+    let w = Math.sqrt(area * ratio)
+    let h = w / ratio
+    const longest = Math.max(w, h)
+    if (longest > maxSide) {
+        const k = maxSide / longest
+        w *= k
+        h *= k
+    }
+    return { w: Math.round(w), h: Math.round(h) }
 }
 
-// Quiet footnote: muted dot + availability line, then the live local time (24h, updates every 10s)
-const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
-  timeZone: TIME_ZONE,
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-})
+// Keeps the decoded expertise images warm between visits. Keyed by src so it
+// never grows past EXPERTISE_DATA.length entries.
+const EXPERTISE_IMAGE_CACHE = new Map()
 
-// Touch devices get a 44px tap target via an invisible ::before that extends past the text, so the
-// rows keep the same tight spacing as on desktop (padding would push them apart).
-// One row in the services list. GSAP drives the hover so it stays smooth and interruptible.
-// The <li> never moves (it is the hover target); only the <button> inside slides, so the hover
-// area can't flicker at the edge. Mid-hover reversals simply retarget the tween from where it is.
-const SERVICE_SHIFT = 8 // px the label slides right on hover
-const SERVICE_ACTIVE_COLOR = "#000000"
+const readRatio = (img) =>
+    img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : null
 
-function ServiceItem({ label, active, onSelect }) {
-  const liRef = useRef(null)
-  const btnRef = useRef(null)
-  const baseColor = useRef("")
-  const hovering = useRef(false)
-  const activeRef = useRef(active)
-
-  useEffect(() => {
-    activeRef.current = active
-  }, [active])
-
-  // Read the resting colour once (inherited from the list), and wire up hover on the stable <li>
-  useEffect(() => {
-    const li = liRef.current
-    const btn = btnRef.current
-    if (!li || !btn) return
-
-    baseColor.current = getComputedStyle(btn).color
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-
-    const enter = () => {
-      hovering.current = true
-      gsap.to(btn, {
-        x: SERVICE_SHIFT,
-        color: SERVICE_ACTIVE_COLOR,
-        duration: reduce ? 0 : 0.5,
-        ease: "power3.out",
-        overwrite: true,
-      })
-    }
-    const leave = () => {
-      hovering.current = false
-      gsap.to(btn, {
-        x: 0,
-        color: activeRef.current ? SERVICE_ACTIVE_COLOR : baseColor.current,
-        duration: reduce ? 0 : 0.6,
-        ease: "power3.out",
-        overwrite: true,
-      })
-    }
-
-    li.addEventListener("pointerenter", enter)
-    li.addEventListener("pointerleave", leave)
-    return () => {
-      li.removeEventListener("pointerenter", enter)
-      li.removeEventListener("pointerleave", leave)
-      gsap.killTweensOf(btn)
-    }
-  }, [])
-
-  // When this row becomes (or stops being) the selected service, update its colour unless hovered
-  useEffect(() => {
-    const btn = btnRef.current
-    if (!btn || hovering.current) return
-    gsap.to(btn, {
-      color: active ? SERVICE_ACTIVE_COLOR : baseColor.current || "",
-      duration: 0.3,
-      ease: "power2.out",
-      overwrite: "auto",
+function useExpertiseRatios() {
+    const [ratios, setRatios] = useState(() => {
+        const initial = {}
+        EXPERTISE_IMAGE_CACHE.forEach((img, src) => {
+            const r = readRatio(img)
+            if (r) initial[src] = r
+        })
+        return initial
     })
-  }, [active])
 
-  return (
-    <li ref={liRef} className="cursor-default">
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={onSelect}
-        aria-pressed={active}
-        className="relative block cursor-pointer text-left will-change-transform [@media(pointer:coarse)]:before:absolute [@media(pointer:coarse)]:before:inset-x-0 [@media(pointer:coarse)]:before:-inset-y-2.5"
-      >
-        {label}
-      </button>
-    </li>
-  )
+    useEffect(() => {
+        let cancelled = false
+
+        const settle = (src, img) => {
+            const r = readRatio(img)
+            if (cancelled || !r) return
+            setRatios((prev) => (prev[src] === r ? prev : { ...prev, [src]: r }))
+        }
+
+        // These PNGs are only needed once the user reaches the expertise list,
+        // so load them when the browser is idle instead of competing with the
+        // hero and ticker for bandwidth.
+        const cancelIdle = whenIdle(() => {
+            EXPERTISE_DATA.forEach(({ image: src }) => {
+                let img = EXPERTISE_IMAGE_CACHE.get(src)
+                if (!img) {
+                    img = new Image()
+                    img.decoding = "async"
+                    EXPERTISE_IMAGE_CACHE.set(src, img)
+                    img.src = src
+                    img.decode?.().catch(() => {})
+                }
+                if (img.complete) settle(src, img)
+                else img.addEventListener("load", () => settle(src, img), { once: true })
+            })
+        }, 1500)
+
+        return () => {
+            cancelled = true
+            cancelIdle()
+        }
+    }, [])
+
+    return ratios
 }
 
-function Availability() {
-  const [now, setNow] = useState(() => new Date())
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 10000)
-    return () => clearInterval(id)
-  }, [])
-
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <span
-          className="h-2 w-2 shrink-0 rounded-full bg-green-500 shadow-[0_0_6px_1px_rgba(34,197,94,0.6)]"
-          aria-hidden="true"
-        />
-        <span className="Caption !text-[14px] !font-medium leading-[1.2] text-black">{AVAILABILITY_TEXT}</span>
-      </div>
-      <span className="Caption !text-[14px] !font-medium leading-[1.2] tabular-nums text-gray-400">
-        {TIME_FORMAT.format(now)} {TIME_ABBR} · {TIME_PLACE}
-      </span>
-    </div>
-  )
+const EXPERTISE_CURSOR = {
+    width: 240,
+    height: 240,
+    offsetX: 0,
+    offsetY: 0,
+    stiffness: 150,
+    damping: 28,
+    mass: 0.2,
 }
+const EXPERTISE_SHIFT = 14
+const SITE_GREY = "#cccccc"
+const SITE_SECONDARY_GREY = "#999999"
+const SERVICE_INACTIVE_GREY = "#999999"
 
-export default function Work() {
-  const outletCtx = useOutletContext()
-  const navigate = useNavigate()
+const ExpertiseCursorImage = ({ x, y, hoveredIndex, ratios }) => {
+    const c = EXPERTISE_CURSOR
+    const sx = useSpring(x, { stiffness: c.stiffness, damping: c.damping, mass: c.mass })
+    const sy = useSpring(y, { stiffness: c.stiffness, damping: c.damping, mass: c.mass })
 
-  const isCarousel = useMediaQuery(CAROUSEL_QUERY)
-  const isPhone = useMediaQuery(PHONE_QUERY)
-  const isPortraitTablet = useMediaQuery("(min-width: 768px) and (orientation: portrait)")
-  const layoutVars = useMemo(() => buildLayoutVars(isPortraitTablet), [isPortraitTablet])
+    const wrapRef = useRef(null)
 
-  const pageReady = usePageReady()
+    useEffect(() => {
+        wrapRef.current?.querySelectorAll("img").forEach((img) => {
+            img.decode?.().catch(() => {})
+        })
+    }, [])
 
-  // Bring in the triggerTransition function from the PageTransitionOverlay context
-  const transitionCtx = usePageTransition()
-  const triggerTransition = transitionCtx?.triggerTransition
-
-  const viewportRef = useRef(null)
-  const trackRef = useRef(null)
-  const draggedRef = useRef(false)
-
-  // Holds every card element for the carousel
-  const cardRefs = useRef([])
-
-  // The carousel effect fills this with a function that glides the row to card k (carousel only)
-  const slideRef = useRef(null)
-  // Mobile flipbook handle: flipRef.current.goTo(k) flips to card k
-  const flipRef = useRef(null)
-  // Remembers the last service clicked so a repeat click can step to the next matching card
-  const lastServiceRef = useRef({ tag: null, idx: -1 })
-  // The service last clicked in the left list: it stays black and shifted right until another is clicked
-  const [activeService, setActiveService] = useState(null)
-
-  // Always point at the latest outlet context, so the mount effect below can run exactly once
-  const ctxRef = useRef(outletCtx)
-  useEffect(() => {
-    ctxRef.current = outletCtx
-  })
-
-  // Light page: header text goes dark. Start at the top. Runs once on mount.
-  useEffect(() => {
-    const ctx = ctxRef.current
-    const setHeaderLight = ctx?.setHeaderLight || NOOP
-    setHeaderLight(false)
-    window.scrollTo(0, 0)
-    if (ctx?.heroFade) ctx.heroFade.set(1)
-  }, [])
-
-  /* ---------- horizontal movement: infinite loop + stacking, critically-damped easing ---------- */
-  // Carousel only. Re-runs when the breakpoint flips, so mobile never carries carousel state.
-  useEffect(() => {
-    const viewport = viewportRef.current
-    const track = trackRef.current
-    if (!isCarousel || !viewport || !track) return
-    if (!pageReady) return // DO NOT START THE INTRO UNTIL THE PRELOADER IS DONE
-
-    const cards = cardRefs.current.slice(0, LOOPED_CARDS.length)
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    const glideSmooth = reduceMotion ? REDUCED_GLIDE_SMOOTH : GLIDE_SMOOTH
-    // SwiftUI "response" -> SmoothDamp smoothTime (omega = 2*pi/response = 2/smoothTime)
-    const snapSmooth = (reduceMotion ? REDUCED_SNAP_RESPONSE : SNAP_RESPONSE) / Math.PI
-    const stackScale = reduceMotion ? 0 : STACK_SCALE
-    const dpr = window.devicePixelRatio || 1
-
-    let x = 0 // rendered offset
-    let v = 0 // rendered velocity (px/s), carried across drag -> release so nothing ever jumps
-    let target = 0 // where x is easing toward
-    let raf = 0
-    let lastFrame = 0
-    let dragging = false
-    let activePointer = null
-    let startX = 0
-    let startTarget = 0
-    let step = 0 // card width + gap, measured only when the layout changes
-    let cancelled = false
-    let wheelTimer = 0
-    const settleWaiters = []
-
-    let settleSmooth = glideSmooth // spring softness used while not tracking a finger
-    let wheelActive = false // trackpad swipe in progress: also tracked 1:1
-    let autoDrift = false // true while the row is auto-scrolling (the loop pushes target left every frame)
-    let slack = 0 // leftover px between row and finger; drags rebase at the threshold so this stays 0
-    let travel = 0 // unwrapped position (the loop wrap would otherwise look like a huge velocity)
-    const samples = [] // finger history (raw pointer px for drags, row travel for wheel)
-
-    // Cache each card's parts once so the per-frame paint does no DOM queries
-    const parts = cards.map((card) =>
-      card
-        ? {
-            card,
-            inner: card.querySelector(".card-inner"),
-            meta: card.querySelector(".card-meta"),
-            shade: card.querySelector(".card-shade"),
-            last: -1, // last state written (skips redundant style writes)
-          }
-        : null
-    )
-
-    // Measured once per layout change instead of every frame. Uses the LAST card: it's always
-    // far right, so it never has a stacking transform applied. getBoundingClientRect gives
-    // the exact fractional width, whereas offsetWidth rounds and makes cards drift off their slot.
-    const measure = () => {
-      const last = cards[cards.length - 1]
-      if (!last) {
-        step = 0
-        return
-      }
-      const gap = parseFloat(window.getComputedStyle(track).columnGap) || 16
-      step = last.getBoundingClientRect().width + gap
-    }
-
-    const resetStyles = () => {
-      track.style.transform = ""
-      viewport.removeAttribute("data-dragging")
-      parts.forEach((p) => {
-        if (!p) return
-        p.card.style.transform = ""
-        p.card.style.visibility = ""
-        p.card.style.opacity = ""
-        p.card.style.transition = ""
-        if (p.inner) p.inner.style.opacity = ""
-        if (p.shade) p.shade.style.opacity = ""
-        if (p.meta) p.meta.style.opacity = ""
-        p.last = -1
-      })
-    }
-
-    // snapPx = true only when the row has come to rest: land on a whole device pixel so images and
-    // labels are crisp instead of slightly soft from a fractional resting offset.
-    const paint = (snapPx = false) => {
-      if (!step) return
-      const setWidth = step * N
-
-      // --- INFINITE LOOP: silently jump one full set when we leave the middle set ---
-      if (x <= -setWidth * 1.5) {
-        x += setWidth
-        target += setWidth
-        startTarget += setWidth
-      } else if (x >= -setWidth * 0.5) {
-        x -= setWidth
-        target -= setWidth
-        startTarget -= setWidth
-      }
-
-      const tx = snapPx ? Math.round(x * dpr) / dpr : x
-      track.style.transform = `translate3d(${tx}px, 0, 0)`
-
-      // --- STACKING DECK ---
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i]
-        if (!p) continue
-        const left = i * step + x // card's position relative to the viewport's left edge
-
-        // Normal state. The 0.5px dead-zone stops a card from sitting at 99.9% scale.
-        if (left > -0.5) {
-          if (p.last !== 0) {
-            p.card.style.transform = ""
-            p.card.style.visibility = ""
-            if (p.shade) p.shade.style.opacity = "0"
-            if (p.meta) p.meta.style.opacity = ""
-            p.last = 0
-          }
-          continue
+    const visible = hoveredIndex !== null
+    useLayoutEffect(() => {
+        if (!visible) return
+        if (typeof sx.jump === "function") {
+            sx.jump(x.get())
+            sy.jump(y.get())
         }
+    }, [visible, sx, sy, x, y])
 
-        const progress = Math.min(1, -left / step)
-
-        // Fully buried behind later cards: don't paint it at all
-        if (left <= -2 * step) {
-          if (p.last !== 2) {
-            p.card.style.visibility = "hidden"
-            p.last = 2
-          }
-          continue
-        }
-
-        // Pin to the left edge (counter-translate), shrink from the left, dim via overlay
-        p.card.style.visibility = ""
-        p.card.style.transform = `translate3d(${-left}px, 0, 0) scale(${1 - stackScale * progress})`
-        if (p.shade) p.shade.style.opacity = String(SHADE_MAX * progress)
-        if (p.meta) p.meta.style.opacity = String(Math.max(0, 1 - progress * 2))
-        p.last = 1
-      }
-    }
-
-    const loop = (t) => {
-      // Clamp both ways: rAF's timestamp is the frame start and can be slightly older than
-      // the performance.now() stored by kick(), which would otherwise give a negative dt.
-      const dt = Math.max(0, Math.min(0.05, (t - lastFrame) / 1000 || 1 / 60))
-      lastFrame = t
-      const prevX = x
-      const tracking = (dragging && draggedRef.current) || wheelActive
-
-      if (tracking) {
-        // Direct manipulation: the row IS where your finger put it (1:1, one write per frame).
-        slack *= Math.exp(-dt * SLACK_RATE)
-        if (Math.abs(slack) < 0.05) slack = 0
-        x = target + slack
-        v = 0
-      } else {
-        // Finger down but not dragging yet = catch the glide quickly; otherwise settle softly.
-        // v is carried over from the release, so nothing ever jumps.
-        // Auto-scroll: move the goal at a constant speed; the spring turns that into an ease-in and ease-out.
-        if (autoDrift) target -= step * AUTO_SPEED * dt
-        const smoothTime = dragging ? CATCH_SMOOTH : settleSmooth
-        ;[x, v] = smoothDamp(x, target, v, smoothTime, dt)
-      }
-      travel += x - prevX
-      paint()
-
-      if (tracking) {
-        // Drags sample the raw pointer in onPointerMove; only the wheel is sampled per frame
-        if (wheelActive) pushSample()
-        if (slack === 0) { raf = 0; return } // finger is still: sleep until the next move
-      } else if (Math.abs(target - x) < 0.05 && Math.abs(v) < 0.5) {
-        x = target
-        v = 0
-        paint(true) // at rest: land on a whole device pixel
-        raf = 0
-        settleWaiters.splice(0).forEach((resolve) => resolve())
-        return
-      }
-      raf = requestAnimationFrame(loop)
-    }
-
-    const kick = () => {
-      if (raf) return
-      lastFrame = performance.now()
-      raf = requestAnimationFrame(loop)
-    }
-
-    // Resolves once the glide has come to rest (no setTimeout guessing)
-    const whenSettled = () =>
-      new Promise((resolve) => {
-        if (!raf && Math.abs(target - x) < 0.05) resolve()
-        else settleWaiters.push(resolve)
-      })
-
-    /* ---------- auto-scroll: slow constant-speed drift, stopped by hover (off unless USE_AUTO_SCROLL) ---------- */
-    let autoEnabled = false // switched on once the intro has finished (and only if USE_AUTO_SCROLL)
-    let hovering = false
-    let inView = true
-    let resumeTimer = 0
-
-    const canDrift = () =>
-      autoEnabled &&
-      !cancelled &&
-      !reduceMotion &&
-      step > 0 &&
-      !dragging &&
-      !wheelActive &&
-      !hovering &&
-      inView &&
-      !document.hidden &&
-      !viewport.querySelector(":focus-visible") // keyboard focus only: a mouse click must not block it forever
-
-    const startDrift = () => {
-      if (autoDrift) return
-      autoDrift = true
-      settleSmooth = AUTO_SMOOTH
-      kick() // starts from rest, so the spring gives a natural ease-in
-    }
-
-    // snap = true: glide to the nearest card and stop (the velocity is kept, so it decelerates smoothly).
-    // snap = false: the caller is about to set its own target (drag, wheel, keys).
-    const stopDrift = (snap) => {
-      if (!autoDrift) return
-      autoDrift = false
-      if (snap && step) {
-        target = Math.round(x / step) * step
-        settleSmooth = snapSmooth
-        kick()
-      }
-    }
-
-    // If something is still blocking (off-screen, keyboard focus...), check again shortly
-    const tryResume = () => {
-      if (canDrift()) startDrift()
-      else resumeTimer = setTimeout(tryResume, 500)
-    }
-    const scheduleResume = (delay) => {
-      clearTimeout(resumeTimer)
-      if (!autoEnabled || cancelled || reduceMotion) return
-      resumeTimer = setTimeout(tryResume, delay)
-    }
-
-    const onEnter = (e) => {
-      if (e.pointerType !== "mouse") return
-      hovering = true
-      clearTimeout(resumeTimer)
-      stopDrift(true)
-    }
-    const onLeave = (e) => {
-      if (e.pointerType !== "mouse") return
-      hovering = false
-      scheduleResume(HOVER_RESUME_DELAY)
-    }
-    viewport.addEventListener("pointerenter", onEnter)
-    viewport.addEventListener("pointerleave", onLeave)
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        inView = entry.isIntersecting
-        if (!inView) stopDrift(false)
-        else scheduleResume(500)
-      },
-      { threshold: 0.5 }
-    )
-    io.observe(viewport)
-
-    /* ---------- intro helpers (declared first: input handlers call interrupt()) ---------- */
-    const timers = []
-    const anims = []
-    let touched = false // any real interaction cancels the hint
-    // The card(s) stacked at the far left (the previous loop set) are hidden during the intro,
-    // otherwise they show through while the first cards are still sliding in.
-    const behind = cards.slice(0, N)
-    const hideBehind = () => behind.forEach((c) => c && (c.style.opacity = "0"))
-    const showBehind = () =>
-      behind.forEach((c) => {
-        if (!c) return
-        c.style.transition = "opacity 300ms ease"
-        c.style.opacity = ""
-      })
-    const interrupt = () => {
-      stopDrift(false)
-      scheduleResume(AUTO_RESUME_DELAY)
-      if (touched) return
-      touched = true
-      showBehind()
-    }
-    const wait = (ms) => new Promise((resolve) => timers.push(setTimeout(resolve, ms)))
-
-    /* ---------- release physics ---------- */
-    // Records a position/time pair. Drags pass the RAW pointer x and its event timestamp (so velocity is the
-    // finger's, not the rendered row's, which trails by a frame). The wheel uses the default (row travel, now).
-    const pushSample = (p = travel, t = performance.now()) => {
-      samples.push({ p, t })
-      while (samples.length > 2 && t - samples[0].t > VELOCITY_WINDOW * 2) samples.shift()
-    }
-    // Finger velocity (px/s) over the last VELOCITY_WINDOW ms. Held still before letting go = 0, like iOS.
-    const sampledVelocity = (endP = travel) => {
-      pushSample(endP) // end the measurement exactly at release
-      const now = performance.now()
-      const recent = samples.filter((s) => now - s.t <= VELOCITY_WINDOW)
-      if (recent.length < 2) return 0
-      const a = recent[0]
-      const b = recent[recent.length - 1]
-      const dt = (b.t - a.t) / 1000
-      return dt < 0.016 ? 0 : (b.p - a.p) / dt
-    }
-    // Hand the row back to the spring: keep the finger's exact velocity, project where a flick would
-    // coast to, snap to the nearest card (flicks always advance at least one card), and spring there
-    // starting at that velocity, stiffened just enough that it never overshoots.
-    const releaseWith = (vel) => {
-      // 0 for a gentle release, 1 for a very fast flick
-      const speed = clamp((Math.abs(vel) - FLICK_MIN) / (FLICK_FAST - FLICK_MIN), 0, 1)
-      const throwDist = clamp(
-        ((vel * DECELERATION_RATE) / (1 - DECELERATION_RATE) / 1000) * (1 + FLICK_GAIN * speed),
-        -MAX_THROW * step,
-        MAX_THROW * step
-      )
-      let goal = SNAP && step ? Math.round((x + throwDist) / step) * step : x + throwDist
-
-      // Like UIScrollView paging: a deliberate flick goes to the next card in its direction
-      if (SNAP && step && Math.abs(vel) > FLICK_MIN) {
-        const pos = x / step
-        goal =
-          vel > 0
-            ? Math.max(goal, Math.ceil(pos - 0.02) * step)
-            : Math.min(goal, Math.floor(pos + 0.02) * step)
-      }
-      target = goal
-
-      // A critically damped spring overshoots when |v| > omega * distance (omega = 2 / smoothTime).
-      // Stiffen the spring just enough, and cap v, so a flick never rubber-bands.
-      const dist = Math.abs(goal - x)
-      let smooth = snapSmooth
-      v = vel
-      if (dist > 1 && Math.sign(goal - x) === Math.sign(vel) && Math.abs(vel) > 1) {
-        // 2 * dist / |vel| is the softest spring that still can't overshoot. Slow releases stay crisp
-        // (snapSmooth); fast flicks may use a much longer one, so the row keeps its speed over several
-        // cards and then eases out slowly, instead of braking hard.
-        const softest = snapSmooth + (MAX_FLICK_SMOOTH - snapSmooth) * speed
-        smooth = clamp((2 * dist) / Math.abs(vel), 0.06, Math.max(snapSmooth, softest))
-        const maxV = (2 / smooth) * dist
-        v = Math.sign(vel) * Math.min(Math.abs(vel), maxV)
-      }
-      slack = 0
-      settleSmooth = smooth
-      kick()
-    }
-
-    /* ---------- input: drag (pointer capture), wheel, keyboard, focus ---------- */
-    const onPointerMove = (e) => {
-      if (!dragging || e.pointerId !== activePointer) return
-
-      if (!draggedRef.current) {
-        if (Math.abs(e.clientX - startX) <= DRAG_THRESHOLD) return
-        draggedRef.current = true
-        // Capture only once it's really a drag, so plain clicks keep their normal target
-        try {
-          viewport.setPointerCapture(e.pointerId)
-        } catch {
-          /* pointer already gone */
-        }
-        // Rebase: row and finger start in sync from here. No slack, no lag.
-        startX = e.clientX
-        startTarget = x
-        target = x
-        slack = 0
-        samples.length = 0
-      }
-
-      // Feed every coalesced event (up to 240Hz on trackpads and Pencil) into the velocity measurement
-      const evs = e.getCoalescedEvents?.() ?? [e]
-      for (const ce of evs) pushSample(ce.clientX, ce.timeStamp)
-
-      target = startTarget + (e.clientX - startX) // applied 1:1 by the loop on the next frame
-      kick()
-    }
-
-    const endDrag = () => {
-      viewport.removeEventListener("pointermove", onPointerMove)
-      viewport.removeEventListener("pointerup", onPointerUp)
-      viewport.removeEventListener("pointercancel", onPointerUp)
-    }
-
-    function onPointerUp(e) {
-      if (!dragging || e.pointerId !== activePointer) return
-      const wasDrag = draggedRef.current
-      const vel = wasDrag ? sampledVelocity(e.clientX) : 0 // measure from the finger while still in drag mode
-      dragging = false
-      scheduleResume(AUTO_RESUME_DELAY)
-      endDrag()
-      viewport.removeAttribute("data-dragging")
-      try {
-        viewport.releasePointerCapture(e.pointerId)
-      } catch {
-        /* already released */
-      }
-
-      if (wasDrag) {
-        releaseWith(vel)
-      } else if (SNAP && step) {
-        // A tap, or you caught a moving row: settle on the nearest card instead of resting half-stacked
-        target = Math.round(x / step) * step
-        settleSmooth = snapSmooth
-        kick()
-      }
-
-      // The click event fires right after pointerup; clear the flag once it has passed
-      setTimeout(() => {
-        draggedRef.current = false
-      }, 0)
-    }
-
-    const onPointerDown = (e) => {
-      if (e.pointerType === "mouse" && e.button !== 0) return
-      interrupt()
-      dragging = true
-      draggedRef.current = false
-      wheelActive = false
-      clearTimeout(wheelTimer)
-      activePointer = e.pointerId
-      startX = e.clientX
-      target = x // catch the glide where it is right now (v is kept, so it brakes smoothly)
-      startTarget = target
-      slack = 0
-      viewport.setAttribute("data-dragging", "true")
-      viewport.addEventListener("pointermove", onPointerMove)
-      viewport.addEventListener("pointerup", onPointerUp)
-      viewport.addEventListener("pointercancel", onPointerUp)
-      kick()
-    }
-
-    // After a drag, swallow the click so the card underneath doesn't navigate
-    const onClickCapture = (e) => {
-      if (!draggedRef.current) return
-      e.preventDefault()
-      e.stopPropagation()
-    }
-
-    // Trackpad / horizontal wheel: 1:1 while the gesture (and the OS's own momentum) lasts,
-    // then it settles on a card exactly like a finger release.
-    const onWheel = (e) => {
-      if (dragging) return
-      const dx = e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX
-      if (Math.abs(dx) <= Math.abs(e.deltaY)) return // vertical scroll: leave it alone
-      e.preventDefault() // also stops the browser's swipe-back gesture
-      interrupt()
-      if (!wheelActive) {
-        wheelActive = true
-        target = x
-        slack = 0
-        v = 0
-        samples.length = 0
-        pushSample()
-      }
-      target -= dx
-      kick()
-      clearTimeout(wheelTimer)
-      wheelTimer = setTimeout(() => {
-        const vel = sampledVelocity()
-        wheelActive = false
-        releaseWith(vel)
-      }, WHEEL_SNAP_DELAY)
-    }
-
-    // Arrow keys move one card at a time
-    const onKeyDown = (e) => {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return
-      if (!step || dragging) return
-      e.preventDefault()
-      interrupt()
-      const dir = e.key === "ArrowRight" ? -1 : 1
-      target = Math.round(target / step) * step + dir * step
-      settleSmooth = glideSmooth
-      kick()
-    }
-
-    // Keyboard focus on a clipped card would make the browser scroll the overflow:hidden
-    // viewport sideways. Undo that, and glide the focused card into the first slot instead.
-    const onFocusIn = (e) => {
-      viewport.scrollLeft = 0
-      if (!step || !e.target.matches?.(":focus-visible")) return // mouse focus: leave it alone
-      const idx = cards.indexOf(e.target.closest("a"))
-      if (idx < 0) return
-      interrupt()
-      target = -idx * step
-      settleSmooth = glideSmooth
-      kick()
-    }
-
-    // Glide to card k (0..N-1) using the copy of it that needs the shortest trip
-    slideRef.current = (k) => {
-      if (!step) return
-      interrupt()
-      const setWidth = step * N
-      const base = -(N + k) * step // card k in the middle set
-      target = base + Math.round((target - base) / setWidth) * setWidth
-      settleSmooth = glideSmooth
-      kick()
-    }
-
-    /* ---------- layout: measure once, then only when sizes actually change ---------- */
-    measure()
-    paint()
-    const ro = new ResizeObserver(() => {
-      const prev = step
-      measure()
-      if (prev && step && prev !== step) {
-        // keep the row aligned to its cards when the card width changes
-        const k = step / prev
-        x *= k
-        target *= k
-        startTarget *= k
-        slack *= k
-        v *= k
-      }
-      parts.forEach((p) => p && (p.last = -1))
-      paint()
-    })
-    ro.observe(track)
-    ro.observe(cards[cards.length - 1])
-
-    viewport.addEventListener("pointerdown", onPointerDown)
-    viewport.addEventListener("click", onClickCapture, true)
-    viewport.addEventListener("wheel", onWheel, { passive: false })
-    viewport.addEventListener("keydown", onKeyDown)
-    viewport.addEventListener("focusin", onFocusIn)
-
-    /* ---------- intro: cards glide in from the right (staggered), then the row slides one card left as a "drag me" hint ---------- */
-    // Everything chains on real signals (decode, animation.finished, settle), not guessed timeouts.
-    const decodeImages = (imgs) =>
-      Promise.race([
-        Promise.all(imgs.map((img) => (img?.decode ? img.decode().catch(() => {}) : Promise.resolve()))),
-        wait(IMAGE_WAIT_MAX),
-      ])
-
-    const runIntro = async () => {
-      // Cards in the middle set are the ones on screen (paint() already moved us there)
-      const visible = cards.slice(N, N * 2)
-      hideBehind()
-      // Keep the cards invisible until their images are decoded, so nothing pops in late
-      visible.forEach((c) => {
-        const inner = c?.querySelector(".card-inner")
-        if (inner) inner.style.opacity = "0"
-      })
-
-      await decodeImages(visible.map((c) => c?.querySelector("img")))
-      if (cancelled) return
-
-      const dist = step // each card starts one card-width to the right of its slot
-      const landed = visible.map((card, i) => {
-        const inner = card?.querySelector(".card-inner")
-        if (!inner) return Promise.resolve()
-        if (!inner.animate) {
-          inner.style.opacity = ""
-          return Promise.resolve()
-        }
-        const anim = inner.animate(
-          [
-            { transform: `translate3d(${dist}px, 0, 0)`, opacity: 0 },
-            { transform: "translate3d(0, 0, 0)", opacity: 1 },
-          ],
-          {
-            duration: INTRO_DURATION,
-            delay: INTRO_DELAY + i * INTRO_STAGGER,
-            easing: INTRO_EASE,
-            fill: "both", // hold the hidden start frame during the delay and the landed frame at the end
-          }
-        )
-        anims.push(anim)
-        return anim.finished
-          .then(() => {
-            inner.style.opacity = ""
-            anim.cancel()
-          })
-          .catch(() => {}) // cancelled on cleanup
-      })
-
-      await Promise.all(landed)
-      if (cancelled) return
-      if (touched || dragging) return showBehind()
-
-      // One-card hint: glide exactly one card width to the left, once, and stay there
-      if (USE_INTRO_SLIDE && step) {
-        target = Math.round(target / step) * step - step
-        settleSmooth = glideSmooth
-        kick()
-        await whenSettled()
-      }
-      if (!cancelled) showBehind()
-    }
-
-    if (!reduceMotion) {
-      runIntro().finally(() => {
-        autoEnabled = USE_AUTO_SCROLL
-        if (USE_AUTO_SCROLL) scheduleResume(HOVER_RESUME_DELAY)
-      })
-    }
-
-    return () => {
-      cancelled = true
-      autoDrift = false
-      clearTimeout(resumeTimer)
-      io.disconnect()
-      viewport.removeEventListener("pointerenter", onEnter)
-      viewport.removeEventListener("pointerleave", onLeave)
-      timers.forEach(clearTimeout)
-      clearTimeout(wheelTimer)
-      cancelAnimationFrame(raf)
-      anims.forEach((a) => a.cancel())
-      ro.disconnect()
-      endDrag()
-      viewport.removeEventListener("pointerdown", onPointerDown)
-      viewport.removeEventListener("click", onClickCapture, true)
-      viewport.removeEventListener("wheel", onWheel)
-      viewport.removeEventListener("keydown", onKeyDown)
-      viewport.removeEventListener("focusin", onFocusIn)
-      slideRef.current = null
-      // Cards 0-3 keep their DOM nodes when we drop to mobile, so clear every inline style
-      resetStyles()
-    }
-  }, [isCarousel, pageReady])
-
-  // Left list click: slide to the first card with that service's tag; clicking the same one again
-  // steps to the next match (wraps around). Carousel slides the row, mobile flips the flipbook.
-  const handleServiceClick = (service) => {
-    setActiveService(service)
-    const rule = SERVICE_TAGS[service]
-    if (!rule) return
-    const matches = CARDS.map((c, i) =>
-      c.tags.includes(rule.tag) && (!rule.only || c.tags.length === 1) ? i : -1
-    ).filter((i) => i >= 0)
-    if (!matches.length) return
-    const last = lastServiceRef.current
-    const k = last.tag === service ? matches[(matches.indexOf(last.idx) + 1) % matches.length] : matches[0]
-    lastServiceRef.current = { tag: service, idx: k }
-    if (slideRef.current) slideRef.current(k)
-    else if (flipRef.current) flipRef.current.goTo(k)
-  }
-
-  // Tapping the front flipbook card opens its project
-  const handleFlipSelect = (name) => {
-    const card = CARDS.find((c) => c.name === name)
-    if (card) {
-      if (triggerTransition) triggerTransition(card.to)
-      else navigate(card.to)
-    }
-  }
-
-  // Carousel renders the tripled row for the loop.
-  // (Phones render the flipbook instead.)
-  const renderedCards = isCarousel ? LOOPED_CARDS : CARDS
-
-  return (
-    <div
-      className="relative flex min-h-[100dvh] flex-col bg-white pt-28 md:block md:h-[100dvh] md:min-h-[var(--min-page-h)] md:overflow-x-clip md:pt-0"
-      style={layoutVars}
-    >
-      {/* Left column: heading level with the top of the images, services level with the image bottoms */}
-      <div
-        className="flex flex-col gap-6 px-[var(--page-pad)] pb-0 pt-4 md:absolute md:left-0 md:top-[var(--work-top)] md:h-[var(--card-h)] md:w-[var(--left-col-w)] md:justify-between md:gap-0 md:pb-0 md:pt-0"
-        style={LEFT_TEXT_VARS}
-      >
-        {/* H4: 32px display, tight two-line stack */}
-        <h2 className="H4 uppercase md:text-[40px]" style={{ lineHeight: 0.95 }}>
-          HOW I<br />
-          CAN HELP
-        </h2>
-        {/* Services list styled with ultra-compact line height */}
-        <ul className="Body !font-normal !leading-[1.2] !text-gray-400 md:text-[20px]">
-          {SERVICES.map((s) => (
-            <ServiceItem
-              key={s}
-              label={s}
-              active={activeService === s}
-              onSelect={() => handleServiceClick(s)}
-            />
-          ))}
-        </ul>
-      </div>
-
-      {/* Mobile: flipbook. The component applies var(--page-pad) itself, so the tucked side cards stop at the page margin on both sides. */}
-      {isPhone && (
-        <div className="pt-6">
-          <FlipbookCarousel ref={flipRef} projects={FLIP_PROJECTS} onSelect={handleFlipSelect} bottomReserve={PHONE_FOOTER_H} />
-        </div>
-      )}
-
-      {/* Cards: sliding carousel (Tablet & Desktop) */}
-      {!isPhone && (
-      <div
-        ref={viewportRef}
-        role="region"
-        aria-roledescription={isCarousel ? "carousel" : undefined}
-        aria-label="Selected work"
-        className="px-[var(--page-pad)] pt-12 md:ml-[var(--cards-left)] md:cursor-grab md:touch-pan-y md:select-none md:overflow-hidden md:px-0 md:pt-[var(--work-top)] md:data-[dragging=true]:cursor-grabbing"
-      >
-        <div
-          ref={trackRef}
-          className="flex flex-col gap-[var(--cs-gap)] md:will-change-transform md:flex-row md:pr-[var(--page-pad)]"
+    return (
+        <motion.div
+            ref={wrapRef}
+            aria-hidden="true"
+            style={{
+                x: sx,
+                y: sy,
+                translateX: c.offsetX,
+                translateY: c.offsetY,
+                width: c.width,
+                height: c.height,
+                marginLeft: -c.width / 2,
+                marginTop: -c.height / 2,
+            }}
+            className="fixed top-0 left-0 z-40 hidden pointer-events-none lg:block"
         >
-          {renderedCards.map((card, index) => {
-            const project = WORK_PROJECTS.find((p) => p.slug === card.match || p.id === card.match)
-            const imgSrc = card.image || project?.image
+            {EXPERTISE_DATA.map((item, i) => {
+                const active = hoveredIndex === i
+                const { w, h } = fitByArea(ratios[item.image] || 1, EXPERTISE_SIZE.desktop)
+                return (
+                    <motion.img
+                        key={item.title}
+                        src={item.image}
+                        alt=""
+                        draggable={false}
+                        initial={false}
+                        style={{
+                            left: "50%",
+                            top: "50%",
+                            width: w,
+                            height: h,
+                            marginLeft: -w / 2 + (item.desktopOffset?.x || 0),
+                            marginTop: -h / 2 - (item.desktopOffset?.y || 0),
+                        }}
+                        animate={{
+                            opacity: active ? 1 : 0,
+                            scale: active ? item.scale : item.scale * 0.8,
+                            rotate: active ? item.tilt : item.tilt - 8,
+                        }}
+                        transition={{ duration: active ? 0.7 : 0.35, ease: customEase }}
+                        className="absolute object-contain select-none will-change-[transform,opacity]"
+                    />
+                )
+            })}
+        </motion.div>
+    )
+}
 
-            // On carousel only the middle set is the "real" one: it's what you see, tab to and hear.
-            // The first and last sets exist purely for the endless loop.
-            const canonical = !isCarousel || (index >= N && index < N * 2)
+const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone }) => {
+    const slideRef = useRef(null)
+    const cardRef = useRef(null)
+    const [reveal, setReveal] = useState(null)
+    // The arrow nudge only runs while this slide is hovered. Before, every slide ran an
+    // infinite framer-motion loop all the time (even while invisible), which competed
+    // with the ticker for the main thread on every frame.
+    const [hovered, setHovered] = useState(false)
 
-            // Load what's on screen right away; copies reuse the same files, mobile lazy-loads below the fold
-            const eager = isCarousel ? canonical : index === 0
-            const high = isCarousel ? canonical && index < N + 2 : index === 0
+    useEffect(() => {
+        if (!ready || reveal) return
+        const frame = requestAnimationFrame(() => {
+            const el = slideRef.current
+            if (!el) return
+            const rect = el.getBoundingClientRect()
+            const vw = window.innerWidth || 1280
+            const onScreen = rect.right > 0 && rect.left < vw
+            if (!onScreen) {
+                setReveal({ delay: 0, instant: true })
+                return
+            }
+            const column = Math.max(0, Math.round(rect.left / (rect.width || 1)))
+            setReveal({
+                delay: TICKER_REVEAL.delay + column * TICKER_REVEAL.stagger,
+                instant: false,
+            })
+        })
+        return () => cancelAnimationFrame(frame)
+    }, [ready, reveal])
 
-            const img = (
-              <img
-                src={imgSrc}
-                alt={canonical ? card.alt || card.name : ""}
-                width={IMAGE_W}
-                height={IMAGE_H}
-                sizes={IMAGE_SIZES}
-                loading={eager ? "eager" : "lazy"}
-                decoding="async"
-                fetchPriority={high ? "high" : "auto"}
-                className="h-full w-full object-cover"
-                draggable={false}
-              />
-            )
+    // Rise-in + fade as Web Animations: they run on the compositor, so the reveal can't stutter
+    // while the main thread is busy with the preloader hand-off, text reveals and image decode.
+    // Layout effect + fill "both" means there is never a frame showing the slide in its final
+    // state before the animation takes over.
+    useLayoutEffect(() => {
+        const el = cardRef.current
+        if (!reveal || reveal.instant || !el || typeof el.animate !== "function") return
+        const delay = reveal.delay * 1000
+        const dur = TICKER_REVEAL.duration * 1000
+        el.style.willChange = "transform, opacity"
+        const rise = el.animate(
+            [{ transform: `translateY(${TICKER_REVEAL.from})` }, { transform: "translateY(0%)" }],
+            { duration: dur, delay, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "both" }
+        )
+        const fade = el.animate([{ opacity: 0 }, { opacity: 1 }], {
+            duration: dur * 0.5,
+            delay,
+            easing: "ease-out",
+            fill: "both",
+        })
+        const settle = () => {
+            // end state == the element's normal style, so drop the animations and the layer
+            rise.cancel()
+            fade.cancel()
+            el.style.willChange = ""
+        }
+        Promise.all([rise.finished, fade.finished]).then(settle, () => {})
+        return () => {
+            rise.cancel()
+            fade.cancel()
+            el.style.willChange = ""
+        }
+    }, [reveal])
 
-            return (
-              <Link
-                key={`${card.name}-${index}`}
-                to={card.to}
-                onClick={(e) => {
-                  if (draggedRef.current) return // Prevent triggering if the user is dragging the carousel
-                  e.preventDefault()
-                  if (triggerTransition) triggerTransition(card.to)
-                  else navigate(card.to)
+    const getSubtitle = (name) => {
+        if (!name) return ""
+        const lower = name.toLowerCase()
+        if (lower.includes("yimaj")) return "Branding / 3D"
+        if (lower.includes("weyra")) return "Branding"
+        if (lower.includes("origen")) return "Branding"
+        return project.category || "Branding"
+    }
+
+    // The ticker repeats the same slides 3x to loop seamlessly. Only the first copy is exposed to
+    // keyboard and screen readers; the clones are decoration.
+    const interactive = !!project && !isClone
+    const a11y = interactive
+        ? {
+              role: "link",
+              tabIndex: 0,
+              "aria-label": `${project.name}, ${getSubtitle(project.name)}`,
+              onKeyDown: (e) => {
+                  if (e.key === "Enter") {
+                      e.preventDefault()
+                      onClick?.(e)
+                  }
+              },
+          }
+        : { "aria-hidden": true }
+
+    return (
+        <div
+            ref={slideRef}
+            onClick={onClick}
+            onPointerEnter={(e) => {
+                if (project) prefetchHero(heroSlugFor(project.name)) // start the case-study hero early
+                if (e.pointerType === "mouse") setHovered(true)
+            }}
+            onPointerDown={() => {
+                if (project) prefetchHero(heroSlugFor(project.name))
+            }}
+            onPointerLeave={() => setHovered(false)}
+            className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group outline-none"
+            {...a11y}
+        >
+            <div
+                ref={cardRef}
+                // hidden until the reveal is decided; the Web Animation above takes over from here
+                style={{
+                    height: TICKER_HEIGHT,
+                    ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
                 }}
-                ref={(el) => {
-                  cardRefs.current[index] = el
-                }}
-                aria-hidden={canonical ? undefined : true}
-                tabIndex={canonical ? undefined : -1}
-                // will-change only on the 4 on-screen (middle set) cards: 12 promoted layers is a lot of texture memory
-                className={`block shrink-0 md:[contain:layout] md:w-[var(--card-w)] ${canonical ? "md:will-change-transform" : ""}`}
-                style={{ transformOrigin: "left center" }}
-                draggable={false}
-              >
-                <div className="card-inner" style={!pageReady ? { opacity: 0 } : {}}>
-                  <div
-                    className="relative aspect-[4/5] w-full overflow-hidden bg-[var(--bg-surface-light)]"
-                    // isolation + translateZ(0): gives the rounded clip its own compositor layer, so
-                    // border-radius + overflow-hidden on a moving, scaled card doesn't stutter on mid-range GPUs
-                    style={{ borderRadius: CARD_RADIUS, isolation: "isolate", transform: "translateZ(0)" }}
-                  >
-                    {imgSrc &&
-                      (USE_RESPONSIVE_IMAGES ? (
-                        <picture>
-                          <source type="image/avif" srcSet={srcSetFor(imgSrc, "avif")} sizes={IMAGE_SIZES} />
-                          <source type="image/webp" srcSet={srcSetFor(imgSrc, "webp")} sizes={IMAGE_SIZES} />
-                          {img}
-                        </picture>
-                      ) : (
-                        img
-                      ))}
-                    {/* depth shading: light-to-dark gradient (left clear, right dark). Invisible at rest (opacity 0);
-                        paint() fades it in only while the card stacks behind the next one. */}
-                    <div className="card-shade pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent to-black opacity-0" />
-                  </div>
-                  <div className="card-meta mt-3 flex items-start justify-between gap-4 text-black">
-                    <h3 className="Caption !text-[14px] uppercase !font-medium leading-[1.2]">{card.name}</h3>
-                    <ul className="Caption !text-[14px] uppercase !font-medium leading-[1.2] text-right [&>li+li]:mt-[2px]">
-                      {card.tags.map((t) => (
-                        <li key={t}>{t}</li>
-                      ))}
-                    </ul>
-                  </div>
+                className="relative w-full overflow-hidden rounded-lg md:rounded-[12px] lg:rounded-[8px] bg-[var(--bg-surface-dark)]"
+            >
+                <div className="absolute inset-0 w-full h-full">
+                    <img
+                        src={src}
+                        alt={project ? project.name : "Portfolio Work"}
+                        draggable={false}
+                        decoding="async"
+                        // Stays eager on purpose: slides sit inside overflow-hidden marquees, where
+                        // loading="lazy" would not fetch until they are already visible (pop-in).
+                        loading="eager"
+                        {...(fetchPriority ? { [FETCH_PRIORITY_KEY]: fetchPriority } : null)}
+                        className="object-cover w-full h-full scale-[1.35] pointer-events-none select-none"
+                    />
                 </div>
-              </Link>
-            )
-          })}
+                <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+                {/* keyboard focus ring (inside the clipped card so the marquee never crops it) */}
+                <div className="absolute inset-0 rounded-[inherit] pointer-events-none ring-2 ring-inset ring-white opacity-0 group-focus-visible:opacity-100" />
+
+                {project && (
+                    <div className="absolute inset-x-0 bottom-0 pointer-events-none">
+                        <div
+                            className="absolute inset-x-0 bottom-0 h-[120px] bg-gradient-to-t from-black/65 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
+                        />
+                        <div className="relative flex items-end justify-between p-[16px]">
+                            <div className="flex flex-col items-start opacity-0 translate-y-[14px] group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-1000 ease-[cubic-bezier(0.25,0.8,0.25,1)]">
+                                <span className="Caption !text-[14px] uppercase !font-medium text-white leading-[1.2]">
+                                    {project.name}
+                                </span>
+                                <span className="Caption !text-[14px] uppercase !font-medium text-white leading-[1.2] mt-[2px]">
+                                    {getSubtitle(project.name)}
+                                </span>
+                            </div>
+
+                            <span className="Caption !text-[14px] uppercase !font-medium leading-[1.2] opacity-0 translate-y-[14px] group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-1000 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex items-center gap-[6px] text-white">
+                                <span>VIEW PROJECT</span>
+                                {hovered ? (
+                                    <motion.span
+                                        animate={{ x: [0, 5, 0] }}
+                                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                                        className="flex items-center"
+                                    >
+                                        <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
+                                    </motion.span>
+                                ) : (
+                                    <span className="flex items-center">
+                                        <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
+                                    </span>
+                                )}
+                            </span>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
-      </div>
-      )}
+    )
+}
 
-      {/* Availability badge, bottom left, aligned with the WORK title */}
-      <div
-        className="mt-auto flex flex-col gap-4 px-[var(--page-pad)] pb-[max(var(--page-pad),env(safe-area-inset-bottom))] pt-0 md:mt-0 md:absolute md:left-0 md:top-[var(--title-top)] md:h-[var(--title-h)] md:w-[var(--left-col-w)] md:justify-end md:pb-0 md:pt-0"
-      >
-        <Availability />
-      </div>
+const TickerSlide = memo(
+    TickerSlideBase,
+    (a, b) =>
+        a.src === b.src &&
+        a.project === b.project &&
+        a.ready === b.ready &&
+        a.fetchPriority === b.fetchPriority &&
+        a.isClone === b.isClone
+)
 
-      {/* Huge title, lined up with the first card (H1: Borscha display, tight tracking from the token).
-          Visually hidden on mobile but still the page's h1 for screen readers and SEO. */}
-      <h1
-        className="H1 pointer-events-none absolute sr-only select-none md:not-sr-only md:!absolute md:left-[var(--cards-left)]"
-        style={TITLE_STYLE}
-      >
-        WORK
-      </h1>
-    </div>
-  )
+// iOS-style curve: leaves immediately, settles softly. One curve and one clock for the whole panel.
+const APPLE_EASE_CSS = "cubic-bezier(0.32, 0.72, 0, 1)"
+const ACCORDION_OPEN = { duration: 0.6, fadeIn: 0.45, fadeInDelay: 0.12 }
+const ACCORDION_CLOSE = { duration: 0.5, fadeOut: 0.18 }
+
+// Height is animated by the browser (grid 0fr -> 1fr), not measured and tweened in JS.
+const AccordionPanel = ({ active, children }) => {
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    const dur = reduce ? 0 : active ? ACCORDION_OPEN.duration : ACCORDION_CLOSE.duration
+    return (
+        <div
+            aria-hidden={!active}
+            style={{
+                display: "grid",
+                gridTemplateRows: active ? "1fr" : "0fr",
+                // visibility flips at the end of a close so hidden rows can't be tabbed into
+                visibility: active ? "visible" : "hidden",
+                transition: `grid-template-rows ${dur}s ${APPLE_EASE_CSS}, visibility 0s linear ${active ? 0 : dur}s`,
+            }}
+        >
+            <div style={{ overflow: "hidden", minHeight: 0 }}>{children}</div>
+        </div>
+    )
+}
+
+// Only opacity and transform animate inside the panel, so nothing triggers extra layout.
+// `depth` = how many names are stacked above this image when it reaches them (its own name + the ones
+// before it). Its scroll-driven "settle" (see .svc-par in the <style> block) ends exactly there.
+const ServiceAccordionImage = ({ src, alt, active, depth = 1 }) => {
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    return (
+        <div
+            className="svc-par-box relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]"
+            // isolation + translateZ keep Safari from painting the moving image over the rounded corners
+            style={{ "--svc-n": depth, isolation: "isolate", transform: "translateZ(0)" }}
+        >
+            {/* The parallax moves this wrapper; the <img> keeps its own open/close scale + fade untouched. */}
+            <div className="svc-par">
+                <img
+                    src={src}
+                    alt={alt}
+                    draggable={false}
+                    decoding="async"
+                    className="object-cover w-full h-full select-none pointer-events-none"
+                    style={{
+                        opacity: active ? 1 : 0,
+                        transform: active ? "scale(1)" : "scale(1.04)",
+                        transition: reduce
+                            ? "none"
+                            : active
+                              ? `opacity ${ACCORDION_OPEN.fadeIn}s ${APPLE_EASE_CSS} 0.05s, transform ${ACCORDION_OPEN.duration + 0.2}s ${APPLE_EASE_CSS} 0.05s`
+                              : `opacity ${ACCORDION_CLOSE.fadeOut}s ease-out, transform ${ACCORDION_CLOSE.duration}s ${APPLE_EASE_CSS}`,
+                    }}
+                />
+            </div>
+        </div>
+    )
+}
+
+const RES = 0.5
+const BASE_SHIFT = -1.0
+const SPEED = 2.6
+const BEND = 0.1
+const TOP_BEND = 0.12
+const STOPS = [
+    [0.0, 5, 5, 5], [0.22, 5, 5, 5], [0.3, 20, 8, 3], [0.43, 52, 18, 5],
+    [0.54, 92, 29, 8], [0.64, 140, 42, 12], [0.75, 205, 82, 34],
+    [0.88, 228, 96, 42], [1.0, 240, 130, 48], [1.1, 243, 152, 60],
+    [1.2, 245, 176, 74], [1.33, 249, 217, 160], [1.44, 253, 241, 224],
+    [1.52, 255, 255, 255], [1.6, 255, 255, 255],
+]
+const V_MAX = 1.6
+const LUT_SIZE = 2048
+const HEADER_TONE_THRESHOLD = 0.55
+
+function buildLut() {
+    const raw = new Float32Array(LUT_SIZE * 3)
+    for (let i = 0; i < LUT_SIZE; i++) {
+        const v = (i / (LUT_SIZE - 1)) * V_MAX
+        let s = 0
+        while (s < STOPS.length - 2 && v > STOPS[s + 1][0]) s++
+        const a = STOPS[s]
+        const b = STOPS[s + 1]
+        const u = Math.min(1, Math.max(0, (v - a[0]) / (b[0] - a[0])))
+        raw[i * 3] = a[1] + (b[1] - a[1]) * u
+        raw[i * 3 + 1] = a[2] + (b[2] - a[2]) * u
+        raw[i * 3 + 2] = a[3] + (b[3] - a[3]) * u
+    }
+    let src = raw
+    const R = 40
+    for (let pass = 0; pass < 3; pass++) {
+        const dst = new Float32Array(LUT_SIZE * 3)
+        for (let i = 0; i < LUT_SIZE; i++) {
+            for (let c = 0; c < 3; c++) {
+                let sum = 0
+                for (let k = -R; k <= R; k++) {
+                    const j = Math.min(LUT_SIZE - 1, Math.max(0, i + k))
+                    sum += src[j * 3 + c]
+                }
+                dst[i * 3 + c] = sum / (2 * R + 1)
+            }
+        }
+        src = dst
+    }
+    const out = new Uint8ClampedArray(LUT_SIZE * 3)
+    for (let i = 0; i < out.length; i++) out[i] = src[i]
+    return out
+}
+
+function SunriseTransition({ children, anchorRef, onHeaderTone }) {
+    const canvasRef = useRef(null)
+    const { scrollY } = useScroll()
+    // Apple-style scrub: the gradient position is a direct function of scroll (no spring lag),
+    // so it moves exactly as far as you scroll, and reverses the instant you scroll back.
+    const travel = useMotionValue(0)
+
+    useEffect(() => {
+        const update = () => {
+            const el = anchorRef?.current
+            if (!el) return
+            const vh = window.innerHeight || 800
+            const rect = el.getBoundingClientRect()
+            const progress = (vh - rect.top) / (vh * 1.5)
+            travel.set(Math.max(0, Math.min(1, progress)))
+        }
+
+        update()
+        const unsubscribe = scrollY.on("change", update)
+        window.addEventListener("resize", update)
+        window.addEventListener("load", update)
+        return () => {
+            unsubscribe()
+            window.removeEventListener("resize", update)
+            window.removeEventListener("load", update)
+        }
+    }, [anchorRef, scrollY, travel])
+
+    useEffect(() => {
+        const canvas = canvasRef.current
+        if (!canvas) return
+        let ctx = null
+        try {
+            ctx = canvas.getContext("2d", { alpha: false })
+        } catch (e) {
+            console.warn("2D context error:", e)
+        }
+        if (!ctx) return
+
+        const lut = buildLut()
+        const lutScale = (LUT_SIZE - 1) / V_MAX
+        const noise = new Float32Array(4096)
+        for (let i = 0; i < noise.length; i++) noise[i] = (Math.random() - 0.5) * 2.4
+
+        let W = 0
+        let H = 0
+        let img = null
+        let arc = null
+        let lastLight = null
+
+        const resize = () => {
+            W = Math.max(2, Math.round(window.innerWidth * RES))
+            H = Math.max(2, Math.round(window.innerHeight * RES))
+            canvas.width = W
+            canvas.height = H
+            try {
+                img = ctx.createImageData(W, H)
+                for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255
+            } catch (err) {
+                img = null
+            }
+            arc = new Float32Array(W)
+            for (let x = 0; x < W; x++) {
+                const dx = x / (W - 1) - 0.5
+                arc[x] = 1 - 4 * dx * dx
+            }
+        }
+
+        const draw = (sv) => {
+            if (!img || !arc) return
+            const shift = BASE_SHIFT + SPEED * sv
+            const clamp01 = (n) => Math.min(1, Math.max(0, n))
+            const bottomDepth = BEND * Math.sin(Math.PI * clamp01(sv / 0.75))
+            const topDepth = TOP_BEND * Math.sin(Math.PI * clamp01((sv + 0.35) / 1.1))
+
+            const data = img.data
+            const off = (Math.random() * 4096) | 0
+            let i = 0
+
+            for (let y = 0; y < H; y++) {
+                const vb = y / H + shift
+                const w = clamp01((1.0 - vb) / 0.6)
+                const mix = w * w * (3 - 2 * w)
+                const depth = topDepth * mix + bottomDepth * (1 - mix)
+
+                for (let x = 0; x < W; x++) {
+                    const vv = vb - depth * arc[x]
+                    const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
+                    const j = k * 3
+                    const n = noise[(i + off) & 4095]
+                    const o = i * 4
+
+                    data[o] = lut[j] + n
+                    data[o + 1] = lut[j + 1] + n
+                    data[o + 2] = lut[j + 2] + n
+                    i++
+                }
+            }
+
+            ctx.putImageData(img, 0, 0)
+
+            if (typeof onHeaderTone === "function") {
+                const headerCenter = window.innerWidth < 768 ? 36 : 47
+                const headerV = headerCenter / window.innerHeight
+                const vv = headerV + shift
+                const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
+                const lum = (0.2126 * lut[k * 3] + 0.7152 * lut[k * 3 + 1] + 0.0722 * lut[k * 3 + 2]) / 255
+                const light = lum > HEADER_TONE_THRESHOLD
+                if (light !== lastLight) {
+                    lastLight = light
+                    onHeaderTone(light)
+                }
+            }
+        }
+
+        resize()
+        draw(travel.get())
+
+        // Scroll can fire several times per frame; paint once per frame with the latest value.
+        let raf = 0
+        const schedule = () => {
+            if (raf) return
+            raf = requestAnimationFrame(() => {
+                raf = 0
+                draw(travel.get())
+            })
+        }
+        const unsubscribe = travel.on("change", schedule)
+        const onResize = () => {
+            resize()
+            draw(travel.get())
+        }
+        window.addEventListener("resize", onResize)
+
+        return () => {
+            unsubscribe()
+            if (raf) cancelAnimationFrame(raf)
+            window.removeEventListener("resize", onResize)
+        }
+    }, [travel, onHeaderTone])
+
+    return (
+        <div className="relative w-full">
+            <div className="sticky top-0 z-0 w-full h-[100lvh] overflow-hidden pointer-events-none bg-[var(--bg-dark)]">
+                <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 w-full h-full" />
+            </div>
+            <div className="relative z-10 -mt-[100lvh]">{children}</div>
+        </div>
+    )
+}
+
+export default function Home() {
+    const vp = useContext(ViewportContext)
+    const navigate = useNavigate()
+    const pageTransition = usePageTransition()
+    const pageReady = usePageReady()
+
+    const outletCtx = useOutletContext()
+    const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
+
+    // Arriving from a (scrolled) case study: start at the top, like the case studies do.
+    // Skipped when the URL has a #hash so anchor links keep working.
+    useEffect(() => {
+        if (window.location.hash) return
+        window.scrollTo(0, 0)
+    }, [])
+
+    // ---- Services text reveal ------------------------------------------------------------------
+    // The reveal plays once the section is in view AND the page is actually showing it. Without
+    // this gate it fired while the page was still covered by the transition (cross-page link) or
+    // while the smooth scroll was still travelling (same-page link), so the visitor never saw it.
+    // The header announces "#services" links with a "header-anchor" event; while that scroll is
+    // still moving we hold the reveal, then release it ~160ms after the scroll goes quiet.
+    const servicesHeadRef = useRef(null)
+    const servicesListRef = useRef(null)
+    const servicesHeadInView = useInView(servicesHeadRef, SERVICES_VIEWPORT)
+    const servicesListInView = useInView(servicesListRef, SERVICES_VIEWPORT)
+    const [servicesHold, setServicesHold] = useState(false)
+    const servicesRevealedRef = useRef(false)
+    const servicesHeadActive = pageReady && servicesHeadInView && !servicesHold
+    const servicesListActive = pageReady && servicesListInView && !servicesHold
+    if (servicesHeadActive || servicesListActive) servicesRevealedRef.current = true
+
+    useEffect(() => {
+        let settleTimer = 0
+        let hardStop = 0
+        let listening = false
+        const release = () => {
+            window.removeEventListener("scroll", onScroll)
+            listening = false
+            clearTimeout(settleTimer)
+            clearTimeout(hardStop)
+            setServicesHold(false)
+        }
+        function onScroll() {
+            clearTimeout(settleTimer)
+            settleTimer = setTimeout(release, 160)
+        }
+        const onAnchor = (e) => {
+            if (e.detail !== "#services") return
+            if (servicesRevealedRef.current) return // already played: don't hide it again
+            setServicesHold(true)
+            if (!listening) {
+                window.addEventListener("scroll", onScroll, { passive: true })
+                listening = true
+            }
+            clearTimeout(settleTimer)
+            clearTimeout(hardStop)
+            settleTimer = setTimeout(release, 700) // the scroll has not started yet / nothing to scroll
+            hardStop = setTimeout(release, 3000) // never hold forever
+        }
+        window.addEventListener("header-anchor", onAnchor)
+        return () => {
+            window.removeEventListener("header-anchor", onAnchor)
+            window.removeEventListener("scroll", onScroll)
+            clearTimeout(settleTimer)
+            clearTimeout(hardStop)
+        }
+    }, [])
+
+    const [activeIndex, setActiveIndex] = useState(0)
+    // Hover highlight for the accordion rows (tablet/mobile widths with a mouse or trackpad).
+    // Touch input is ignored so taps still just toggle the row.
+    const [hoveredRow, setHoveredRow] = useState(null)
+    const [openIndexes, setOpenIndexes] = useState([0])
+
+    // Services (tablet/mobile): instead of an accordion, every service shows its full panel and its name
+    // row sticks to the top as you scroll past. Names stack in order (Brand Identity first, the next
+    // below it, ...), so only passed services are reduced to their names.
+    //
+    // This is pure CSS sticky, so the browser positions everything on the compositor and it cannot lag:
+    //  - every name has a SOLID background, so panels simply slide behind the stack (no masking, no JS);
+    //  - at the end of the list the names leave together: each name has a bottom margin of (names after
+    //    it) * row height and sticky keeps that margin box inside the list. The panel below pulls up by
+    //    the same amount, so the layout does not move.
+    // The only JS is the highlight: it measures once and sets data-stuck on the names (no React state).
+    useLayoutEffect(() => {
+        const list = servicesListRef.current
+        if (!list) return
+        if (vp.isDesktop) {
+            list.style.removeProperty("--svc-row-h")
+            list.removeAttribute("data-leaving")
+            return
+        }
+
+        let geo = null
+        let lastRowH = ""
+        let lastStuck = -2
+        let lastPinned = null
+        let lastLeaving = null
+        let raf = 0
+        let idleTimer = 0
+
+        // Measured once (and on resize / font / image load / scroll-idle), never per scroll frame.
+        const measure = () => {
+            const hs = Array.from(list.querySelectorAll(".svc-sticky-head"))
+            const ps = Array.from(list.querySelectorAll(".svc-panel"))
+            if (!hs.length || hs.length !== ps.length || hs[0].offsetHeight <= 0) return
+
+            // fractional: offsetHeight rounds and the error stacks
+            const rowH = hs[0].getBoundingClientRect().height
+            const rowHStr = `${rowH}px`
+            if (rowHStr !== lastRowH) {
+                lastRowH = rowHStr
+                list.style.setProperty("--svc-row-h", rowHStr)
+            }
+            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
+            const sy = window.scrollY
+            const rects = ps.map((el) => el.getBoundingClientRect())
+            geo = {
+                heads: hs,
+                rowH,
+                top0,
+                panelTops: rects.map((r) => r.top + sy),
+                lastPanelBottom: rects[rects.length - 1].bottom + sy,
+            }
+            lastStuck = -2 // force the highlight to be re-applied
+            lastPinned = null
+            lastLeaving = null
+        }
+
+        const frame = () => {
+            raf = 0
+            if (!geo) return
+            const { heads, rowH, top0, panelTops, lastPanelBottom } = geo
+            const sy = window.scrollY
+            // A name is stuck once its natural top (= its panel's top minus its own height) reaches its
+            // stuck position. The last such name is the highlighted one.
+            let stuck = 0
+            for (let i = 0; i < heads.length; i++) {
+                if (panelTops[i] - rowH - sy <= top0 + i * rowH + 1) stuck = i
+            }
+
+            // Once the first panel has started to pass behind the first name, show the cover strip that
+            // hides the part of it that would stick out above the name (CSS, see the <style> block). It is
+            // attached to the name, so it moves and leaves with the stack natively; this only switches it on.
+            // The lead covers the frame the rAF runs behind a fast scroll; the strip switches on instantly (no fade).
+            const pinned = panelTops[0] - sy <= top0 + 72
+            if (pinned !== lastPinned) {
+                lastPinned = pinned
+                heads[0].setAttribute("data-pinned", pinned ? "true" : "false")
+            }
+
+            // The names are solid only to hide the panels sliding behind them. Once the last panel is fully
+            // behind the stack (= the stack is about to leave), the panels fade out and the names turn
+            // transparent (CSS transitions on [data-leaving]), so the names leave over the sunrise gradient
+            // instead of as a black block. A short time-based fade, so a frame of scroll lag is invisible.
+            const leaving = lastPanelBottom - sy <= top0 + heads.length * rowH + 40
+            if (leaving !== lastLeaving) {
+                lastLeaving = leaving
+                list.setAttribute("data-leaving", leaving ? "true" : "false")
+            }
+
+            if (stuck === lastStuck) return
+            lastStuck = stuck
+            for (let i = 0; i < heads.length; i++) heads[i].setAttribute("data-stuck", i === stuck ? "true" : "false")
+        }
+
+        const schedule = () => {
+            if (!raf) raf = requestAnimationFrame(frame)
+        }
+        const remeasure = () => {
+            measure()
+            schedule()
+        }
+        const onScroll = () => {
+            schedule()
+            // Safety net: if layout shifted while scrolling (late image, page transition), correct it once
+            // scrolling stops, off the hot path.
+            clearTimeout(idleTimer)
+            idleTimer = setTimeout(remeasure, 200)
+        }
+
+        measure()
+        frame()
+        const ro = new ResizeObserver(remeasure)
+        ro.observe(list)
+        document.fonts?.ready?.then(remeasure)
+        window.addEventListener("scroll", onScroll, { passive: true })
+        window.addEventListener("resize", remeasure)
+        window.addEventListener("load", remeasure)
+        return () => {
+            if (raf) cancelAnimationFrame(raf)
+            clearTimeout(idleTimer)
+            window.removeEventListener("scroll", onScroll)
+            window.removeEventListener("resize", remeasure)
+            window.removeEventListener("load", remeasure)
+            ro.disconnect()
+        }
+    }, [vp.isDesktop, pageReady])
+
+    const [activeExpertise, setActiveExpertise] = useState(null)
+
+    const expertiseRatios = useExpertiseRatios()
+    const [hoveredExpertise, setHoveredExpertise] = useState(null)
+    const cursorX = useMotionValue(0)
+    const cursorY = useMotionValue(0)
+
+    const expertiseRefs = useRef([])
+    const scrollIndexRef = useRef(null)
+    const lastPointerRef = useRef({ x: -1, y: -1 })
+    const pointerRef = useRef(null)
+    const hoverRef = useRef(null)
+    const isDesktopRef = useRef(vp.isDesktop)
+    isDesktopRef.current = vp.isDesktop
+    const transitionRef = useRef(null)
+
+    const tickerViewportRef = useRef(null)
+    const tickerRef = useRef(null)
+    const tickerWrapRef = useRef(null)
+    const workSectionRef = useRef(null)
+    const tickerEngine = useRef(null)
+    const [tickerReady, setTickerReady] = useState(false)
+    const [tickerPaused, setTickerPaused] = useState(false)
+    const tickerPausedRef = useRef(false)
+    const toggleTickerPause = () => {
+        const next = !tickerPausedRef.current
+        tickerPausedRef.current = next
+        setTickerPaused(next)
+        tickerEngine.current?.setPaused(next)
+    }
+    const pageReadyRef = useRef(pageReady)
+    pageReadyRef.current = pageReady
+
+    useEffect(() => {
+        if (!tickerViewportRef.current || !tickerRef.current) return
+
+        tickerEngine.current = createTicker(tickerViewportRef.current, tickerRef.current, {
+            ...TICKER_MOTION,
+            startPaused: true,
+        })
+        if (tickerPausedRef.current) tickerEngine.current.setPaused(true)
+        // If the page is already revealed (e.g. after a resize), start right away
+        if (pageReadyRef.current) tickerEngine.current.start()
+        setTickerReady(true)
+        return () => {
+            tickerEngine.current?.destroy()
+            tickerEngine.current = null
+        }
+    }, [vp.isMobile])
+
+    // Start the ticker once the page is revealed (after the preloader / page transition)
+    // Held back until the reveal wipe has finished: starting it earlier piles the ticker's
+    // first frames on top of the mask wipe, the page slide and every slide's rise-in. The
+    // ticker springs up from rest, so a late start still looks like a smooth ease-in.
+    useEffect(() => {
+        if (!pageReady) return
+        const id = setTimeout(() => tickerEngine.current?.start(), TICKER_START_DELAY)
+        return () => clearTimeout(id)
+    }, [pageReady])
+
+    useEffect(() => {
+        const wrap = tickerWrapRef.current
+        if (wrap) wrap.style.transform = ""
+    }, [vp.isMobile])
+
+    useEffect(() => {
+        const unique = Array.from(new Set(LOOPING_IMAGES))
+        const warm = (src, priority) => {
+            const img = new Image()
+            img.decoding = "async"
+            if ("fetchPriority" in img) img.fetchPriority = priority
+            img.src = src
+            img.decode?.().catch(() => {})
+        }
+        unique.slice(0, TICKER_PRIORITY_COUNT).forEach((src) => warm(src, "high"))
+        const rest = unique.slice(TICKER_PRIORITY_COUNT)
+        if (!rest.length) return
+        return whenIdle(() => rest.forEach((src) => warm(src, "low")), 2000)
+    }, [])
+
+    // Warm every case-study hero once the homepage is idle (4 images, low priority).
+    useEffect(() => whenIdle(() => warmAllHeroes(), 2500), [])
+
+    useEffect(() => {
+        if (!vp.isDesktop) return
+        const onMove = (e) => {
+            if (e.pointerType && e.pointerType !== "mouse") return
+            pointerRef.current = { x: e.clientX, y: e.clientY }
+            cursorX.set(e.clientX)
+            cursorY.set(e.clientY)
+        }
+        const onLeaveWindow = () => {
+            pointerRef.current = null
+        }
+        window.addEventListener("pointermove", onMove, { passive: true })
+        document.documentElement.addEventListener("mouseleave", onLeaveWindow)
+        return () => {
+            window.removeEventListener("pointermove", onMove)
+            document.documentElement.removeEventListener("mouseleave", onLeaveWindow)
+        }
+    }, [vp.isDesktop, cursorX, cursorY])
+
+    useEffect(() => {
+        let frame = null
+        const update = () => {
+            frame = null
+            if (!isDesktopRef.current) return
+            const rows = expertiseRefs.current
+            if (!rows.some(Boolean)) return
+            const mid = (window.innerHeight || 800) * 0.5
+
+            let idx = null
+            rows.forEach((node, i) => {
+                if (node && node.getBoundingClientRect().top <= mid) idx = i
+            })
+            scrollIndexRef.current = idx
+
+            let under = null
+            const p = pointerRef.current
+            if (isDesktopRef.current && p) {
+                rows.forEach((node, i) => {
+                    if (!node) return
+                    const r = node.getBoundingClientRect()
+                    if (p.y >= r.top && p.y < r.bottom && p.x >= r.left && p.x <= r.right) under = i
+                })
+            }
+            if (under !== hoverRef.current) {
+                hoverRef.current = under
+                setHoveredExpertise(under)
+            }
+            setActiveExpertise(under !== null ? under : idx)
+        }
+        const onScroll = () => {
+            if (frame === null) frame = requestAnimationFrame(update)
+        }
+        update()
+        window.addEventListener("scroll", onScroll, { passive: true })
+        window.addEventListener("resize", onScroll)
+        return () => {
+            if (frame !== null) cancelAnimationFrame(frame)
+            window.removeEventListener("scroll", onScroll)
+            window.removeEventListener("resize", onScroll)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (vp.isDesktop) return
+
+        hoverRef.current = null
+        setHoveredExpertise(null)
+        setActiveExpertise(null)
+
+        const rows = expertiseRefs.current
+        const imgs = EXPERTISE_DATA.map((_, i) => rows[i]?.querySelector("[data-exp-img]") || null)
+        const texts = EXPERTISE_DATA.map((_, i) =>
+            Array.from(rows[i]?.querySelectorAll("[data-exp-text]") || [])
+        )
+        const toolsLists = EXPERTISE_DATA.map((_, i) => rows[i]?.querySelector("[data-exp-tools]") || null)
+
+        const allTexts = texts.flat()
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        const origin = vp.isMobile ? "100% 100%" : "50% 50%"
+
+        imgs.forEach((img, i) => {
+            if (!img) return
+            const d = EXPERTISE_DATA[i]
+            gsap.set(img, {
+                opacity: 0,
+                scale: d.scale * 0.8,
+                rotation: d.tilt - 8,
+                y: 12,
+                transformOrigin: origin,
+                force3D: true,
+            })
+        })
+        if (allTexts.length) gsap.set(allTexts, { color: SITE_GREY })
+        toolsLists.forEach((tools) => {
+            if (tools) gsap.set(tools, { color: SITE_GREY })
+        })
+
+        let current
+
+        const apply = (idx) => {
+            if (idx === current) return
+            current = idx
+            EXPERTISE_DATA.forEach((d, i) => {
+                const active = i === idx
+                const img = imgs[i]
+                if (img) {
+                    gsap.to(
+                        img,
+                        active
+                            ? {
+                                  opacity: 1,
+                                  scale: d.scale,
+                                  rotation: d.tilt,
+                                  y: 0,
+                                  duration: reduce ? 0 : 0.8,
+                                  ease: "expo.out",
+                                  overwrite: "auto",
+                              }
+                            : {
+                                  opacity: 0,
+                                  scale: d.scale * 0.8,
+                                  rotation: d.tilt - 8,
+                                  y: 12,
+                                  duration: reduce ? 0 : 0.4,
+                                  ease: "power2.out",
+                                  overwrite: "auto",
+                              }
+                    )
+                }
+                if (texts[i].length) {
+                    gsap.to(texts[i], {
+                        color: active ? "#000000" : SITE_GREY,
+                        duration: reduce ? 0 : 0.3,
+                        ease: "power3.out",
+                        overwrite: "auto",
+                    })
+                }
+                if (toolsLists[i]) {
+                    gsap.to(toolsLists[i], {
+                        color: active ? SITE_SECONDARY_GREY : SITE_GREY,
+                        duration: reduce ? 0 : 0.3,
+                        ease: "power3.out",
+                        overwrite: "auto",
+                    })
+                }
+            })
+        }
+
+        const onScroll = () => {
+            const mid = (window.innerHeight || 800) * 0.65
+            let idx = null
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i] && rows[i].getBoundingClientRect().top <= mid) idx = i
+            }
+            apply(idx)
+        }
+
+        onScroll()
+        window.addEventListener("scroll", onScroll, { passive: true })
+        window.addEventListener("resize", onScroll)
+        return () => {
+            window.removeEventListener("scroll", onScroll)
+            window.removeEventListener("resize", onScroll)
+            gsap.killTweensOf([...imgs.filter(Boolean), ...allTexts, ...toolsLists.filter(Boolean)])
+            gsap.set(imgs.filter(Boolean), { clearProps: "transform,transformOrigin" })
+            gsap.set([...allTexts, ...toolsLists.filter(Boolean)], { clearProps: "color" })
+        }
+    }, [vp.isDesktop, vp.isMobile])
+
+    const handleRowPress = (index) => {
+        if (vp.isDesktop) selectService(index)
+    }
+
+    const toggleAccordion = (index) => {
+        setOpenIndexes((current) =>
+            current.includes(index) ? current.filter((i) => i !== index) : [...current, index]
+        )
+    }
+
+    const selectService = (index) => {
+        if (index === activeIndex) return
+        setActiveIndex(index)
+    }
+
+    const handleProjectClickRef = useRef(null)
+    const handleProjectClick = (projectName) => {
+        const lower = projectName.toLowerCase()
+        const dest = lower.includes("weyra")
+            ? "/work/weyra"
+            : lower.includes("origen")
+              ? "/work/origen"
+              : lower.includes("yimaj")
+                ? "/work/yimaj"
+                : lower.includes("zhongshan")
+                  ? "/work/zhongshan"
+                  : null
+        if (!dest) return
+
+        prefetchHero(heroSlugFor(projectName)) // no-op if already warmed
+
+        if (pageTransition?.triggerTransition) {
+            pageTransition.triggerTransition(dest)
+        } else {
+            navigate(dest)
+        }
+    }
+    handleProjectClickRef.current = handleProjectClick
+
+    return (
+        <div data-page-transition="" className="relative w-full">
+            <section
+                id="work"
+                ref={workSectionRef}
+                className={`relative flex flex-col w-full pt-[144px] bg-[var(--bg-dark)] ${
+                    vp.isMobile ? "" : "justify-between min-h-[max(100svh,640px)]"
+                }`}
+            >
+                <div className="flex flex-col flex-1 w-full px-[var(--page-pad)] max-md:pt-0 pt-[32px] lg:pt-[40px] pb-[24px] md:pb-[16px] m-0">
+                    <div className="flex flex-col w-full mt-auto max-md:gap-[96px] gap-[48px] md:gap-[64px] m-0">
+                        <main className="flex flex-col items-start gap-[32px] w-full m-0 lg:flex-row lg:items-end lg:justify-between lg:gap-0">
+                            <MaskRevealText
+                                as="h1"
+                                mode="lines"
+                                linesFrom="md"
+                                active={pageReady}
+                                delay={0.1}
+                                stagger={0.08}
+                                className="H2 hero-title rwd-balance max-md:![text-wrap:pretty] max-md:!text-[40px] max-md:!leading-[1.1] sm:max-md:portrait:text-left sm:max-md:portrait:!text-[56px] !text-white m-0 p-0 uppercase"
+                            >
+                                {"What if your brand\nmatched what you\nhave built?"}
+                            </MaskRevealText>
+
+                            <MaskRevealText
+                                as="div"
+                                mode="lines"
+                                linesFrom="md"
+                                active={pageReady}
+                                delay={0.3}
+                                stagger={0.06}
+                                className="svc-size Body rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] max-w-[440px] sm:max-md:portrait:max-w-[560px] sm:max-md:portrait:self-start lg:max-w-none m-0 p-0 text-left self-end"
+                            >
+                                {"I close the gap between how good your\nbusiness is and how it looks."}
+                            </MaskRevealText>
+                        </main>
+
+                        <div className="flex flex-col items-start gap-1 w-full m-0 -translate-y-[12px] md:translate-y-0 md:flex-row md:justify-between md:items-center md:gap-0">
+                            <MaskRevealText
+                                mode="words"
+                                active={pageReady}
+                                delay={0.4}
+                                className="Nav sm:max-md:portrait:!text-[22px] uppercase text-[var(--text-dark-secondary)]"
+                            >
+                                Selected Work
+                            </MaskRevealText>
+
+                            <div className="hidden md:block">
+                                <MaskRevealText
+                                    mode="words"
+                                    active={pageReady}
+                                    delay={0.45}
+                                    className="Nav sm:max-md:portrait:!text-[22px] uppercase text-[var(--text-dark-secondary)] text-right"
+                                >
+                                    Based in Addis Ababa, Ethiopia
+                                </MaskRevealText>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {vp.isMobile ? (
+                    <div className="w-full pb-[var(--page-pad-y)]">
+                        <FlipbookCarousel
+                            fullWidth
+                            projects={[...WORK_PROJECTS].sort((a, b) =>
+                                b.name.toLowerCase().includes("weyra") ? 1 : -1
+                            )}
+                            onSelect={handleProjectClick}
+                        />
+                    </div>
+                ) : (
+                    <div ref={tickerWrapRef} className="relative flex-shrink-0 w-full pb-[16px] m-0 overflow-hidden will-change-transform">
+                        {/* Moving content needs a pause control (WCAG 2.2.2). Hidden until keyboard focus. */}
+                        <button
+                            type="button"
+                            onClick={toggleTickerPause}
+                            className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:right-[16px] focus-visible:top-[16px] focus-visible:z-10 focus-visible:rounded-full focus-visible:bg-white focus-visible:px-[14px] focus-visible:py-[8px] focus-visible:text-black Caption !text-[14px] uppercase !font-medium"
+                        >
+                            {tickerPaused ? "Play work gallery" : "Pause work gallery"}
+                        </button>
+                        <div
+                            ref={tickerViewportRef}
+                            role="region"
+                            aria-roledescription="carousel"
+                            aria-label="Selected work"
+                            onClickCapture={(e) => {
+                                if (tickerEngine.current?.consumeDrag()) {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                }
+                            }}
+                            style={{ touchAction: "pan-y" }}
+                            className="w-full overflow-hidden select-none cursor-grab data-[dragging=true]:cursor-grabbing data-[dragging=true]:[&>div]:pointer-events-none"
+                        >
+                            <div ref={tickerRef} className="flex w-full">
+                                {Array.from({ length: TICKER_MOTION.copies }, () => LOOPING_IMAGES).flat().map((src, idx) => {
+                                    const proj = WORK_PROJECTS.find((p) => p.image === src)
+                                    return (
+                                        <TickerSlide
+                                            key={idx}
+                                            src={src}
+                                            project={proj}
+                                            ready={tickerReady && pageReady}
+                                            isClone={idx >= LOOPING_IMAGES.length}
+                                            fetchPriority={idx < TICKER_PRIORITY_COUNT ? "high" : undefined}
+                                            onClick={() => proj && handleProjectClickRef.current?.(proj.name)}
+                                        />
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            {/* Tablet/mobile: the stacked name that is currently stuck is white; written as an attribute by the
+                scroll effect so no React render happens while scrolling. */}
+            <style>{`
+                .svc-sticky-head .svc-num, .svc-sticky-head .svc-title-text { transition: color 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
+                .svc-sticky-head[data-stuck="true"] .svc-num, .svc-sticky-head[data-stuck="true"] .svc-title-text { color: #fff !important; }
+                /* Cover strip above the first name: hides the panel that slides up past it. Attached to the name,
+                   so it sticks, moves and leaves with it. Off until the panel is about to pass behind the name. */
+                .svc-sticky-head[data-pinned]::before {
+                    content: ""; position: absolute; left: 0; right: 0; bottom: 100%; pointer-events: none; opacity: 0;
+                    height: calc(var(--svc-stick-top, 76px) + 200px);
+                    background: var(--svc-head-bg, var(--bg-dark, #050505));
+                }
+                .svc-sticky-head[data-pinned="true"]::before { opacity: 1; }
+                /* Leaving: the last panel is fully behind the stack. Panels fade out first, then the solid name
+                   backgrounds (and the cover strip) fade to transparent, so the names leave over the gradient.
+                   Coming back, the order is reversed (backgrounds first, panels after). */
+                .svc-sticky-head { transition: background-color 0.15s ease, box-shadow 0.15s ease; }
+                /* No fade on the way ON: a fade lets the image show above the name for a few frames. The fade
+                   only plays when the stack leaves (see the [data-leaving] rule below, which overrides this). */
+                .svc-sticky-head[data-pinned]::before { transition: none; }
+                .svc-panel { transition: opacity 0.15s ease 0.12s; }
+                [data-leaving="true"] .svc-panel { opacity: 0; transition: opacity 0.15s ease; }
+                [data-leaving="true"] .svc-sticky-head {
+                    background-color: transparent !important; box-shadow: none !important;
+                    transition: background-color 0.22s ease 0.14s, box-shadow 0.22s ease 0.14s;
+                }
+                [data-leaving="true"] .svc-sticky-head[data-pinned]::before {
+                    opacity: 0 !important; transition: opacity 0.22s ease 0.14s;
+                }
+                /* Image "settle" parallax. The wrapper is taller than the frame by the travel distance (so no edge
+                   can show) and starts offset; it settles to rest by the time the image reaches the names above
+                   it. Pure CSS scroll-driven animation on a transform: no JS, no lag in Safari 26+/Chrome; older
+                   browsers simply show the image at rest. The timeline lives on the static frame (not on the
+                   moving wrapper) and its top inset is the bottom of the name stack, so nothing plays while the
+                   image is hidden behind the names. */
+                .svc-par { position: absolute; left: 0; right: 0; top: -36px; bottom: -36px; will-change: transform; }
+                @supports (animation-timeline: view()) {
+                    .svc-par-box {
+                        view-timeline-name: --svc-img;
+                        view-timeline-axis: block;
+                        view-timeline-inset: calc(var(--svc-stick-top, 76px) + var(--svc-n, 1) * var(--svc-row-h, 84px)) 0px;
+                    }
+                    .svc-par {
+                        animation: svc-settle linear both;
+                        animation-timeline: --svc-img;
+                        animation-range: entry 0% exit 0%;
+                    }
+                    @media (prefers-reduced-motion: reduce) { .svc-par { animation: none; } }
+                }
+                @keyframes svc-settle {
+                    from { transform: translate3d(0, 36px, 0); }
+                    to { transform: translate3d(0, 0, 0); }
+                }
+                @media (hover: hover) {
+                    .svc-sticky-head:hover .svc-num, .svc-sticky-head:hover .svc-title-text { color: #fff !important; }
+                }
+            `}</style>
+            <SunriseTransition anchorRef={transitionRef} onHeaderTone={setHeaderLight}>
+                <section
+                    id="services"
+                    // Rows resize while they animate; keep the browser from nudging scrollTop in response.
+                    style={{ overflowAnchor: "none" }}
+                    className="relative flex flex-col justify-between w-full min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
+                >
+                    <div className="w-full h-full px-[var(--page-pad)] flex flex-col flex-1 m-0">
+                        <div ref={servicesHeadRef} className="flex flex-col items-start gap-[40px] sm:max-md:gap-[64px] w-full mb-[clamp(48px,8svh,80px)] md:flex-row md:justify-between md:items-start md:gap-[32px] m-0">
+                            <MaskRevealText as="h2" mode="words" active={servicesHeadActive} className="cap-align H1 md:shrink-0 md:max-lg:!text-[clamp(56px,8vw,96px)] text-white m-0 uppercase">
+                                Services
+                            </MaskRevealText>
+
+                            <MaskRevealText
+                                as="p"
+                                mode="words"
+                                active={servicesHeadActive}
+                                stagger={0.02}
+                                delay={0.1}
+                                className="cap-align svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] w-full max-w-[500px] md:w-auto md:flex-none md:ml-auto md:self-end md:min-w-0 !text-[var(--text-dark-muted)] m-0"
+                            >
+                                Good brands don't happen because everything looks nice. They happen when the strategy, identity and experience all point in the same direction. I work across four disciplines to make that happen.
+                            </MaskRevealText>
+                        </div>
+
+                        <div className="flex flex-col gap-[32px] w-full items-stretch lg:flex-row lg:items-start lg:mt-auto m-0">
+                            <div className="svc-list flex-1 min-w-0 flex flex-col w-full lg:pr-[32px] m-0">
+                                <motion.ul
+                                    ref={servicesListRef}
+                                    variants={servicesListContainerVariants}
+                                    initial="hidden"
+                                    animate={servicesListActive ? "show" : "hidden"}
+                                    className="flex flex-col m-0 p-0 list-none w-full"
+                                >
+                                    {/* Tablet/mobile: the stacked names have a solid background so panels slide behind them
+                                        (see the scroll effect). When the stack leaves, [data-leaving] fades the panels and
+                                        the backgrounds out so no black block is left over the sunrise gradient. */}
+                                    {SERVICES_DATA.map((service, index) => {
+                                        // Desktop: hover-selected. Tablet/mobile: every panel is always shown;
+                                        // the name that is currently stacked/stuck is the highlighted one.
+                                        const isActive = vp.isDesktop ? activeIndex === index : true
+                                        const isHighlighted = vp.isDesktop ? isActive : hoveredRow === index
+                                        const HeadWrap = "div"
+                                        const headWrapProps = vp.isDesktop
+                                            ? { className: "contents" }
+                                            : {
+                                                  className: "svc-sticky-head sticky z-10",
+                                                  "data-stuck": index === 0 ? "true" : "false",
+                                                  "data-pinned": index === 0 ? "false" : undefined,
+                                                  style: {
+                                                      top: `calc(var(--svc-stick-top, 76px) + ${index} * var(--svc-row-h, 84px))`,
+                                                      // Native exit: sticky keeps the head's MARGIN box inside the list, so a
+                                                      // bottom margin of (heads after it) * rowHeight makes the heads stop in
+                                                      // stack order and leave with the page together. The panel below pulls up
+                                                      // by the same amount (wrapper below), so the layout does not move.
+                                                      marginBottom: `calc(${SERVICES_DATA.length - 1 - index} * var(--svc-row-h, 84px))`,
+                                                      // Solid, so panels sliding behind the stack are fully hidden. Set --svc-head-bg
+                                                      // if the section background is not --bg-dark. The 1px shadow overlaps the name
+                                                      // above, so a fractional device pixel can never open a seam between two names.
+                                                      background: "var(--svc-head-bg, var(--bg-dark, #050505))",
+                                                      boxShadow: "0 -1px 0 0 var(--svc-head-bg, var(--bg-dark, #050505))",
+                                                  },
+                                              }
+
+                                        return (
+                                            <motion.li
+                                                key={service.id}
+                                                variants={servicesRowVariants}
+                                                className={vp.isDesktop ? "flex flex-col w-full m-0 relative" : "contents"}
+                                            >
+                                                <HeadWrap {...headWrapProps}>
+                                                <motion.div
+                                                    variants={servicesDividerVariants}
+                                                    className="w-full h-[1px] bg-[var(--border-dark)] origin-left"
+                                                />
+
+                                                <motion.div
+                                                    role={vp.isDesktop ? "button" : undefined}
+                                                    tabIndex={vp.isDesktop ? 0 : -1}
+                                                    aria-expanded={vp.isDesktop ? isActive : undefined}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter" || e.key === " ") {
+                                                            e.preventDefault()
+                                                            handleRowPress(index)
+                                                        }
+                                                    }}
+                                                    onMouseEnter={vp.isDesktop ? () => selectService(index) : undefined}
+                                                    onPointerEnter={
+                                                        vp.isDesktop
+                                                            ? undefined
+                                                            : (e) => {
+                                                                  if (e.pointerType !== "touch") setHoveredRow(index)
+                                                              }
+                                                    }
+                                                    onPointerLeave={vp.isDesktop ? undefined : () => setHoveredRow(null)}
+                                                    onClick={() => handleRowPress(index)}
+                                                    whileHover={{ y: -3 }}
+                                                    transition={{ duration: 0.25, ease: taylorEase }}
+                                                    className="svc-row cursor-pointer group w-full m-0 select-none"
+                                                >
+                                                    <motion.span
+                                                        animate={vp.isDesktop ? { color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 } : undefined}
+                                                        style={vp.isDesktop ? undefined : { color: SERVICE_INACTIVE_GREY }}
+                                                        transition={{ duration: 0.25, ease: taylorEase }}
+                                                        className="svc-num Caption font-semibold transition-colors select-none"
+                                                    >
+                                                        ({service.id})
+                                                    </motion.span>
+
+                                                    <div className="svc-title relative overflow-hidden">
+                                                        <motion.span
+                                                            animate={vp.isDesktop ? { color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 } : undefined}
+                                                            style={vp.isDesktop ? undefined : { color: SERVICE_INACTIVE_GREY }}
+                                                            transition={{ duration: 0.25, ease: taylorEase }}
+                                                            className="svc-title-text H2 block tracking-[-0.02em] group-hover:text-white uppercase"
+                                                        >
+                                                            {service.title}
+                                                        </motion.span>
+                                                    </div>
+
+                                                    <div className="svc-keywords-cell min-w-0 overflow-hidden lg:pl-[48px] xl:pl-[72px]">
+                                                        {/* Desktop keeps the keywords in the row; tablet/mobile shows them inside the expanded panel instead. */}
+                                                        {vp.isDesktop && (
+                                                        <motion.div
+                                                            animate={{
+                                                                color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY,
+                                                                opacity: isHighlighted ? 1 : 0.45,
+                                                                y: isHighlighted ? 0 : 4,
+                                                            }}
+                                                            transition={{ duration: 0.25, ease: taylorEase }}
+                                                            className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] whitespace-pre-line"
+                                                        >
+                                                            {service.keywords}
+                                                        </motion.div>
+                                                        )}
+                                                    </div>
+
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={`svc-icon relative block w-[14px] h-[14px] shrink-0 transition-opacity duration-300 ${
+                                                            !vp.isDesktop ? "opacity-0" : isHighlighted ? "opacity-100" : "opacity-50"
+                                                        }`}
+                                                    >
+                                                        <span className="absolute left-0 top-[6.25px] w-full h-[1.5px] bg-white" />
+                                                        <motion.span
+                                                            animate={{ scaleY: isActive ? 0 : 1 }}
+                                                            transition={{ duration: 0.35, ease: taylorEase }}
+                                                            className="absolute top-0 left-[6.25px] h-full w-[1.5px] bg-white"
+                                                        />
+                                                    </span>
+                                                </motion.div>
+                                                </HeadWrap>
+
+                                                {!vp.isDesktop && (
+                                                    <div style={{ marginTop: `calc(${-(SERVICES_DATA.length - 1 - index)} * var(--svc-row-h, 84px))` }}>
+                                                    <AccordionPanel active={isActive}>
+                                                            <div className="svc-panel pb-[28px]">
+                                                                <ServiceAccordionImage
+                                                                    src={service.image}
+                                                                    alt={service.title}
+                                                                    active={isActive}
+                                                                    depth={index + 1}
+                                                                />
+                                                                <div
+                                                                    style={{
+                                                                        opacity: isActive ? 1 : 0,
+                                                                        transform: isActive ? "translate3d(0,0,0)" : "translate3d(0,8px,0)",
+                                                                        transition: isActive
+                                                                            ? `opacity ${ACCORDION_OPEN.fadeIn}s ${APPLE_EASE_CSS} ${ACCORDION_OPEN.fadeInDelay}s, transform ${ACCORDION_OPEN.fadeIn + 0.1}s ${APPLE_EASE_CSS} ${ACCORDION_OPEN.fadeInDelay}s`
+                                                                            : `opacity ${ACCORDION_CLOSE.fadeOut}s ease-out, transform ${ACCORDION_CLOSE.duration}s ${APPLE_EASE_CSS}`,
+                                                                    }}
+                                                                    className="svc-panel-text !pl-[48px]"
+                                                                >
+                                                                    <p className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] whitespace-pre-line m-0 mb-[16px]">
+                                                                        {service.keywords}
+                                                                    </p>
+                                                                    <h4 className="Body rwd-balance !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-white m-0 font-semibold">
+                                                                        {flat(service.captionTitle)}
+                                                                    </h4>
+                                                                    <p className="Body !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] rwd-pretty m-0 mt-[4px]">
+                                                                        {service.captionText}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                    </AccordionPanel>
+                                                    </div>
+                                                )}
+                                            </motion.li>
+                                        )
+                                    })}
+
+                                    <motion.div
+                                        variants={servicesDividerVariants}
+                                        className="w-full h-[1px] bg-[var(--border-dark)] origin-left"
+                                    />
+                                </motion.ul>
+                            </div>
+
+                            <div className="hidden lg:flex w-[332px] flex-shrink-0 flex-col justify-between m-0">
+                                <div className="relative w-full h-[clamp(150px,25svh,230px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]">
+                                    <ServiceImageStage
+                                        images={SERVICE_IMAGES}
+                                        index={activeIndex}
+                                        label={SERVICES_DATA[activeIndex].title}
+                                    />
+                                </div>
+
+                                <div className="relative min-h-[120px] mt-[24px] m-0 overflow-hidden flex flex-col justify-end">
+                                    <AnimatePresence mode="wait">
+                                        <motion.div
+                                            key={activeIndex}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -20 }}
+                                            transition={{ duration: 0.4, ease: "easeOut" }}
+                                            className="flex flex-col w-full m-0"
+                                        >
+                                            <h4 className="Body rwd-balance !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-white mb-6 whitespace-pre-line !font-semibold">
+                                                {SERVICES_DATA[activeIndex].captionTitle}
+                                            </h4>
+                                            <p className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] m-0">
+                                                {SERVICES_DATA[activeIndex].captionText}
+                                            </p>
+                                        </motion.div>
+                                    </AnimatePresence>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div ref={transitionRef} aria-hidden="true" className="relative w-full h-[30vh] pointer-events-none" />
+
+                <section
+                    id="about"
+                    className="relative flex flex-col w-full lg:min-h-screen pt-[48px] lg:pt-[144px] pb-[48px] md:pb-[64px] px-[var(--page-pad)] bg-transparent"
+                >
+                    <div className="w-full flex flex-col gap-[40px] md:gap-[48px] items-start lg:flex-row lg:items-stretch lg:gap-[64px] xl:gap-[138px]">
+                        <div className="flex-shrink-0 lg:self-stretch">
+                            <div className="w-[160px] h-[211px] md:w-[217px] md:h-[286px] lg:sticky lg:top-[120px]">
+                                <div className="relative w-full h-full bg-[var(--bg-surface-light)] overflow-hidden rounded-lg md:rounded-[12px]">
+                                    <img
+                                        src="/portrait.jpeg"
+                                        alt="Iyosias Portrait"
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="object-cover w-full h-full grayscale"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 flex flex-col w-full min-w-0">
+                            <div className="flex flex-col">
+                                <p className="H5 sm:max-md:portrait:!text-[28px] pb-[4px] mb-[24px] md:mb-[40px] lg:mb-[64px] text-[var(--text-light-primary)]">
+                                    ABOUT ME
+                                </p>
+
+                                <ScrollFillGroup
+                                    blocks={[
+                                        {
+                                            text: "Industries change; the standard doesn't. Over eight years, I have shaped brands across real estate, coffee, technology, consumer products, and social impact.",
+                                            className: "H3 about-text rwd-pretty sm:max-md:portrait:!text-[42px] sm:max-md:portrait:!leading-[1.1] lg:max-xl:!text-[36px] lg:max-xl:!leading-[1.1] w-full max-w-[900px] mb-[32px] md:mb-[48px] lg:mb-[64px] uppercase",
+                                        },
+                                        {
+                                            text: "Great brands win on distinction, not volume. I turn complex ideas into identities that define their category.",
+                                            className: "H3 about-text rwd-pretty sm:max-md:portrait:!text-[42px] sm:max-md:portrait:!leading-[1.1] lg:max-xl:!text-[36px] lg:max-xl:!leading-[1.1] w-full max-w-[900px] mb-[24px] uppercase",
+                                        },
+                                    ]}
+                                />
+                            </div>
+
+                            <div id="expertise" className="flex flex-col w-full mt-[48px] lg:mt-[clamp(72px,14svh,144px)]">
+                                <p className="H5 sm:max-md:portrait:!text-[28px] pb-[4px] nav-title mb-[48px] md:mb-[80px] lg:mb-[clamp(48px,8svh,80px)] text-[var(--text-light-primary)]">
+                                    EXPERTISE
+                                </p>
+
+                                {vp.isDesktop && (
+                                    <ExpertiseCursorImage
+                                        x={cursorX}
+                                        y={cursorY}
+                                        hoveredIndex={hoveredExpertise}
+                                        ratios={expertiseRatios}
+                                    />
+                                )}
+
+                                <motion.ul
+                                    variants={servicesContainerVariants}
+                                    initial="hidden"
+                                    whileInView="show"
+                                    viewport={{ once: true, amount: 0.15 }}
+                                    onMouseLeave={() => {
+                                        hoverRef.current = null
+                                        setHoveredExpertise(null)
+                                        setActiveExpertise(scrollIndexRef.current)
+                                    }}
+                                    className="flex flex-col m-0 p-0 list-none w-full"
+                                >
+                                    {EXPERTISE_DATA.map((item, index) => {
+                                        const isActive = activeExpertise === index
+                                        const isDimmed = activeExpertise !== null && !isActive
+
+                                        return (
+                                            <motion.li
+                                                key={item.title}
+                                                ref={(el) => {
+                                                    expertiseRefs.current[index] = el
+                                                }}
+                                                variants={taylorServiceRowVariants}
+                                                onMouseMove={
+                                                    vp.isDesktop
+                                                        ? (e) => {
+                                                              cursorX.set(e.clientX)
+                                                              cursorY.set(e.clientY)
+                                                              const last = lastPointerRef.current
+                                                              if (e.clientX === last.x && e.clientY === last.y) return
+                                                              lastPointerRef.current = { x: e.clientX, y: e.clientY }
+                                                              hoverRef.current = index
+                                                              setActiveExpertise(index)
+                                                              setHoveredExpertise(index)
+                                                          }
+                                                        : undefined
+                                                }
+                                                className="flex flex-col w-full m-0"
+                                            >
+                                                <motion.div
+                                                    variants={dividerVariants}
+                                                    style={{ backgroundColor: SITE_GREY }}
+                                                    className="w-full h-[1px] origin-left"
+                                                />
+
+                                                <motion.div
+                                                    initial={false}
+                                                    animate={{
+                                                        x: vp.isDesktop && isActive ? EXPERTISE_SHIFT : 0,
+                                                    }}
+                                                    transition={{ duration: 0.45, ease: taylorEase }}
+                                                    className="grid grid-cols-1 gap-[16px] md:grid-cols-2 md:gap-[24px] lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px] pt-[24px] pb-[48px] md:pt-[28px] md:pb-[56px] lg:pt-[clamp(16px,2.5svh,28px)] lg:pb-[clamp(24px,5svh,56px)] will-change-transform relative items-start"
+                                                >
+                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H2 expertise-title rwd-balance m-0 tracking-[-0.02em] uppercase !text-[28px] lg:!text-[30px] xl:!text-[44px] lg:transition-colors lg:duration-500">
+                                                        {item.title}
+                                                    </h3>
+
+                                                    <div
+                                                        className="flex flex-col justify-between h-full pr-[120px] md:pr-0"
+                                                        style={vp.isDesktop ? { paddingRight: EXPERTISE_SHIFT } : undefined}
+                                                    >
+                                                        <p data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] rwd-balance whitespace-pre-line m-0 lg:transition-colors lg:duration-500">
+                                                            {glueLastWords(item.description)}
+                                                        </p>
+
+                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] flex flex-col lg:flex-row lg:flex-wrap lg:gap-x-[6px] m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px] lg:mt-[12px]">
+                                                            {item.tools.map((tool, i) => (
+                                                                <li key={tool}>
+                                                                    {tool}
+                                                                    {i < item.tools.length - 1 ? "," : ""}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+
+                                                    {(() => {
+                                                        const fitted = fitByArea(
+                                                            expertiseRatios[item.image] || 1,
+                                                            vp.isMobile ? EXPERTISE_SIZE.mobile : EXPERTISE_SIZE.tablet
+                                                        )
+                                                        const boost = vp.isMobile ? item.mobileBoost || 1 : 1
+                                                        const size = { w: Math.round(fitted.w * boost), h: Math.round(fitted.h * boost) }
+                                                        const nudge = (vp.isMobile && item.mobileOffset) || { x: 0, y: 0 }
+                                                        return (
+                                                            <div className="absolute inset-0 flex items-end justify-end pb-[20px] md:items-center md:justify-end md:pb-0 lg:hidden pointer-events-none">
+                                                                <img
+                                                                    data-exp-img
+                                                                    src={item.image}
+                                                                    alt=""
+                                                                    aria-hidden="true"
+                                                                    draggable={false}
+                                                                    loading="lazy"
+                                                                    decoding="async"
+                                                                    style={{ width: size.w, height: size.h, opacity: 0, marginRight: -nudge.x, marginBottom: nudge.y }}
+                                                                    className="shrink-0 object-contain pointer-events-none select-none will-change-[transform,opacity]"
+                                                                />
+                                                            </div>
+                                                        )
+                                                    })()}
+                                                </motion.div>
+                                            </motion.li>
+                                        )
+                                    })}
+
+                                    <motion.div
+                                        variants={dividerVariants}
+                                        style={{ backgroundColor: SITE_GREY }}
+                                        className="w-full h-[1px] origin-left"
+                                    />
+                                </motion.ul>
+                            </div>
+                        </div>
+                    </div>
+                    {/* Moved spacer outside the flex row so the sticky portrait stops exactly at the end of the list */}
+                    <div className="w-full h-[48px] lg:h-[144px]" aria-hidden="true" />
+                </section>
+            </SunriseTransition>
+        </div>
+    )
 }
