@@ -11,6 +11,7 @@ import MaskRevealText from "../components/MaskRevealText"
 import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
+import MobileImageGroups, { useIsMobile } from "../components/MobileImageGroups"
 import { Img as BaseImg, SceneVideo, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
 import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
@@ -77,11 +78,43 @@ const Video = (props) => (
 
 const ZHONGSHAN_LETTER_SPACING_EM = -0.02
 
+const ZHONGSHAN_RUN_1 = [
+  { id: "screen", ratio: 1472 / 867, ratioClass: "aspect-[1472/867]", bg: "dark",
+    render: (p) => <Img src={ASSETS.screen} alt="Seamless Sourcing exhibition screen with a glass shipping container" ratio={p.ratio} className={`${p.className} bg-black`} imgClassName="max-md:object-[50%_50%]" /> },
+  { id: "poster", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
+    render: (p) => <Img src={ASSETS.poster} alt="Zhongshan poster in a timber-panelled lobby: A home is only as good as its details" ratio={p.ratio} className={p.className} /> },
+  { id: "signage", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
+    render: (p) => <Img src={ASSETS.signage} alt="Zhongshan teal logo signage on a dark panel against a blue sky" ratio={p.ratio} className={p.className} /> },
+  { id: "folder", ratio: 1472 / 867, ratioClass: "aspect-[1472/867]", bg: "dark",
+    render: (p) => <Img src={ASSETS.folder} alt="Zhongshan One Stop Sourcing brochure and 2026 Collection catalogue" ratio={p.ratio} className={`${p.className} bg-black`} imgClassName="max-md:object-[50%_50%]" /> },
+  { id: "boxes", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
+    render: (p) => <Img src={ASSETS.boxes} alt="Navy Zhongshan packaging boxes on a warehouse cart" ratio={p.ratio} className={p.className} /> },
+  { id: "cargo", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
+    render: (p) => <Img src={ASSETS.cargo} alt="Zhongshan branded shipping container on a truck" ratio={p.ratio} className={p.className} /> },
+]
+
+const ZHONGSHAN_RUN_2 = [
+  { id: "floorplan", ratio: 1476 / 867, ratioClass: "aspect-[1476/867]", bg: "light",
+    render: (p) => <Video src={ASSETS.floorplan} label="Isometric 3D floorplan of the apartment" ratio={p.ratio} className={`${p.className} bg-[#aeaaa9]`} /> },
+  { id: "doors", ratio: 1476 / 867, ratioClass: "aspect-[1476/867]", bg: "light",
+    render: (p) => <Img src={ASSETS.doors} alt="Three interior doors in grey, walnut and oak finishes" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
+  { id: "bathroom", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
+    render: (p) => <Img src={ASSETS.bathroom} alt="Floating timber and marble bathroom vanity with backlit mirrors and brass sconces" ratio={p.ratio} className={p.className} /> },
+  { id: "kitchen", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
+    render: (p) => <Img src={ASSETS.kitchen} alt="Oak kitchen with stainless island, burr wood stool and amber pendant light" ratio={p.ratio} className={p.className} /> },
+  { id: "living", ratio: 1476 / 798, ratioClass: "aspect-[1476/798]", bg: "dark",
+    render: (p) => <Img src={ASSETS.living} alt="Furniture vignette with a curved sofa, lounge chairs and timber screens on a navy stage" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
+]
+
+
 export default function ZhongshanCaseStudy() {
   const outletCtx = useOutletContext()
   const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
   const heroFade = outletCtx?.heroFade
 
+  const isMobile = useIsMobile()
+  // inline so no other rule can override the stack gap on phones
+  const mobileGap = isMobile ? { gap: "var(--page-pad)" } : undefined
   const ready = usePageReady()
   const pageTransition = usePageTransition()
 
@@ -260,8 +293,8 @@ export default function ZhongshanCaseStudy() {
         </div>
       </section>
 
-      <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[12px] md:gap-[16px]">
-        <div className="flex flex-col gap-[12px] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
+      <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
+        <div style={mobileGap} className="flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
             <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] items-end max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:flex max-md:flex-col max-md:flex-1">
               <h2 className={`${CS_HEADING} lg:col-span-7 max-md:mb-auto max-md:pb-[32px]`}>
@@ -282,7 +315,7 @@ export default function ZhongshanCaseStudy() {
             data-header-bg="light"
             className="w-full flex flex-col pt-0 pb-0 max-md:h-auto portrait:max-xl:h-auto landscape:md:max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
           >
-            <div className="grid grid-cols-[minmax(0,845fr)_minmax(0,619fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-[auto_auto] portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-[auto_auto] gap-[12px] md:gap-[16px] portrait:max-xl:gap-[12px] flex-1 min-h-0">
+            <div style={mobileGap} className="grid grid-cols-[minmax(0,845fr)_minmax(0,619fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-[auto_auto] portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-[auto_auto] gap-[var(--page-pad)] md:gap-[16px] portrait:max-xl:gap-[12px] flex-1 min-h-0">
               <Img
                 src={ASSETS.logoConstruction}
                 alt="Letter Z plus modern building equals the Zhongshan mark, over a cargo ship"
@@ -302,7 +335,7 @@ export default function ZhongshanCaseStudy() {
           </section>
 
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
-            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
+            <div style={mobileGap} className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
                 <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-auto max-md:pb-[32px]`}>
                   Technical By Nature<br className="max-md:hidden" />{" "}Editorial By Design
@@ -347,7 +380,7 @@ export default function ZhongshanCaseStudy() {
             <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
               Contrast With<br className="max-md:hidden" />{" "}Purpose
             </h2>
-            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0 max-md:flex max-md:flex-col">
+            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0 max-md:flex max-md:flex-col">
               <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
                 <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
                   Contrast With Purpose
@@ -390,11 +423,11 @@ export default function ZhongshanCaseStudy() {
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--page-pad)] ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
                 <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
-                  Bring It To Life With<br className="max-md:hidden" />{" "}Warmth &amp; Legacy
+                  Precision<br className="max-md:hidden" />{" "}In Every Detail
                 </h2>
                 <Img src={ASSETS.flyer} alt="Finishing Materials, Sourced from China flyer on stone samples" ratio="aspect-[726/700]" className="max-md:h-auto lg:min-h-[31.7vw]" />
               </div>
@@ -403,6 +436,10 @@ export default function ZhongshanCaseStudy() {
           </section>
         </div>
 
+        {isMobile && <MobileImageGroups items={ZHONGSHAN_RUN_1} padVar="--page-pad" />}
+
+        {!isMobile && (
+        <>
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src={ASSETS.screen}
@@ -411,7 +448,7 @@ export default function ZhongshanCaseStudy() {
             className="bg-black max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
           <Img src={ASSETS.poster} alt="Zhongshan poster in a timber-panelled lobby: A home is only as good as its details" ratio="aspect-[726/867]" />
           <Img src={ASSETS.signage} alt="Zhongshan teal logo signage on a dark panel against a blue sky" ratio="aspect-[726/867]" />
         </section>
@@ -424,10 +461,12 @@ export default function ZhongshanCaseStudy() {
             className="bg-black max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
           <Img src={ASSETS.boxes} alt="Navy Zhongshan packaging boxes on a warehouse cart" ratio="aspect-[726/867]" />
           <Img src={ASSETS.cargo} alt="Zhongshan branded shipping container on a truck" ratio="aspect-[726/867]" />
         </section>
+        </>
+        )}
 
         <section data-header-bg="light" className={`sticky top-0 z-0 w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
@@ -438,9 +477,9 @@ export default function ZhongshanCaseStudy() {
             className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        <div className="relative z-10 w-full bg-[var(--bg-light)] flex flex-col gap-[12px] md:gap-[16px]">
+        <div className="relative z-10 w-full bg-[var(--bg-light)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
         <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} ${FRAME_PB} lg:h-[100dvh]`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
             <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
               <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
                 3D Renders<br className="max-md:hidden" />{" "}That Feel Real
@@ -461,6 +500,10 @@ export default function ZhongshanCaseStudy() {
           </div>
         </section>
 
+        {isMobile && <MobileImageGroups items={ZHONGSHAN_RUN_2} padVar="--page-pad" />}
+
+        {!isMobile && (
+        <>
         <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Video
             src={ASSETS.floorplan}
@@ -478,7 +521,7 @@ export default function ZhongshanCaseStudy() {
             className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
           <Img src={ASSETS.bathroom} alt="Floating timber and marble bathroom vanity with backlit mirrors and brass sconces" ratio="aspect-[726/867]" />
           <Img src={ASSETS.kitchen} alt="Oak kitchen with stainless island, burr wood stool and amber pendant light" ratio="aspect-[726/867]" />
         </section>
@@ -490,6 +533,8 @@ export default function ZhongshanCaseStudy() {
             ratio="aspect-[1476/798]"
             className="max-md:h-auto lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
         </section>
+        </>
+        )}
 
         <NextProject current="zhongshan" />
         </div>

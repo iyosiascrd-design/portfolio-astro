@@ -8,6 +8,7 @@ export const PROJECTS = [
   { slug: "weyra", route: "/work/weyra", title: "Weyra", disciplines: ["Brand Identity"], year: "2023", hero: "/weyra-hero.jpg" },
   { slug: "yimaj", route: "/work/yimaj", title: "Yimaj", disciplines: ["Brand Identity", "3D Visuals"], year: "2025", hero: "/yimaj-hero.jpg" },
   { slug: "origen", route: "/work/origen", title: "Origen", disciplines: ["Brand Identity"], year: "2025", hero: "/origen-hero.jpg" },
+  { slug: "zhongshan", route: "/work/zhongshan", title: "Zhongshan", disciplines: ["Brand Identity", "3D Visuals"], year: "2026", hero: "/zhongshan-house.jpg" },
 ]
 
 const SHOW_MARGIN = "0px 0px -5% 0px"

@@ -11,6 +11,7 @@ import MaskRevealText from "../components/MaskRevealText"
 import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
+import MobileImageGroups, { useIsMobile } from "../components/MobileImageGroups"
 import { Img, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
 import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
@@ -55,11 +56,36 @@ const FRAME5_PHOTO_SRC = "/weyra-clothing.jpg"
 
 const WEYRA_LETTER_SPACING_EM = -0.02
 
+const WEYRA_RUN = [
+  { id: "banner", ratio: 1472 / 942, ratioClass: "aspect-[1472/942]", bg: "dark",
+    render: (p) => <Img src="/weyra-banner.jpg" alt="Voices That Build Outdoor Banners" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
+  { id: "magazine", ratio: 722 / 942, ratioClass: "aspect-[722/942]", bg: "dark",
+    render: (p) => <Img src="/weyra-magazine.jpg" alt="Empowering Youth For Peace Report" ratio={p.ratio} className={p.className} /> },
+  { id: "profile", ratio: 722 / 942, ratioClass: "aspect-[722/942]", bg: "dark",
+    render: (p) => <Img src="/weyra-profile.jpg" alt="Weyra Social Media Layout" ratio={p.ratio} className={p.className} /> },
+  { id: "phones", ratio: 1, ratioClass: "aspect-square", bg: "light",
+    render: (p) => (
+      <div data-reveal className={`relative w-full overflow-hidden bg-[#d9f5c8] rounded-lg ${p.ratio} ${p.className}`}>
+        <LazyImg src="/weyra-phones.jpg" alt="Weyra Mobile Stories" className="absolute inset-0 block w-full h-full object-contain scale-[1.35] will-change-transform" />
+      </div>
+    ) },
+  { id: "poster", ratio: 722 / 688, ratioClass: "aspect-[722/688]", bg: "dark",
+    render: (p) => <Img src="/weyra-poster.jpg" alt="Youth holding Weyra Poster" ratio={p.ratio} className={p.className} /> },
+  { id: "board", ratio: 722 / 688, ratioClass: "aspect-[722/688]", bg: "dark",
+    render: (p) => <Img src="/weyra-board.jpg" alt="Branded Basketball Backboard" ratio={p.ratio} className={p.className} /> },
+  { id: "flags", ratio: 1472 / 962, ratioClass: "aspect-[1472/962]", bg: "dark",
+    render: (p) => <Img src="/weyra-flags.jpg" alt="Weyra Outdoor Event Flags" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
+]
+
+
 export default function WeyraCaseStudy() {
   const outletCtx = useOutletContext()
   const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
   const heroFade = outletCtx?.heroFade
 
+  const isMobile = useIsMobile()
+  // inline so no other rule can override the stack gap on phones
+  const mobileGap = isMobile ? { gap: "var(--page-pad)" } : undefined
   const ready = usePageReady()
   const pageTransition = usePageTransition()
 
@@ -235,8 +261,8 @@ export default function WeyraCaseStudy() {
         </div>
       </section>
 
-      <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[12px] md:gap-[16px]">
-        <div className="flex flex-col gap-[12px] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
+      <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
+        <div style={mobileGap} className="flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
             <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] items-end max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:flex max-md:flex-col max-md:flex-1">
               <h2 className={`${CS_HEADING} lg:col-span-7 max-md:mb-auto max-md:pb-[32px]`}>
@@ -257,7 +283,7 @@ export default function WeyraCaseStudy() {
             data-header-bg="light"
             className="w-full flex flex-col pt-0 pb-0 max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
           >
-            <div className="grid grid-cols-[minmax(0,845fr)_minmax(0,607fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-2 portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-2 gap-[12px] md:gap-[16px] flex-1 min-h-0">
+            <div style={mobileGap} className="grid grid-cols-[minmax(0,845fr)_minmax(0,607fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-2 portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-2 gap-[var(--page-pad)] md:gap-[16px] flex-1 min-h-0">
               <Img
                 src={FRAME3_STORY_SRC}
                 alt="Olive Leaves + White Dove = Weyra"
@@ -277,7 +303,7 @@ export default function WeyraCaseStudy() {
           </section>
 
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
-            <div className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[12px] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
+            <div style={mobileGap} className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
                 <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-auto max-md:pb-[32px]`}>
                   A Clear Voice<br className="max-md:hidden" />{" "}Everywhere
@@ -319,7 +345,7 @@ export default function WeyraCaseStudy() {
             <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
               Familiarly<br className="max-md:hidden" />{" "}Ethiopian
             </h2>
-            <div className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0 max-md:flex max-md:flex-col">
+            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0 max-md:flex max-md:flex-col">
               <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
                 <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
                   Familiarly Ethiopian
@@ -362,8 +388,8 @@ export default function WeyraCaseStudy() {
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--page-pad)] ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
                 <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
                   One Identity<br className="max-md:hidden" />{" "}In Harmony
@@ -375,6 +401,10 @@ export default function WeyraCaseStudy() {
           </section>
         </div>
 
+        {isMobile && <MobileImageGroups items={WEYRA_RUN} padVar="--page-pad" />}
+
+        {!isMobile && (
+        <>
         <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src="/weyra-banner.jpg"
@@ -383,7 +413,7 @@ export default function WeyraCaseStudy() {
             className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
         </section>
 
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
           <Img src="/weyra-magazine.jpg" alt="Empowering Youth For Peace Report" ratio="aspect-[722/942]" />
           <Img src="/weyra-profile.jpg" alt="Weyra Social Media Layout" ratio="aspect-[722/942]" />
         </section>
@@ -398,7 +428,7 @@ export default function WeyraCaseStudy() {
           </div>
         </section>
 
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[74.1vh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[12px] md:gap-[16px]`}>
+        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[74.1vh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
           <Img src="/weyra-poster.jpg" alt="Youth holding Weyra Poster" ratio="aspect-[722/688]" />
           <Img src="/weyra-board.jpg" alt="Branded Basketball Backboard" ratio="aspect-[722/688]" />
         </section>
@@ -410,6 +440,8 @@ export default function WeyraCaseStudy() {
             ratio="aspect-[1472/962]"
             className="max-md:h-auto lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
         </section>
+        </>
+        )}
 
         <NextProject current="weyra" />
       </main>
