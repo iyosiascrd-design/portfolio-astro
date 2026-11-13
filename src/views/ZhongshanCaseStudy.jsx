@@ -24,6 +24,7 @@ gsap.registerPlugin(ScrollTrigger)
 const FRAME_PB = "pb-0"
 
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
+const CS_LG_FRAME = "lg:h-[100dvh] lg:pt-[calc(var(--header-h,64px)+var(--page-pad))] lg:pb-[var(--page-pad)]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
 const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] max-md:pb-[var(--page-pad)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
@@ -366,7 +367,7 @@ export default function ZhongshanCaseStudy() {
                   className="w-full h-full" imgClassName="object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col tablet-hide w-full">
+              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col md:max-lg:hidden w-full">
                 <Media
                   src={ASSETS.typeTablet}
                   alt="Zhongshan product catalogue on a tablet over perforated metal"
@@ -376,11 +377,11 @@ export default function ZhongshanCaseStudy() {
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col lg:flex lg:flex-col pb-0 ${CS_FULL_H}`}>
             <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
               Contrast With<br className="max-md:hidden" />{" "}Purpose
             </h2>
-            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-[0_1_40.35vw] lg:mt-auto md:min-h-0 max-md:flex max-md:flex-col">
+            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
               <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
                 <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
                   Contrast With Purpose
@@ -388,7 +389,7 @@ export default function ZhongshanCaseStudy() {
                 <LineMaskText as="p" className={`${CS_PARA} md:hidden self-start mb-[24px]`}>
                   A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
                 </LineMaskText>
-                <div className="lg:col-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
+                <div className="lg:col-start-1 lg:row-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
                   <div className="w-full md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#eff5f5]">
                     <Media
                       src={ASSETS.color}
@@ -399,19 +400,19 @@ export default function ZhongshanCaseStudy() {
                 </div>
               </div>
 
-              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 md:order-1 h-full max-md:contents">
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-[12px] lg:mt-[var(--page-pad)] max-md:hidden`}>
+              <div className="cs-f5-wrap flex flex-col justify-between lg:flex-col-reverse lg:col-start-2 lg:row-start-1 md:order-1 h-full max-md:contents">
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-[12px] lg:mt-[var(--page-pad)] lg:mb-0 max-md:hidden`}>
                   A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
                 </LineMaskText>
                 <Img
                   src={ASSETS.colorTexture}
                   alt="Grey and blue fabric and timber material samples"
                   ratio="aspect-[357/345]"
-                  className="bg-[#d9d4cb] lg:!aspect-auto lg:flex-1 lg:min-h-0 lg:max-h-[400px] w-full tablet-hide max-md:order-3"
+                  className="bg-[#d9d4cb] w-full lg:!aspect-[357/345] lg:shrink-0 md:max-lg:hidden max-md:order-3"
                 />
               </div>
 
-              <div className="lg:col-start-3 md:order-3 flex flex-col h-full max-md:order-4">
+              <div className="lg:col-start-3 lg:row-start-1 md:order-3 flex flex-col h-full max-md:order-4">
                 <Img
                   src={ASSETS.hardhat}
                   alt="Worker in a teal Zhongshan Sourcing Technology hard hat"
@@ -423,15 +424,15 @@ export default function ZhongshanCaseStudy() {
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 max-md:pt-[96px] lg:h-[100dvh] lg:pt-[144px] lg:pb-[var(--page-pad)] lg:flex lg:flex-col`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
                 <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
                   Precision<br className="max-md:hidden" />{" "}In Every Detail
                 </h2>
-                <Img src={ASSETS.flyer} alt="Finishing Materials, Sourced from China flyer on stone samples" ratio="aspect-[726/700]" className="max-md:h-auto lg:min-h-[31.7vw]" />
+                <Img src={ASSETS.flyer} alt="Finishing Materials, Sourced from China flyer on stone samples" ratio="aspect-[726/700]" className="max-md:h-auto lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
               </div>
-              <Img src={ASSETS.cardboard} alt="Courier in a teal uniform carrying a Zhongshan porcelain tile sample box" ratio="aspect-[726/700]" className="lg:min-h-[31.7vw]" />
+              <Img src={ASSETS.cardboard} alt="Courier in a teal uniform carrying a Zhongshan porcelain tile sample box" ratio="aspect-[726/700]" className="lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
             </div>
           </section>
         </div>
@@ -440,7 +441,7 @@ export default function ZhongshanCaseStudy() {
 
         {!isMobile && (
         <>
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
+        <section data-header-bg="dark" className={`w-full ${FRAME_PB} ${CS_LG_FRAME} flex flex-col`}>
           <Img
             src={ASSETS.screen}
             alt="Seamless Sourcing exhibition screen with a glass shipping container"
@@ -478,8 +479,8 @@ export default function ZhongshanCaseStudy() {
         </section>
 
         <div className="relative z-10 w-full bg-[var(--bg-light)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
-        <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} ${FRAME_PB} lg:h-[100dvh]`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
+        <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 max-md:pt-[96px] ${CS_LG_FRAME} lg:flex lg:flex-col`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
             <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
               <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
                 3D Renders<br className="max-md:hidden" />{" "}That Feel Real
@@ -488,14 +489,14 @@ export default function ZhongshanCaseStudy() {
                 src={ASSETS.tiles}
                 label="Fan of timber floor tiles"
                 ratio="aspect-[726/867]"
-                className="max-md:h-auto bg-[#cfcfcf] lg:min-h-[31.7vw]"
+                className="max-md:h-auto bg-[#cfcfcf] lg:min-h-0 lg:h-full lg:!aspect-auto"
               />
             </div>
             <Img
               src={ASSETS.wallPanel}
               alt="Timber and stone wall panels with an armchair on a dark stage"
               ratio="aspect-[726/867]"
-              className="bg-[#111111] lg:min-h-[31.7vw]"
+              className="bg-[#111111] lg:min-h-0 lg:h-full lg:!aspect-auto"
             />
           </div>
         </section>

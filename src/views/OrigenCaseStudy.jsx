@@ -401,8 +401,8 @@ export default function OrigenCaseStudy() {
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
-            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[var(--cs-gap)] md:gap-x-[16px] gap-y-[var(--cs-gap)] md:gap-y-[16px] lg:gap-y-0 md:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col lg:flex lg:flex-col pb-0 ${CS_FULL_H}`}>
+            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[var(--cs-gap)] md:gap-x-[16px] gap-y-[var(--cs-gap)] md:gap-y-[16px] lg:gap-y-0 md:flex-1 lg:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
               <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))]">
                 <h2 className={`cs-f5-heading ${CS_HEADING} md:col-span-2 lg:col-span-3 md:-mt-[0.234em] max-lg:order-1 max-md:mb-auto max-md:pb-[32px] md:max-lg:mb-[64px]`}>
                   Highland<br className="max-md:hidden" />{" "}Inspired Color
