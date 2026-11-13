@@ -416,7 +416,7 @@ export default function OrigenCaseStudy() {
           </section>
         </div>
 
-        <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-[var(--cs-gap)] ${CS_FRAME_PT} pb-0`}>
+        <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 max-md:mb-[4px] ${CS_FRAME_PT} pb-0`}>
           <div className="flex flex-col gap-[12px] md:gap-[16px] max-md:flex-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px] md:gap-[16px] max-md:flex max-md:flex-col">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))] md:contents">
@@ -446,7 +446,7 @@ export default function OrigenCaseStudy() {
           </div>
         </section>
 
-        <div className="w-full h-[48px] lg:h-[144px]" aria-hidden="true" />
+        <div className="w-full h-[48px] lg:h-[144px] max-md:hidden" aria-hidden="true" />
         <NextProject current="origen" />
       </main>
     </div>
