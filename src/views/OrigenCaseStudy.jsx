@@ -123,10 +123,10 @@ function InViewGif({ src, alt, className = "", threshold = 0.35, rounded = true 
     }
   }, [src, threshold])
 
-  const roundingClass = rounded ? "rounded-lg md:rounded-[12px]" : ""
+  const roundingClass = rounded ? "rounded-[12px] md:rounded-[16px] lg:rounded-[24px]" : ""
   return (
     <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${roundingClass} ${className}`}>
-      {started && <Media src={src} alt={alt} lazy={false} className="absolute inset-0 w-full h-full object-cover rounded-[inherit]" />}
+      {started && <Media src={src} alt={alt} lazy={false} className="absolute -inset-px w-[calc(100%+2px)] h-[calc(100%+2px)] max-w-none object-cover scale-[1.012]" />}
     </div>
   )
 }
@@ -416,7 +416,7 @@ export default function OrigenCaseStudy() {
                   <InViewGif
                     src={ASSETS.color}
                     alt="Origen colour palette"
-                    className="cs-f5-gif bg-[#262511] w-full max-md:h-auto md:h-full aspect-[1205/1162] lg:aspect-auto"
+                    className="cs-f5-gif bg-transparent w-full max-md:h-auto md:h-full aspect-[1205/1162] lg:aspect-auto"
                   />
                 </div>
               </div>

@@ -308,7 +308,7 @@ export default function ZhongshanCaseStudy() {
             <Media
               src={ASSETS.suppliers}
               alt="Curved balconies and timber fins on a modern residential facade"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover rounded-lg md:rounded-[12px]"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
             />
           </section>
 
@@ -371,7 +371,7 @@ export default function ZhongshanCaseStudy() {
                 <Media
                   src={ASSETS.typeTablet}
                   alt="Zhongshan product catalogue on a tablet over perforated metal"
-                  className="w-full max-md:h-auto md:h-full object-cover rounded-lg md:rounded-[12px]"
+                  className="w-full max-md:h-auto md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
                 />
               </div>
             </div>
@@ -390,11 +390,11 @@ export default function ZhongshanCaseStudy() {
                   A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
                 </LineMaskText>
                 <div className="lg:col-start-1 lg:row-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
-                  <div className="w-full md:h-full overflow-hidden rounded-lg md:rounded-[12px] bg-[#eff5f5]">
+                  <div className="w-full md:h-full isolate overflow-hidden rounded-[12px] md:rounded-[16px] lg:rounded-[24px] bg-transparent">
                     <Media
                       src={ASSETS.color}
                       alt="Zhongshan colour palette"
-                      className="w-full max-md:h-auto max-md:aspect-[602/581] md:h-full object-cover object-left-top"
+                      className="w-full max-md:h-auto max-md:aspect-[602/581] md:h-full object-cover object-left-top scale-[1.012]"
                     />
                   </div>
                 </div>

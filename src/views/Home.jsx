@@ -409,7 +409,7 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
                     height: TICKER_HEIGHT,
                     ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
                 }}
-                className="relative w-full overflow-hidden rounded-lg md:rounded-[12px] lg:rounded-[8px] bg-[var(--bg-surface-dark)]"
+                className="relative isolate w-full overflow-hidden rounded-[12px] md:rounded-[16px] lg:rounded-[24px] bg-[var(--bg-surface-dark)]"
             >
                 <div className="absolute inset-0 w-full h-full">
                     <img
@@ -509,7 +509,7 @@ const ServiceAccordionImage = ({ src, alt, active, depth = 1 }) => {
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     return (
         <div
-            className="svc-par-box relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]"
+            className="svc-par-box relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] isolate overflow-hidden rounded-[12px] md:rounded-[16px] border border-[var(--border-dark-subtle)]"
             // isolation + translateZ keep Safari from painting the moving image over the rounded corners
             style={{ "--svc-n": depth, isolation: "isolate", transform: "translateZ(0)" }}
         >
@@ -1600,7 +1600,7 @@ export default function Home() {
                             </div>
 
                             <div className="hidden lg:flex w-[332px] flex-shrink-0 flex-col justify-between m-0">
-                                <div className="relative w-full h-[clamp(150px,25svh,230px)] bg-[var(--bg-surface-dark)] overflow-hidden rounded-lg md:rounded-[12px] border border-[var(--border-dark-subtle)]">
+                                <div className="relative w-full h-[clamp(150px,25svh,230px)] bg-[var(--bg-surface-dark)] isolate overflow-hidden rounded-[12px] md:rounded-[16px] border border-[var(--border-dark-subtle)]">
                                     <ServiceImageStage
                                         images={SERVICE_IMAGES}
                                         index={activeIndex}
@@ -1641,7 +1641,7 @@ export default function Home() {
                     <div className="w-full flex flex-col gap-[40px] md:gap-[48px] items-start lg:flex-row lg:items-stretch lg:gap-[64px] xl:gap-[138px]">
                         <div className="flex-shrink-0 lg:self-stretch">
                             <div className="w-[160px] h-[211px] md:w-[217px] md:h-[286px] lg:sticky lg:top-[120px]">
-                                <div className="relative w-full h-full bg-[var(--bg-surface-light)] overflow-hidden rounded-lg md:rounded-[12px]">
+                                <div className="relative w-full h-full bg-[var(--bg-surface-light)] isolate overflow-hidden rounded-[12px]">
                                     <img
                                         src="/portrait.jpeg"
                                         alt="Iyosias Portrait"
