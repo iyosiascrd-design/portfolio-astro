@@ -109,7 +109,7 @@ const AUTO_RESUME_DELAY = 3000 // ms of calm after a touch, wheel or key interac
 // The two --type-* lines bump the small text on this page (Label / Caption) to 14px
 // using the site's own tokens, so the classes in index.css keep doing the styling.
 const TITLE_GAP = 80 // px between the bottom of the card labels and the top of the WORK title
-const LABELS_H = 44 // px reserved under the images for the name/tag labels (8px margin + 2 lines)
+const LABELS_H = 48 // px reserved under the images for the name/tag labels (12px margin + 2 lines)
 const TITLE_RATIO = 0.293 // WORK font-size as a fraction of the card width (same as 9.2vw / 31.4vw)
 
 // ONE source of truth for the card shape. Keep in sync with the aspect-[4/5] class on the image box below.
@@ -1117,7 +1117,7 @@ export default function Work() {
                         paint() fades it in only while the card stacks behind the next one. */}
                     <div className="card-shade pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent to-black opacity-0" />
                   </div>
-                  <div className="card-meta mt-2 flex items-start justify-between gap-4 text-black">
+                  <div className="card-meta mt-3 flex items-start justify-between gap-4 text-black">
                     <h3 className="Caption !text-[14px] uppercase !font-medium leading-[1.2]">{card.name}</h3>
                     <ul className="Caption !text-[14px] uppercase !font-medium leading-[1.2] text-right [&>li+li]:mt-[2px]">
                       {card.tags.map((t) => (
