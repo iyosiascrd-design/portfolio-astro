@@ -626,8 +626,6 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         }
 
         const draw = (sv) => {
-            if (window.innerWidth < 768) return; 
-
             if (!img || !arc) return
             const shift = BASE_SHIFT + SPEED * sv
             const clamp01 = (n) => Math.min(1, Math.max(0, n))
