@@ -1,6 +1,6 @@
 // src/pages/Work.jsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, memo } from "react"
 import { Link, useNavigate, useOutletContext } from "react-router-dom"
 import gsap from "gsap"
 
@@ -8,12 +8,8 @@ import FlipbookCarousel from "../components/FlipbookCarousel"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import { WORK_PROJECTS } from "../lib/projects"
 
-// Card images sit directly in the project's /public folder, which is served from "/".
-// If you move them into a subfolder (e.g. public/work/), change this to "/work/".
 const IMAGE_BASE = "/"
 
-// Order updated to match the design (Yimaj first). `match` finds the project in WORK_PROJECTS (for its image).
-// `alt` is the accessible description of the image: tweak the wording to match the artwork.
 const CARDS = [
   { name: "Yimaj", match: "yimaj", image: IMAGE_BASE + "yimaj-color-card.jpg", alt: "Yimaj brand colour card, shown as a 3D visual", to: "/work/yimaj", tags: ["Brand Identity", "3D Visuals"] },
   { name: "Zhongshan", match: "zhongshan", image: IMAGE_BASE + "zhongshan-cargo.jpg", alt: "Zhongshan brand identity on cargo packaging, shown as a 3D visual", to: "/work/zhongshan", tags: ["Brand Identity", "3D Visuals"] },
@@ -21,114 +17,70 @@ const CARDS = [
   { name: "Weyra", match: "weyra", image: IMAGE_BASE + "weyra-badge.jpg", alt: "Weyra brand identity on a badge", to: "/work/weyra", tags: ["Brand Identity"] },
 ]
 
-// Same cards in the shape the mobile flipbook expects (same order, so card indexes match CARDS)
 const FLIP_PROJECTS = CARDS.map((c) => ({ id: c.match, name: c.name, image: c.image }))
-
-// Triple the cards for the infinite scrolling treadmill effect (carousel only)
 const LOOPED_CARDS = [...CARDS, ...CARDS, ...CARDS]
 const N = CARDS.length
 
-// Phone only: height the availability footnote needs below the flipbook (2 text lines + bottom padding).
-// The flipbook shrinks just enough that this always fits on screen.
 const PHONE_FOOTER_H = 64
-
 const SERVICES = ["Brand Identity", "Digital Design", "Communication", "3D Visual"]
 
-// Clicking a service slides the carousel to the first matching card (clicking it again steps to the
-// next match). Services without an entry here stay plain text until cards use their tag.
-//   tag:  the card tag to look for
-//   only: true = match only cards whose tags are JUST this one (no other tags)
-// Add e.g. "Digital Design": { tag: "Digital Design" } once a card has that tag.
 const SERVICE_TAGS = {
-  "Brand Identity": { tag: "Brand Identity", only: true }, // Origen, Weyra
-  "3D Visual": { tag: "3D Visuals" }, // Yimaj, Zhongshan
+  "Brand Identity": { tag: "Brand Identity", only: true },
+  "3D Visual": { tag: "3D Visuals" },
 }
 
-// Availability badge (bottom left). Change these to update the status text and the clock.
-const AVAILABILITY_TEXT = "Available for opportunities" // keep this in sync with your real availability
+const AVAILABILITY_TEXT = "Available for opportunities" 
 const TIME_ZONE = "Africa/Addis_Ababa"
 const TIME_ABBR = "EAT"
 const TIME_PLACE = "Addis Ababa"
 
-/* ---------- images ---------- */
-const IMAGE_W = 800 // intrinsic ratio hint (4:5) so the browser reserves space before load
+const IMAGE_W = 800 
 const IMAGE_H = 1000
-// Upper bound of the card width (portrait tablets use up to 46vw). Cards can be smaller when the window is
-// short, which only means the browser may fetch a slightly larger file than needed, never a blurry one.
 const IMAGE_SIZES = "(min-width: 768px) 46vw, 100vw"
-// Flip to true once you have exported responsive copies next to each original, named
-//   <name>-640.webp  <name>-960.webp  <name>-1280.webp  <name>-1600.webp  <name>-1920.webp   (and the same with .avif)
-// e.g. zhongshan-cargo-640.avif. The original JPG stays as the fallback <img>.
-// Leave false until the files exist: a <source> that 404s does NOT fall back to the <img>.
 const USE_RESPONSIVE_IMAGES = false
-// 1600 and 1920 cover 2x displays on big monitors (a card can reach ~800 CSS px wide there).
 const IMAGE_WIDTHS = [640, 960, 1280, 1600, 1920]
 const srcSetFor = (src, ext) =>
   IMAGE_WIDTHS.map((w) => `${src.replace(/\.[^.]+$/, "")}-${w}.${ext} ${w}w`).join(", ")
-const IMAGE_WAIT_MAX = 1500 // ms: never hold the intro longer than this waiting for images to decode
+const IMAGE_WAIT_MAX = 1500 
 
-// Motion feel: Apple-style. Dragging is 1:1 (the row is glued to your finger, no lag). Letting go keeps
-// your exact finger velocity, projects where a flick would coast to (UIScrollView's deceleration maths),
-// snaps to the nearest card, and gets there on a critically damped spring that starts at that velocity.
-const DECELERATION_RATE = 0.994 // slightly shorter coast than before: with velocity-biased paging, flicks settle sooner
-const SNAP_RESPONSE = 0.38 // s: SwiftUI-style spring response for settling on a card after a release (smaller = snappier)
-const REDUCED_SNAP_RESPONSE = 0.25 // prefers-reduced-motion
-const CATCH_SMOOTH = 0.04 // s: how fast a gliding row is caught when you touch it
-const SLACK_RATE = 18 // 1/s: eases out any leftover offset between row and finger (drags now rebase at the threshold, so this is normally 0)
-const VELOCITY_WINDOW = 60 // ms of finger history used to measure release velocity
-const FLICK_MIN = 250 // px/s: any flick faster than this always advances at least one card (like UIScrollView paging)
-const GLIDE_SMOOTH = 0.3 // programmatic moves (arrow keys, service click, intro slide): long soft glide, in seconds
+const DECELERATION_RATE = 0.994 
+const SNAP_RESPONSE = 0.38 
+const REDUCED_SNAP_RESPONSE = 0.25 
+const CATCH_SMOOTH = 0.04 
+const SLACK_RATE = 18 
+const VELOCITY_WINDOW = 60 
+const FLICK_MIN = 250 
+const GLIDE_SMOOTH = 0.3 
 const REDUCED_GLIDE_SMOOTH = 0.14
-const MAX_THROW = 5 // max cards a single flick can travel (the loop is endless, so a hard flick can go far)
-const FLICK_GAIN = 0.7 // extra distance for the fastest flicks (0 = pure projection). Faster flick = disproportionately farther
-const FLICK_FAST = 3000 // px/s: flick speed at which the gain and the long glide are fully applied
-const MAX_FLICK_SMOOTH = 0.7 // s: softest spring a fast flick may use (longer = a longer, more luxurious slow-down)
-const STACK_SCALE = 0.15 // how much a card shrinks while it stacks (0 for reduced motion)
-const SHADE_MAX = 0.4 // max strength of the stacking gradient (0 = none, 1 = solid black at the dark edge)
-const WHEEL_SNAP_DELAY = 90 // ms after the last wheel/trackpad event before settling on a card
-// Intro animation (carousel). Times in ms.
-const INTRO_DELAY = 250 // wait before the first card starts (raise this if a page-transition overlay is still covering the page)
-const INTRO_DURATION = 1100 // how long each card takes to glide in
-const INTRO_STAGGER = 130 // gap between one card starting and the next
-const INTRO_EASE = "cubic-bezier(0.16, 1, 0.3, 1)" // strong ease-out: fast start, long soft landing
-// One-card hint: right after the cards land, the row glides exactly one card to the left, once, and stays there.
-// Speed is governed by GLIDE_SMOOTH above (raise it for a slower, softer slide).
+const MAX_THROW = 5 
+const FLICK_GAIN = 0.7 
+const FLICK_FAST = 3000 
+const MAX_FLICK_SMOOTH = 0.7 
+const STACK_SCALE = 0.15 
+const SHADE_MAX = 0.4 
+const WHEEL_SNAP_DELAY = 90 
+const INTRO_DELAY = 250 
+const INTRO_DURATION = 1100 
+const INTRO_STAGGER = 130 
+const INTRO_EASE = "cubic-bezier(0.16, 1, 0.3, 1)" 
 const USE_INTRO_SLIDE = true
-const SNAP = true // settle exactly on a card after release (set false for free-floating)
-const DRAG_THRESHOLD = 5 // px of movement before a press counts as a drag, not a click
-// Auto-scroll (carousel): a slow constant-speed drift to the left that stops while the mouse is over the row.
-// It rides the same critically damped spring as everything else, so it eases in from rest and eases out to a stop.
-// Off by default: the row only moves when the visitor moves it (plus the one-card intro slide above).
+const SNAP = true 
+const DRAG_THRESHOLD = 5 
 const USE_AUTO_SCROLL = false
-const AUTO_SPEED = 0.1 // cards per second (0.1 is about 45px/s at the design size)
-const AUTO_SMOOTH = 0.6 // s: spring softness while drifting (bigger = longer, gentler ease-in)
-const HOVER_RESUME_DELAY = 800 // ms the row rests after the mouse leaves before it eases back into motion
-const AUTO_RESUME_DELAY = 3000 // ms of calm after a touch, wheel or key interaction before drifting again
+const AUTO_SPEED = 0.1 
+const AUTO_SMOOTH = 0.6 
+const HOVER_RESUME_DELAY = 800 
+const AUTO_RESUME_DELAY = 3000 
 
-// Layout measurements taken from the design. Tweak these to fine-tune.
-// The two --type-* lines bump the small text on this page (Label / Caption) to 14px
-// using the site's own tokens, so the classes in index.css keep doing the styling.
-const TITLE_GAP = 80 // px between the bottom of the card labels and the top of the WORK title
-const LABELS_H = 48 // px reserved under the images for the name/tag labels (12px margin + 2 lines)
-const TITLE_RATIO = 0.293 // WORK font-size as a fraction of the card width (same as 9.2vw / 31.4vw)
-
-// ONE source of truth for the card shape. Keep in sync with the aspect-[4/5] class on the image box below.
-const CARD_ASPECT = 1.25 // card height / card width (4:5)
-
-// The card width shrinks on short windows so the title always fits below the cards with the full gap.
-// (dvh, not vh, so mobile browser chrome doesn't throw the size off)
-const FIT = CARD_ASPECT + 0.8 * TITLE_RATIO // 1.484
-
-// Smallest card the height rule may produce. Below the window height where this floor is reached the
-// page stops squeezing and scrolls instead of clipping the WORK title (see --min-page-h).
+const TITLE_GAP = 80 
+const LABELS_H = 48 
+const TITLE_RATIO = 0.293 
+const CARD_ASPECT = 1.25 
+const FIT = CARD_ASPECT + 0.8 * TITLE_RATIO 
 const MIN_CARD_W = 200
-
-// Left column and cards origin follow the card width (same ratios as the 31.4vw / 30vw / 34.2vw design),
-// so when a short window shrinks the cards the whole composition shrinks with them.
 const LEFT_COL_RATIO = 30 / 31.4
 const CARDS_LEFT_RATIO = 34.2 / 31.4
 
-// Portrait tablets: let the card grow (the height rule still caps it).
 const buildLayoutVars = (portrait) => ({
   "--work-top": "clamp(96px, 9.2vw, 140px)",
   "--card-w": `min(${portrait ? "max(260px, 46vw)" : "max(260px, 31.4vw)"}, max(${MIN_CARD_W}px, calc((100dvh - var(--work-top) - ${LABELS_H + TITLE_GAP}px - var(--page-pad)) / ${FIT})))`,
@@ -139,30 +91,22 @@ const buildLayoutVars = (portrait) => ({
   "--type-caption-size": "14px",
   "--title-top": `calc(var(--work-top) + var(--card-h) + ${LABELS_H + TITLE_GAP}px)`,
   "--title-h": `calc(var(--card-w) * ${TITLE_RATIO} * 0.8)`,
-  // Window height at which MIN_CARD_W is reached: never make the page shorter than this on tablet/desktop
   "--min-page-h": `calc(var(--work-top) + ${MIN_CARD_W * FIT}px + ${LABELS_H + TITLE_GAP}px + var(--page-pad))`,
 })
 
-// Giant WORK title: sits exactly TITLE_GAP below the labels, sized relative to the cards
 const TITLE_STYLE = {
   top: `var(--title-top)`,
   fontSize: `calc(var(--card-w) * ${TITLE_RATIO})`,
   lineHeight: 0.8,
 }
 
-// Left column small text (services) is 20px. Set as a token so .Caption keeps styling it.
 const LEFT_TEXT_VARS = { "--type-caption-size": "20px" }
-
-// Corner radius of the project images. Change this one value to match the rest of the site.
-// Scales with the card (12px at the smallest, about 14px at the 452px design size, 24px max).
 const CARD_RADIUS = "clamp(12px, calc(var(--card-w) * 0.03), 24px)"
 
-const NOOP = () => {} // stable identity, so effects never re-fire because of a fallback function
+const NOOP = () => {} 
+const CAROUSEL_QUERY = "(min-width: 768px)" 
+const PHONE_QUERY = "(max-width: 767px)" 
 
-const CAROUSEL_QUERY = "(min-width: 768px)" // 768px triggers the fluid tablet/desktop carousel
-const PHONE_QUERY = "(max-width: 767px)" // the flipbook is strictly for phones
-
-// Subscribes to a media query without re-running anything on every resize event
 function useMediaQuery(query) {
   const subscribe = useCallback(
     (cb) => {
@@ -177,9 +121,6 @@ function useMediaQuery(query) {
 
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n))
 
-// Critically damped spring (the "SmoothDamp" used in game engines).
-// Velocity is continuous, so you get a real ease-in when you start dragging
-// and a real ease-out when you let go.
 const smoothDamp = (current, goal, vel, smoothTime, dt) => {
   const omega = 2 / smoothTime
   const k = omega * dt
@@ -189,7 +130,6 @@ const smoothDamp = (current, goal, vel, smoothTime, dt) => {
   return [goal + (change + temp) * decay, (vel - omega * temp) * decay]
 }
 
-// Quiet footnote: muted dot + availability line, then the live local time (24h, updates every 10s)
 const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
   timeZone: TIME_ZONE,
   hour: "2-digit",
@@ -197,12 +137,7 @@ const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
   hour12: false,
 })
 
-// Touch devices get a 44px tap target via an invisible ::before that extends past the text, so the
-// rows keep the same tight spacing as on desktop (padding would push them apart).
-// One row in the services list. GSAP drives the hover so it stays smooth and interruptible.
-// The <li> never moves (it is the hover target); only the <button> inside slides, so the hover
-// area can't flicker at the edge. Mid-hover reversals simply retarget the tween from where it is.
-const SERVICE_SHIFT = 8 // px the label slides right on hover
+const SERVICE_SHIFT = 8 
 const SERVICE_ACTIVE_COLOR = "#000000"
 
 function ServiceItem({ label, active, onSelect }) {
@@ -216,7 +151,6 @@ function ServiceItem({ label, active, onSelect }) {
     activeRef.current = active
   }, [active])
 
-  // Read the resting colour once (inherited from the list), and wire up hover on the stable <li>
   useEffect(() => {
     const li = liRef.current
     const btn = btnRef.current
@@ -255,7 +189,6 @@ function ServiceItem({ label, active, onSelect }) {
     }
   }, [])
 
-  // When this row becomes (or stops being) the selected service, update its colour unless hovered
   useEffect(() => {
     const btn = btnRef.current
     if (!btn || hovering.current) return
@@ -306,6 +239,72 @@ function Availability() {
   )
 }
 
+// MEMOIZED CARD COMPONENT to prevent heavy re-renders during interactions
+const MemoizedCarouselCard = memo(React.forwardRef(({ card, index, canonical, eager, high, pageReady, triggerTransition, navigate, draggedRef }, ref) => {
+  const project = WORK_PROJECTS.find((p) => p.slug === card.match || p.id === card.match)
+  const imgSrc = card.image || project?.image
+
+  const img = (
+    <img
+      src={imgSrc}
+      alt={canonical ? card.alt || card.name : ""}
+      width={IMAGE_W}
+      height={IMAGE_H}
+      sizes={IMAGE_SIZES}
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      fetchPriority={high ? "high" : "auto"}
+      className="h-full w-full object-cover"
+      draggable={false}
+    />
+  )
+
+  return (
+    <Link
+      to={card.to}
+      onClick={(e) => {
+        if (draggedRef.current) return 
+        e.preventDefault()
+        if (triggerTransition) triggerTransition(card.to)
+        else navigate(card.to)
+      }}
+      ref={ref}
+      aria-hidden={canonical ? undefined : true}
+      tabIndex={canonical ? undefined : -1}
+      className={`block shrink-0 md:[contain:layout] md:w-[var(--card-w)] ${canonical ? "md:will-change-transform" : ""}`}
+      style={{ transformOrigin: "left center" }}
+      draggable={false}
+    >
+      <div className="card-inner" style={!pageReady ? { opacity: 0 } : {}}>
+        <div
+          className="relative aspect-[4/5] w-full overflow-hidden bg-[var(--bg-surface-light)]"
+          style={{ borderRadius: CARD_RADIUS, isolation: "isolate", transform: "translateZ(0)" }}
+        >
+          {imgSrc &&
+            (USE_RESPONSIVE_IMAGES ? (
+              <picture>
+                <source type="image/avif" srcSet={srcSetFor(imgSrc, "avif")} sizes={IMAGE_SIZES} />
+                <source type="image/webp" srcSet={srcSetFor(imgSrc, "webp")} sizes={IMAGE_SIZES} />
+                {img}
+              </picture>
+            ) : (
+              img
+            ))}
+          <div className="card-shade pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent to-black opacity-0" />
+        </div>
+        <div className="card-meta mt-3 flex items-start justify-between gap-4 text-black">
+          <h3 className="Caption !text-[14px] uppercase !font-medium leading-[1.2]">{card.name}</h3>
+          <ul className="Caption !text-[14px] uppercase !font-medium leading-[1.2] text-right [&>li+li]:mt-[2px]">
+            {card.tags.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </Link>
+  )
+}))
+
 export default function Work() {
   const outletCtx = useOutletContext()
   const navigate = useNavigate()
@@ -316,34 +315,23 @@ export default function Work() {
   const layoutVars = useMemo(() => buildLayoutVars(isPortraitTablet), [isPortraitTablet])
 
   const pageReady = usePageReady()
-
-  // Bring in the triggerTransition function from the PageTransitionOverlay context
   const transitionCtx = usePageTransition()
   const triggerTransition = transitionCtx?.triggerTransition
 
   const viewportRef = useRef(null)
   const trackRef = useRef(null)
   const draggedRef = useRef(false)
-
-  // Holds every card element for the carousel
   const cardRefs = useRef([])
-
-  // The carousel effect fills this with a function that glides the row to card k (carousel only)
   const slideRef = useRef(null)
-  // Mobile flipbook handle: flipRef.current.goTo(k) flips to card k
   const flipRef = useRef(null)
-  // Remembers the last service clicked so a repeat click can step to the next matching card
   const lastServiceRef = useRef({ tag: null, idx: -1 })
-  // The service last clicked in the left list: it stays black and shifted right until another is clicked
   const [activeService, setActiveService] = useState(null)
-
-  // Always point at the latest outlet context, so the mount effect below can run exactly once
   const ctxRef = useRef(outletCtx)
+  
   useEffect(() => {
     ctxRef.current = outletCtx
   })
 
-  // Light page: header text goes dark. Start at the top. Runs once on mount.
   useEffect(() => {
     const ctx = ctxRef.current
     const setHeaderLight = ctx?.setHeaderLight || NOOP
@@ -352,44 +340,40 @@ export default function Work() {
     if (ctx?.heroFade) ctx.heroFade.set(1)
   }, [])
 
-  /* ---------- horizontal movement: infinite loop + stacking, critically-damped easing ---------- */
-  // Carousel only. Re-runs when the breakpoint flips, so mobile never carries carousel state.
   useEffect(() => {
     const viewport = viewportRef.current
     const track = trackRef.current
     if (!isCarousel || !viewport || !track) return
-    if (!pageReady) return // DO NOT START THE INTRO UNTIL THE PRELOADER IS DONE
+    if (!pageReady) return 
 
     const cards = cardRefs.current.slice(0, LOOPED_CARDS.length)
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const glideSmooth = reduceMotion ? REDUCED_GLIDE_SMOOTH : GLIDE_SMOOTH
-    // SwiftUI "response" -> SmoothDamp smoothTime (omega = 2*pi/response = 2/smoothTime)
     const snapSmooth = (reduceMotion ? REDUCED_SNAP_RESPONSE : SNAP_RESPONSE) / Math.PI
     const stackScale = reduceMotion ? 0 : STACK_SCALE
     const dpr = window.devicePixelRatio || 1
 
-    let x = 0 // rendered offset
-    let v = 0 // rendered velocity (px/s), carried across drag -> release so nothing ever jumps
-    let target = 0 // where x is easing toward
+    let x = 0 
+    let v = 0 
+    let target = 0 
     let raf = 0
     let lastFrame = 0
     let dragging = false
     let activePointer = null
     let startX = 0
     let startTarget = 0
-    let step = 0 // card width + gap, measured only when the layout changes
+    let step = 0 
     let cancelled = false
     let wheelTimer = 0
     const settleWaiters = []
 
-    let settleSmooth = glideSmooth // spring softness used while not tracking a finger
-    let wheelActive = false // trackpad swipe in progress: also tracked 1:1
-    let autoDrift = false // true while the row is auto-scrolling (the loop pushes target left every frame)
-    let slack = 0 // leftover px between row and finger; drags rebase at the threshold so this stays 0
-    let travel = 0 // unwrapped position (the loop wrap would otherwise look like a huge velocity)
-    const samples = [] // finger history (raw pointer px for drags, row travel for wheel)
+    let settleSmooth = glideSmooth 
+    let wheelActive = false 
+    let autoDrift = false 
+    let slack = 0 
+    let travel = 0 
+    const samples = [] 
 
-    // Cache each card's parts once so the per-frame paint does no DOM queries
     const parts = cards.map((card) =>
       card
         ? {
@@ -397,14 +381,11 @@ export default function Work() {
             inner: card.querySelector(".card-inner"),
             meta: card.querySelector(".card-meta"),
             shade: card.querySelector(".card-shade"),
-            last: -1, // last state written (skips redundant style writes)
+            last: -1, 
           }
         : null
     )
 
-    // Measured once per layout change instead of every frame. Uses the LAST card: it's always
-    // far right, so it never has a stacking transform applied. getBoundingClientRect gives
-    // the exact fractional width, whereas offsetWidth rounds and makes cards drift off their slot.
     const measure = () => {
       const last = cards[cards.length - 1]
       if (!last) {
@@ -431,13 +412,10 @@ export default function Work() {
       })
     }
 
-    // snapPx = true only when the row has come to rest: land on a whole device pixel so images and
-    // labels are crisp instead of slightly soft from a fractional resting offset.
     const paint = (snapPx = false) => {
       if (!step) return
       const setWidth = step * N
 
-      // --- INFINITE LOOP: silently jump one full set when we leave the middle set ---
       if (x <= -setWidth * 1.5) {
         x += setWidth
         target += setWidth
@@ -451,13 +429,11 @@ export default function Work() {
       const tx = snapPx ? Math.round(x * dpr) / dpr : x
       track.style.transform = `translate3d(${tx}px, 0, 0)`
 
-      // --- STACKING DECK ---
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i]
         if (!p) continue
-        const left = i * step + x // card's position relative to the viewport's left edge
+        const left = i * step + x 
 
-        // Normal state. The 0.5px dead-zone stops a card from sitting at 99.9% scale.
         if (left > -0.5) {
           if (p.last !== 0) {
             p.card.style.transform = ""
@@ -471,7 +447,6 @@ export default function Work() {
 
         const progress = Math.min(1, -left / step)
 
-        // Fully buried behind later cards: don't paint it at all
         if (left <= -2 * step) {
           if (p.last !== 2) {
             p.card.style.visibility = "hidden"
@@ -480,7 +455,6 @@ export default function Work() {
           continue
         }
 
-        // Pin to the left edge (counter-translate), shrink from the left, dim via overlay
         p.card.style.visibility = ""
         p.card.style.transform = `translate3d(${-left}px, 0, 0) scale(${1 - stackScale * progress})`
         if (p.shade) p.shade.style.opacity = String(SHADE_MAX * progress)
@@ -490,23 +464,17 @@ export default function Work() {
     }
 
     const loop = (t) => {
-      // Clamp both ways: rAF's timestamp is the frame start and can be slightly older than
-      // the performance.now() stored by kick(), which would otherwise give a negative dt.
       const dt = Math.max(0, Math.min(0.05, (t - lastFrame) / 1000 || 1 / 60))
       lastFrame = t
       const prevX = x
       const tracking = (dragging && draggedRef.current) || wheelActive
 
       if (tracking) {
-        // Direct manipulation: the row IS where your finger put it (1:1, one write per frame).
         slack *= Math.exp(-dt * SLACK_RATE)
         if (Math.abs(slack) < 0.05) slack = 0
         x = target + slack
         v = 0
       } else {
-        // Finger down but not dragging yet = catch the glide quickly; otherwise settle softly.
-        // v is carried over from the release, so nothing ever jumps.
-        // Auto-scroll: move the goal at a constant speed; the spring turns that into an ease-in and ease-out.
         if (autoDrift) target -= step * AUTO_SPEED * dt
         const smoothTime = dragging ? CATCH_SMOOTH : settleSmooth
         ;[x, v] = smoothDamp(x, target, v, smoothTime, dt)
@@ -515,13 +483,12 @@ export default function Work() {
       paint()
 
       if (tracking) {
-        // Drags sample the raw pointer in onPointerMove; only the wheel is sampled per frame
         if (wheelActive) pushSample()
-        if (slack === 0) { raf = 0; return } // finger is still: sleep until the next move
+        if (slack === 0) { raf = 0; return } 
       } else if (Math.abs(target - x) < 0.05 && Math.abs(v) < 0.5) {
         x = target
         v = 0
-        paint(true) // at rest: land on a whole device pixel
+        paint(true) 
         raf = 0
         settleWaiters.splice(0).forEach((resolve) => resolve())
         return
@@ -535,15 +502,13 @@ export default function Work() {
       raf = requestAnimationFrame(loop)
     }
 
-    // Resolves once the glide has come to rest (no setTimeout guessing)
     const whenSettled = () =>
       new Promise((resolve) => {
         if (!raf && Math.abs(target - x) < 0.05) resolve()
         else settleWaiters.push(resolve)
       })
 
-    /* ---------- auto-scroll: slow constant-speed drift, stopped by hover (off unless USE_AUTO_SCROLL) ---------- */
-    let autoEnabled = false // switched on once the intro has finished (and only if USE_AUTO_SCROLL)
+    let autoEnabled = false 
     let hovering = false
     let inView = true
     let resumeTimer = 0
@@ -558,17 +523,15 @@ export default function Work() {
       !hovering &&
       inView &&
       !document.hidden &&
-      !viewport.querySelector(":focus-visible") // keyboard focus only: a mouse click must not block it forever
+      !viewport.querySelector(":focus-visible") 
 
     const startDrift = () => {
       if (autoDrift) return
       autoDrift = true
       settleSmooth = AUTO_SMOOTH
-      kick() // starts from rest, so the spring gives a natural ease-in
+      kick() 
     }
 
-    // snap = true: glide to the nearest card and stop (the velocity is kept, so it decelerates smoothly).
-    // snap = false: the caller is about to set its own target (drag, wheel, keys).
     const stopDrift = (snap) => {
       if (!autoDrift) return
       autoDrift = false
@@ -579,7 +542,6 @@ export default function Work() {
       }
     }
 
-    // If something is still blocking (off-screen, keyboard focus...), check again shortly
     const tryResume = () => {
       if (canDrift()) startDrift()
       else resumeTimer = setTimeout(tryResume, 500)
@@ -614,12 +576,9 @@ export default function Work() {
     )
     io.observe(viewport)
 
-    /* ---------- intro helpers (declared first: input handlers call interrupt()) ---------- */
     const timers = []
     const anims = []
-    let touched = false // any real interaction cancels the hint
-    // The card(s) stacked at the far left (the previous loop set) are hidden during the intro,
-    // otherwise they show through while the first cards are still sliding in.
+    let touched = false 
     const behind = cards.slice(0, N)
     const hideBehind = () => behind.forEach((c) => c && (c.style.opacity = "0"))
     const showBehind = () =>
@@ -637,16 +596,13 @@ export default function Work() {
     }
     const wait = (ms) => new Promise((resolve) => timers.push(setTimeout(resolve, ms)))
 
-    /* ---------- release physics ---------- */
-    // Records a position/time pair. Drags pass the RAW pointer x and its event timestamp (so velocity is the
-    // finger's, not the rendered row's, which trails by a frame). The wheel uses the default (row travel, now).
     const pushSample = (p = travel, t = performance.now()) => {
       samples.push({ p, t })
       while (samples.length > 2 && t - samples[0].t > VELOCITY_WINDOW * 2) samples.shift()
     }
-    // Finger velocity (px/s) over the last VELOCITY_WINDOW ms. Held still before letting go = 0, like iOS.
+    
     const sampledVelocity = (endP = travel) => {
-      pushSample(endP) // end the measurement exactly at release
+      pushSample(endP) 
       const now = performance.now()
       const recent = samples.filter((s) => now - s.t <= VELOCITY_WINDOW)
       if (recent.length < 2) return 0
@@ -655,11 +611,8 @@ export default function Work() {
       const dt = (b.t - a.t) / 1000
       return dt < 0.016 ? 0 : (b.p - a.p) / dt
     }
-    // Hand the row back to the spring: keep the finger's exact velocity, project where a flick would
-    // coast to, snap to the nearest card (flicks always advance at least one card), and spring there
-    // starting at that velocity, stiffened just enough that it never overshoots.
+    
     const releaseWith = (vel) => {
-      // 0 for a gentle release, 1 for a very fast flick
       const speed = clamp((Math.abs(vel) - FLICK_MIN) / (FLICK_FAST - FLICK_MIN), 0, 1)
       const throwDist = clamp(
         ((vel * DECELERATION_RATE) / (1 - DECELERATION_RATE) / 1000) * (1 + FLICK_GAIN * speed),
@@ -668,7 +621,6 @@ export default function Work() {
       )
       let goal = SNAP && step ? Math.round((x + throwDist) / step) * step : x + throwDist
 
-      // Like UIScrollView paging: a deliberate flick goes to the next card in its direction
       if (SNAP && step && Math.abs(vel) > FLICK_MIN) {
         const pos = x / step
         goal =
@@ -678,15 +630,10 @@ export default function Work() {
       }
       target = goal
 
-      // A critically damped spring overshoots when |v| > omega * distance (omega = 2 / smoothTime).
-      // Stiffen the spring just enough, and cap v, so a flick never rubber-bands.
       const dist = Math.abs(goal - x)
       let smooth = snapSmooth
       v = vel
       if (dist > 1 && Math.sign(goal - x) === Math.sign(vel) && Math.abs(vel) > 1) {
-        // 2 * dist / |vel| is the softest spring that still can't overshoot. Slow releases stay crisp
-        // (snapSmooth); fast flicks may use a much longer one, so the row keeps its speed over several
-        // cards and then eases out slowly, instead of braking hard.
         const softest = snapSmooth + (MAX_FLICK_SMOOTH - snapSmooth) * speed
         smooth = clamp((2 * dist) / Math.abs(vel), 0.06, Math.max(snapSmooth, softest))
         const maxV = (2 / smooth) * dist
@@ -697,20 +644,15 @@ export default function Work() {
       kick()
     }
 
-    /* ---------- input: drag (pointer capture), wheel, keyboard, focus ---------- */
     const onPointerMove = (e) => {
       if (!dragging || e.pointerId !== activePointer) return
 
       if (!draggedRef.current) {
         if (Math.abs(e.clientX - startX) <= DRAG_THRESHOLD) return
         draggedRef.current = true
-        // Capture only once it's really a drag, so plain clicks keep their normal target
         try {
           viewport.setPointerCapture(e.pointerId)
-        } catch {
-          /* pointer already gone */
-        }
-        // Rebase: row and finger start in sync from here. No slack, no lag.
+        } catch { }
         startX = e.clientX
         startTarget = x
         target = x
@@ -718,11 +660,10 @@ export default function Work() {
         samples.length = 0
       }
 
-      // Feed every coalesced event (up to 240Hz on trackpads and Pencil) into the velocity measurement
       const evs = e.getCoalescedEvents?.() ?? [e]
       for (const ce of evs) pushSample(ce.clientX, ce.timeStamp)
 
-      target = startTarget + (e.clientX - startX) // applied 1:1 by the loop on the next frame
+      target = startTarget + (e.clientX - startX) 
       kick()
     }
 
@@ -735,27 +676,23 @@ export default function Work() {
     function onPointerUp(e) {
       if (!dragging || e.pointerId !== activePointer) return
       const wasDrag = draggedRef.current
-      const vel = wasDrag ? sampledVelocity(e.clientX) : 0 // measure from the finger while still in drag mode
+      const vel = wasDrag ? sampledVelocity(e.clientX) : 0 
       dragging = false
       scheduleResume(AUTO_RESUME_DELAY)
       endDrag()
       viewport.removeAttribute("data-dragging")
       try {
         viewport.releasePointerCapture(e.pointerId)
-      } catch {
-        /* already released */
-      }
+      } catch { }
 
       if (wasDrag) {
         releaseWith(vel)
       } else if (SNAP && step) {
-        // A tap, or you caught a moving row: settle on the nearest card instead of resting half-stacked
         target = Math.round(x / step) * step
         settleSmooth = snapSmooth
         kick()
       }
 
-      // The click event fires right after pointerup; clear the flag once it has passed
       setTimeout(() => {
         draggedRef.current = false
       }, 0)
@@ -770,7 +707,7 @@ export default function Work() {
       clearTimeout(wheelTimer)
       activePointer = e.pointerId
       startX = e.clientX
-      target = x // catch the glide where it is right now (v is kept, so it brakes smoothly)
+      target = x 
       startTarget = target
       slack = 0
       viewport.setAttribute("data-dragging", "true")
@@ -780,20 +717,17 @@ export default function Work() {
       kick()
     }
 
-    // After a drag, swallow the click so the card underneath doesn't navigate
     const onClickCapture = (e) => {
       if (!draggedRef.current) return
       e.preventDefault()
       e.stopPropagation()
     }
 
-    // Trackpad / horizontal wheel: 1:1 while the gesture (and the OS's own momentum) lasts,
-    // then it settles on a card exactly like a finger release.
     const onWheel = (e) => {
       if (dragging) return
       const dx = e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX
-      if (Math.abs(dx) <= Math.abs(e.deltaY)) return // vertical scroll: leave it alone
-      e.preventDefault() // also stops the browser's swipe-back gesture
+      if (Math.abs(dx) <= Math.abs(e.deltaY)) return 
+      e.preventDefault() 
       interrupt()
       if (!wheelActive) {
         wheelActive = true
@@ -813,7 +747,6 @@ export default function Work() {
       }, WHEEL_SNAP_DELAY)
     }
 
-    // Arrow keys move one card at a time
     const onKeyDown = (e) => {
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return
       if (!step || dragging) return
@@ -825,11 +758,9 @@ export default function Work() {
       kick()
     }
 
-    // Keyboard focus on a clipped card would make the browser scroll the overflow:hidden
-    // viewport sideways. Undo that, and glide the focused card into the first slot instead.
     const onFocusIn = (e) => {
       viewport.scrollLeft = 0
-      if (!step || !e.target.matches?.(":focus-visible")) return // mouse focus: leave it alone
+      if (!step || !e.target.matches?.(":focus-visible")) return 
       const idx = cards.indexOf(e.target.closest("a"))
       if (idx < 0) return
       interrupt()
@@ -838,25 +769,22 @@ export default function Work() {
       kick()
     }
 
-    // Glide to card k (0..N-1) using the copy of it that needs the shortest trip
     slideRef.current = (k) => {
       if (!step) return
       interrupt()
       const setWidth = step * N
-      const base = -(N + k) * step // card k in the middle set
+      const base = -(N + k) * step 
       target = base + Math.round((target - base) / setWidth) * setWidth
       settleSmooth = glideSmooth
       kick()
     }
 
-    /* ---------- layout: measure once, then only when sizes actually change ---------- */
     measure()
     paint()
     const ro = new ResizeObserver(() => {
       const prev = step
       measure()
       if (prev && step && prev !== step) {
-        // keep the row aligned to its cards when the card width changes
         const k = step / prev
         x *= k
         target *= k
@@ -876,8 +804,6 @@ export default function Work() {
     viewport.addEventListener("keydown", onKeyDown)
     viewport.addEventListener("focusin", onFocusIn)
 
-    /* ---------- intro: cards glide in from the right (staggered), then the row slides one card left as a "drag me" hint ---------- */
-    // Everything chains on real signals (decode, animation.finished, settle), not guessed timeouts.
     const decodeImages = (imgs) =>
       Promise.race([
         Promise.all(imgs.map((img) => (img?.decode ? img.decode().catch(() => {}) : Promise.resolve()))),
@@ -885,10 +811,8 @@ export default function Work() {
       ])
 
     const runIntro = async () => {
-      // Cards in the middle set are the ones on screen (paint() already moved us there)
       const visible = cards.slice(N, N * 2)
       hideBehind()
-      // Keep the cards invisible until their images are decoded, so nothing pops in late
       visible.forEach((c) => {
         const inner = c?.querySelector(".card-inner")
         if (inner) inner.style.opacity = "0"
@@ -897,7 +821,7 @@ export default function Work() {
       await decodeImages(visible.map((c) => c?.querySelector("img")))
       if (cancelled) return
 
-      const dist = step // each card starts one card-width to the right of its slot
+      const dist = step 
       const landed = visible.map((card, i) => {
         const inner = card?.querySelector(".card-inner")
         if (!inner) return Promise.resolve()
@@ -914,7 +838,7 @@ export default function Work() {
             duration: INTRO_DURATION,
             delay: INTRO_DELAY + i * INTRO_STAGGER,
             easing: INTRO_EASE,
-            fill: "both", // hold the hidden start frame during the delay and the landed frame at the end
+            fill: "both", 
           }
         )
         anims.push(anim)
@@ -923,14 +847,13 @@ export default function Work() {
             inner.style.opacity = ""
             anim.cancel()
           })
-          .catch(() => {}) // cancelled on cleanup
+          .catch(() => {}) 
       })
 
       await Promise.all(landed)
       if (cancelled) return
       if (touched || dragging) return showBehind()
 
-      // One-card hint: glide exactly one card width to the left, once, and stay there
       if (USE_INTRO_SLIDE && step) {
         target = Math.round(target / step) * step - step
         settleSmooth = glideSmooth
@@ -966,13 +889,10 @@ export default function Work() {
       viewport.removeEventListener("keydown", onKeyDown)
       viewport.removeEventListener("focusin", onFocusIn)
       slideRef.current = null
-      // Cards 0-3 keep their DOM nodes when we drop to mobile, so clear every inline style
       resetStyles()
     }
   }, [isCarousel, pageReady])
 
-  // Left list click: slide to the first card with that service's tag; clicking the same one again
-  // steps to the next match (wraps around). Carousel slides the row, mobile flips the flipbook.
   const handleServiceClick = (service) => {
     setActiveService(service)
     const rule = SERVICE_TAGS[service]
@@ -988,7 +908,6 @@ export default function Work() {
     else if (flipRef.current) flipRef.current.goTo(k)
   }
 
-  // Tapping the front flipbook card opens its project
   const handleFlipSelect = (name) => {
     const card = CARDS.find((c) => c.name === name)
     if (card) {
@@ -997,8 +916,6 @@ export default function Work() {
     }
   }
 
-  // Carousel renders the tripled row for the loop.
-  // (Phones render the flipbook instead.)
   const renderedCards = isCarousel ? LOOPED_CARDS : CARDS
 
   return (
@@ -1006,17 +923,14 @@ export default function Work() {
       className="relative flex min-h-[100dvh] flex-col bg-white pt-28 md:block md:h-[100dvh] md:min-h-[var(--min-page-h)] md:overflow-x-clip md:pt-0"
       style={layoutVars}
     >
-      {/* Left column: heading level with the top of the images, services level with the image bottoms */}
       <div
         className="flex flex-col gap-6 px-[var(--page-pad)] pb-0 pt-4 md:absolute md:left-0 md:top-[var(--work-top)] md:h-[var(--card-h)] md:w-[var(--left-col-w)] md:justify-between md:gap-0 md:pb-0 md:pt-0"
         style={LEFT_TEXT_VARS}
       >
-        {/* H4: 32px display, tight two-line stack */}
         <h2 className="H4 uppercase md:text-[40px]" style={{ lineHeight: 0.95 }}>
           HOW I<br />
           CAN HELP
         </h2>
-        {/* Services list styled with ultra-compact line height */}
         <ul className="Body !font-normal !leading-[1.2] !text-gray-400 md:text-[20px]">
           {SERVICES.map((s) => (
             <ServiceItem
@@ -1029,14 +943,12 @@ export default function Work() {
         </ul>
       </div>
 
-      {/* Mobile: flipbook. The component applies var(--page-pad) itself, so the tucked side cards stop at the page margin on both sides. */}
       {isPhone && (
         <div className="pt-6">
           <FlipbookCarousel ref={flipRef} projects={FLIP_PROJECTS} onSelect={handleFlipSelect} bottomReserve={PHONE_FOOTER_H} />
         </div>
       )}
 
-      {/* Cards: sliding carousel (Tablet & Desktop) */}
       {!isPhone && (
       <div
         ref={viewportRef}
@@ -1050,98 +962,36 @@ export default function Work() {
           className="flex flex-col gap-[var(--cs-gap)] md:will-change-transform md:flex-row md:pr-[var(--page-pad)]"
         >
           {renderedCards.map((card, index) => {
-            const project = WORK_PROJECTS.find((p) => p.slug === card.match || p.id === card.match)
-            const imgSrc = card.image || project?.image
-
-            // On carousel only the middle set is the "real" one: it's what you see, tab to and hear.
-            // The first and last sets exist purely for the endless loop.
             const canonical = !isCarousel || (index >= N && index < N * 2)
-
-            // Load what's on screen right away; copies reuse the same files, mobile lazy-loads below the fold
             const eager = isCarousel ? canonical : index === 0
             const high = isCarousel ? canonical && index < N + 2 : index === 0
 
-            const img = (
-              <img
-                src={imgSrc}
-                alt={canonical ? card.alt || card.name : ""}
-                width={IMAGE_W}
-                height={IMAGE_H}
-                sizes={IMAGE_SIZES}
-                loading={eager ? "eager" : "lazy"}
-                decoding="async"
-                fetchPriority={high ? "high" : "auto"}
-                className="h-full w-full object-cover"
-                draggable={false}
-              />
-            )
-
             return (
-              <Link
+              <MemoizedCarouselCard
                 key={`${card.name}-${index}`}
-                to={card.to}
-                onClick={(e) => {
-                  if (draggedRef.current) return // Prevent triggering if the user is dragging the carousel
-                  e.preventDefault()
-                  if (triggerTransition) triggerTransition(card.to)
-                  else navigate(card.to)
-                }}
-                ref={(el) => {
-                  cardRefs.current[index] = el
-                }}
-                aria-hidden={canonical ? undefined : true}
-                tabIndex={canonical ? undefined : -1}
-                // will-change only on the 4 on-screen (middle set) cards: 12 promoted layers is a lot of texture memory
-                className={`block shrink-0 md:[contain:layout] md:w-[var(--card-w)] ${canonical ? "md:will-change-transform" : ""}`}
-                style={{ transformOrigin: "left center" }}
-                draggable={false}
-              >
-                <div className="card-inner" style={!pageReady ? { opacity: 0 } : {}}>
-                  <div
-                    className="relative aspect-[4/5] w-full overflow-hidden bg-[var(--bg-surface-light)]"
-                    // isolation + translateZ(0): gives the rounded clip its own compositor layer, so
-                    // border-radius + overflow-hidden on a moving, scaled card doesn't stutter on mid-range GPUs
-                    style={{ borderRadius: CARD_RADIUS, isolation: "isolate", transform: "translateZ(0)" }}
-                  >
-                    {imgSrc &&
-                      (USE_RESPONSIVE_IMAGES ? (
-                        <picture>
-                          <source type="image/avif" srcSet={srcSetFor(imgSrc, "avif")} sizes={IMAGE_SIZES} />
-                          <source type="image/webp" srcSet={srcSetFor(imgSrc, "webp")} sizes={IMAGE_SIZES} />
-                          {img}
-                        </picture>
-                      ) : (
-                        img
-                      ))}
-                    {/* depth shading: light-to-dark gradient (left clear, right dark). Invisible at rest (opacity 0);
-                        paint() fades it in only while the card stacks behind the next one. */}
-                    <div className="card-shade pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent to-black opacity-0" />
-                  </div>
-                  <div className="card-meta mt-3 flex items-start justify-between gap-4 text-black">
-                    <h3 className="Caption !text-[14px] uppercase !font-medium leading-[1.2]">{card.name}</h3>
-                    <ul className="Caption !text-[14px] uppercase !font-medium leading-[1.2] text-right [&>li+li]:mt-[2px]">
-                      {card.tags.map((t) => (
-                        <li key={t}>{t}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </Link>
+                card={card}
+                index={index}
+                canonical={canonical}
+                eager={eager}
+                high={high}
+                pageReady={pageReady}
+                triggerTransition={triggerTransition}
+                navigate={navigate}
+                draggedRef={draggedRef}
+                ref={(el) => { cardRefs.current[index] = el }}
+              />
             )
           })}
         </div>
       </div>
       )}
 
-      {/* Availability badge, bottom left, aligned with the WORK title */}
       <div
         className="mt-auto flex flex-col gap-4 px-[var(--page-pad)] pb-[max(var(--page-pad),env(safe-area-inset-bottom))] pt-0 md:mt-0 md:absolute md:left-0 md:top-[var(--title-top)] md:h-[var(--title-h)] md:w-[var(--left-col-w)] md:justify-end md:pb-0 md:pt-0"
       >
         <Availability />
       </div>
 
-      {/* Huge title, lined up with the first card (H1: Borscha display, tight tracking from the token).
-          Visually hidden on mobile but still the page's h1 for screen readers and SEO. */}
       <h1
         className="H1 pointer-events-none absolute sr-only select-none md:not-sr-only md:!absolute md:left-[var(--cards-left)]"
         style={TITLE_STYLE}

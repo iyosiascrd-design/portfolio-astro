@@ -107,14 +107,12 @@ const ZHONGSHAN_RUN_2 = [
     render: (p) => <Img src={ASSETS.living} alt="Furniture vignette with a curved sofa, lounge chairs and timber screens on a navy stage" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
 ]
 
-
 export default function ZhongshanCaseStudy() {
   const outletCtx = useOutletContext()
   const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
   const heroFade = outletCtx?.heroFade
 
   const isMobile = useIsMobile()
-  // inline so no other rule can override the stack gap on phones
   const mobileGap = isMobile ? { gap: "var(--page-pad)" } : undefined
   const ready = usePageReady()
   const pageTransition = usePageTransition()
@@ -211,7 +209,8 @@ export default function ZhongshanCaseStudy() {
     return () => t.kill()
   }, [ready])
 
-  useIdlePreload(PRELOAD_SRCS, ready && heroLoaded)
+  const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
+  useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
 
   return (
@@ -283,10 +282,9 @@ export default function ZhongshanCaseStudy() {
 
           <MaskRevealText
             as="h1"
-            mode="letters"
+            mode="words"
             active={ready}
-            delay={0.4}
-            stagger={0.08}
+            delay={0}
             className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] whitespace-nowrap"
           >
             Zhongshan

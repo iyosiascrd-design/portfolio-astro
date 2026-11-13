@@ -140,7 +140,6 @@ export default function OrigenCaseStudy() {
   const heroFade = outletCtx?.heroFade
 
   const isMobile = useIsMobile()
-  // inline so no stylesheet rule can override it on phones
   const mobileGap = isMobile ? { gap: "var(--cs-gap)" } : undefined
   const ready = usePageReady()
   const pageTransition = usePageTransition()
@@ -237,7 +236,8 @@ export default function OrigenCaseStudy() {
     return () => t.kill()
   }, [ready])
 
-  useIdlePreload(PRELOAD_SRCS, ready && heroLoaded)
+  const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
+  useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
 
   return (
@@ -305,10 +305,9 @@ export default function OrigenCaseStudy() {
 
           <MaskRevealText
             as="h1"
-            mode="letters"
+            mode="words"
             active={ready}
-            delay={0.4}
-            stagger={0.1}
+            delay={0}
             className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] max-w-full"
           >
             Origen

@@ -56,14 +56,8 @@ const glueLastWords = (str) => {
 
 const flat = (str) => str.replace(/\n/g, " ")
 
-// Ticker image loading: LOOPING_IMAGES repeats the same 4 files, and on desktop all 4 are
-// on screen at once, so the first 4 slides load at high priority. Repeat slides share the
-// same URLs, so they need no hint of their own.
 const TICKER_PRIORITY_COUNT = 4
-const TICKER_START_DELAY = 1200 // ms after pageReady (preloader exit / page transition wipe still running)
-
-// Same corner radius as the Work carousel (Work.jsx CARD_RADIUS):
-// 3% of the card width, clamped to 12px–24px. --ticker-card-w is set on each slide below.
+const TICKER_START_DELAY = 1200 
 const TICKER_CARD_RADIUS = "clamp(12px, calc(var(--ticker-card-w) * 0.03), 24px)"
 
 const SERVICES_DATA = [
@@ -164,8 +158,6 @@ const fitByArea = (ratio, { area, maxSide }) => {
     return { w: Math.round(w), h: Math.round(h) }
 }
 
-// Keeps the decoded expertise images warm between visits. Keyed by src so it
-// never grows past EXPERTISE_DATA.length entries.
 const EXPERTISE_IMAGE_CACHE = new Map()
 
 const readRatio = (img) =>
@@ -190,9 +182,6 @@ function useExpertiseRatios() {
             setRatios((prev) => (prev[src] === r ? prev : { ...prev, [src]: r }))
         }
 
-        // These PNGs are only needed once the user reaches the expertise list,
-        // so load them when the browser is idle instead of competing with the
-        // hero and ticker for bandwidth.
         const cancelIdle = whenIdle(() => {
             EXPERTISE_DATA.forEach(({ image: src }) => {
                 let img = EXPERTISE_IMAGE_CACHE.get(src)
@@ -305,9 +294,6 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
     const slideRef = useRef(null)
     const cardRef = useRef(null)
     const [reveal, setReveal] = useState(null)
-    // The arrow nudge only runs while this slide is hovered. Before, every slide ran an
-    // infinite framer-motion loop all the time (even while invisible), which competed
-    // with the ticker for the main thread on every frame.
     const [hovered, setHovered] = useState(false)
 
     useEffect(() => {
@@ -331,10 +317,6 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
         return () => cancelAnimationFrame(frame)
     }, [ready, reveal])
 
-    // Rise-in + fade as Web Animations: they run on the compositor, so the reveal can't stutter
-    // while the main thread is busy with the preloader hand-off, text reveals and image decode.
-    // Layout effect + fill "both" means there is never a frame showing the slide in its final
-    // state before the animation takes over.
     useLayoutEffect(() => {
         const el = cardRef.current
         if (!reveal || reveal.instant || !el || typeof el.animate !== "function") return
@@ -352,7 +334,6 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
             fill: "both",
         })
         const settle = () => {
-            // end state == the element's normal style, so drop the animations and the layer
             rise.cancel()
             fade.cancel()
             el.style.willChange = ""
@@ -374,8 +355,6 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
         return project.category || "Branding"
     }
 
-    // The ticker repeats the same slides 3x to loop seamlessly. Only the first copy is exposed to
-    // keyboard and screen readers; the clones are decoration.
     const interactive = !!project && !isClone
     const a11y = interactive
         ? {
@@ -396,21 +375,18 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
             ref={slideRef}
             onClick={onClick}
             onPointerEnter={(e) => {
-                if (project) prefetchHero(heroSlugFor(project.name)) // start the case-study hero early
+                if (project) prefetchHero(heroSlugFor(project.name))
                 if (e.pointerType === "mouse") setHovered(true)
             }}
             onPointerDown={() => {
                 if (project) prefetchHero(heroSlugFor(project.name))
             }}
             onPointerLeave={() => setHovered(false)}
-            // --ticker-card-w = the visible card width (slide width minus the 12px pr gutter),
-            // used by TICKER_CARD_RADIUS so the radius follows the same formula as the Work carousel.
             className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group outline-none [--ticker-card-w:calc(72vw-12px)] md:[--ticker-card-w:calc(42vw-12px)] lg:[--ticker-card-w:340px]"
             {...a11y}
         >
             <div
                 ref={cardRef}
-                // hidden until the reveal is decided; the Web Animation above takes over from here
                 style={{
                     height: TICKER_HEIGHT,
                     borderRadius: TICKER_CARD_RADIUS,
@@ -424,15 +400,12 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
                         alt={project ? project.name : "Portfolio Work"}
                         draggable={false}
                         decoding="async"
-                        // Stays eager on purpose: slides sit inside overflow-hidden marquees, where
-                        // loading="lazy" would not fetch until they are already visible (pop-in).
                         loading="eager"
                         {...(fetchPriority ? { [FETCH_PRIORITY_KEY]: fetchPriority } : null)}
                         className="object-cover w-full h-full scale-[1.35] pointer-events-none select-none"
                     />
                 </div>
                 <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-                {/* keyboard focus ring (inside the clipped card so the marquee never crops it) */}
                 <div className="absolute inset-0 rounded-[inherit] pointer-events-none ring-2 ring-inset ring-white opacity-0 group-focus-visible:opacity-100" />
 
                 {project && (
@@ -484,12 +457,10 @@ const TickerSlide = memo(
         a.isClone === b.isClone
 )
 
-// iOS-style curve: leaves immediately, settles softly. One curve and one clock for the whole panel.
 const APPLE_EASE_CSS = "cubic-bezier(0.32, 0.72, 0, 1)"
 const ACCORDION_OPEN = { duration: 0.6, fadeIn: 0.45, fadeInDelay: 0.12 }
 const ACCORDION_CLOSE = { duration: 0.5, fadeOut: 0.18 }
 
-// Height is animated by the browser (grid 0fr -> 1fr), not measured and tweened in JS.
 const AccordionPanel = ({ active, children }) => {
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     const dur = reduce ? 0 : active ? ACCORDION_OPEN.duration : ACCORDION_CLOSE.duration
@@ -499,7 +470,6 @@ const AccordionPanel = ({ active, children }) => {
             style={{
                 display: "grid",
                 gridTemplateRows: active ? "1fr" : "0fr",
-                // visibility flips at the end of a close so hidden rows can't be tabbed into
                 visibility: active ? "visible" : "hidden",
                 transition: `grid-template-rows ${dur}s ${APPLE_EASE_CSS}, visibility 0s linear ${active ? 0 : dur}s`,
             }}
@@ -509,18 +479,13 @@ const AccordionPanel = ({ active, children }) => {
     )
 }
 
-// Only opacity and transform animate inside the panel, so nothing triggers extra layout.
-// `depth` = how many names are stacked above this image when it reaches them (its own name + the ones
-// before it). Its scroll-driven "settle" (see .svc-par in the <style> block) ends exactly there.
 const ServiceAccordionImage = ({ src, alt, active, depth = 1 }) => {
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     return (
         <div
             className="svc-par-box relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] isolate overflow-hidden rounded-[12px] md:rounded-[16px] border border-[var(--border-dark-subtle)]"
-            // isolation + translateZ keep Safari from painting the moving image over the rounded corners
             style={{ "--svc-n": depth, isolation: "isolate", transform: "translateZ(0)" }}
         >
-            {/* The parallax moves this wrapper; the <img> keeps its own open/close scale + fade untouched. */}
             <div className="svc-par">
                 <img
                     src={src}
@@ -596,8 +561,6 @@ function buildLut() {
 function SunriseTransition({ children, anchorRef, onHeaderTone }) {
     const canvasRef = useRef(null)
     const { scrollY } = useScroll()
-    // Apple-style scrub: the gradient position is a direct function of scroll (no spring lag),
-    // so it moves exactly as far as you scroll, and reverses the instant you scroll back.
     const travel = useMotionValue(0)
 
     useEffect(() => {
@@ -644,8 +607,9 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         let lastLight = null
 
         const resize = () => {
-            W = Math.max(2, Math.round(window.innerWidth * RES))
-            H = Math.max(2, Math.round(window.innerHeight * RES))
+            const currentRes = window.innerWidth > 1200 ? 0.25 : RES
+            W = Math.max(2, Math.round(window.innerWidth * currentRes))
+            H = Math.max(2, Math.round(window.innerHeight * currentRes))
             canvas.width = W
             canvas.height = H
             try {
@@ -662,6 +626,8 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         }
 
         const draw = (sv) => {
+            if (window.innerWidth < 768) return; 
+
             if (!img || !arc) return
             const shift = BASE_SHIFT + SPEED * sv
             const clamp01 = (n) => Math.min(1, Math.max(0, n))
@@ -711,7 +677,6 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         resize()
         draw(travel.get())
 
-        // Scroll can fire several times per frame; paint once per frame with the latest value.
         let raf = 0
         const schedule = () => {
             if (raf) return
@@ -753,19 +718,11 @@ export default function Home() {
     const outletCtx = useOutletContext()
     const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
 
-    // Arriving from a (scrolled) case study: start at the top, like the case studies do.
-    // Skipped when the URL has a #hash so anchor links keep working.
     useEffect(() => {
         if (window.location.hash) return
         window.scrollTo(0, 0)
     }, [])
 
-    // ---- Services text reveal ------------------------------------------------------------------
-    // The reveal plays once the section is in view AND the page is actually showing it. Without
-    // this gate it fired while the page was still covered by the transition (cross-page link) or
-    // while the smooth scroll was still travelling (same-page link), so the visitor never saw it.
-    // The header announces "#services" links with a "header-anchor" event; while that scroll is
-    // still moving we hold the reveal, then release it ~160ms after the scroll goes quiet.
     const servicesHeadRef = useRef(null)
     const servicesListRef = useRef(null)
     const servicesHeadInView = useInView(servicesHeadRef, SERVICES_VIEWPORT)
@@ -793,7 +750,7 @@ export default function Home() {
         }
         const onAnchor = (e) => {
             if (e.detail !== "#services") return
-            if (servicesRevealedRef.current) return // already played: don't hide it again
+            if (servicesRevealedRef.current) return 
             setServicesHold(true)
             if (!listening) {
                 window.addEventListener("scroll", onScroll, { passive: true })
@@ -801,8 +758,8 @@ export default function Home() {
             }
             clearTimeout(settleTimer)
             clearTimeout(hardStop)
-            settleTimer = setTimeout(release, 700) // the scroll has not started yet / nothing to scroll
-            hardStop = setTimeout(release, 3000) // never hold forever
+            settleTimer = setTimeout(release, 700) 
+            hardStop = setTimeout(release, 3000) 
         }
         window.addEventListener("header-anchor", onAnchor)
         return () => {
@@ -814,21 +771,9 @@ export default function Home() {
     }, [])
 
     const [activeIndex, setActiveIndex] = useState(0)
-    // Hover highlight for the accordion rows (tablet/mobile widths with a mouse or trackpad).
-    // Touch input is ignored so taps still just toggle the row.
     const [hoveredRow, setHoveredRow] = useState(null)
     const [openIndexes, setOpenIndexes] = useState([0])
 
-    // Services (tablet/mobile): instead of an accordion, every service shows its full panel and its name
-    // row sticks to the top as you scroll past. Names stack in order (Brand Identity first, the next
-    // below it, ...), so only passed services are reduced to their names.
-    //
-    // This is pure CSS sticky, so the browser positions everything on the compositor and it cannot lag:
-    //  - every name has a SOLID background, so panels simply slide behind the stack (no masking, no JS);
-    //  - at the end of the list the names leave together: each name has a bottom margin of (names after
-    //    it) * row height and sticky keeps that margin box inside the list. The panel below pulls up by
-    //    the same amount, so the layout does not move.
-    // The only JS is the highlight: it measures once and sets data-stuck on the names (no React state).
     useLayoutEffect(() => {
         const list = servicesListRef.current
         if (!list) return
@@ -846,13 +791,11 @@ export default function Home() {
         let raf = 0
         let idleTimer = 0
 
-        // Measured once (and on resize / font / image load / scroll-idle), never per scroll frame.
         const measure = () => {
             const hs = Array.from(list.querySelectorAll(".svc-sticky-head"))
             const ps = Array.from(list.querySelectorAll(".svc-panel"))
             if (!hs.length || hs.length !== ps.length || hs[0].offsetHeight <= 0) return
 
-            // fractional: offsetHeight rounds and the error stacks
             const rowH = hs[0].getBoundingClientRect().height
             const rowHStr = `${rowH}px`
             if (rowHStr !== lastRowH) {
@@ -869,7 +812,7 @@ export default function Home() {
                 panelTops: rects.map((r) => r.top + sy),
                 lastPanelBottom: rects[rects.length - 1].bottom + sy,
             }
-            lastStuck = -2 // force the highlight to be re-applied
+            lastStuck = -2 
             lastPinned = null
             lastLeaving = null
         }
@@ -879,27 +822,17 @@ export default function Home() {
             if (!geo) return
             const { heads, rowH, top0, panelTops, lastPanelBottom } = geo
             const sy = window.scrollY
-            // A name is stuck once its natural top (= its panel's top minus its own height) reaches its
-            // stuck position. The last such name is the highlighted one.
             let stuck = 0
             for (let i = 0; i < heads.length; i++) {
                 if (panelTops[i] - rowH - sy <= top0 + i * rowH + 1) stuck = i
             }
 
-            // Once the first panel has started to pass behind the first name, show the cover strip that
-            // hides the part of it that would stick out above the name (CSS, see the <style> block). It is
-            // attached to the name, so it moves and leaves with the stack natively; this only switches it on.
-            // The lead covers the frame the rAF runs behind a fast scroll; the strip switches on instantly (no fade).
             const pinned = panelTops[0] - sy <= top0 + 72
             if (pinned !== lastPinned) {
                 lastPinned = pinned
                 heads[0].setAttribute("data-pinned", pinned ? "true" : "false")
             }
 
-            // The names are solid only to hide the panels sliding behind them. Once the last panel is fully
-            // behind the stack (= the stack is about to leave), the panels fade out and the names turn
-            // transparent (CSS transitions on [data-leaving]), so the names leave over the sunrise gradient
-            // instead of as a black block. A short time-based fade, so a frame of scroll lag is invisible.
             const leaving = lastPanelBottom - sy <= top0 + heads.length * rowH + 40
             if (leaving !== lastLeaving) {
                 lastLeaving = leaving
@@ -920,8 +853,6 @@ export default function Home() {
         }
         const onScroll = () => {
             schedule()
-            // Safety net: if layout shifted while scrolling (late image, page transition), correct it once
-            // scrolling stops, off the hot path.
             clearTimeout(idleTimer)
             idleTimer = setTimeout(remeasure, 200)
         }
@@ -945,7 +876,6 @@ export default function Home() {
     }, [vp.isDesktop, pageReady])
 
     const [activeExpertise, setActiveExpertise] = useState(null)
-
     const expertiseRatios = useExpertiseRatios()
     const [hoveredExpertise, setHoveredExpertise] = useState(null)
     const cursorX = useMotionValue(0)
@@ -985,7 +915,6 @@ export default function Home() {
             startPaused: true,
         })
         if (tickerPausedRef.current) tickerEngine.current.setPaused(true)
-        // If the page is already revealed (e.g. after a resize), start right away
         if (pageReadyRef.current) tickerEngine.current.start()
         setTickerReady(true)
         return () => {
@@ -994,10 +923,6 @@ export default function Home() {
         }
     }, [vp.isMobile])
 
-    // Start the ticker once the page is revealed (after the preloader / page transition)
-    // Held back until the reveal wipe has finished: starting it earlier piles the ticker's
-    // first frames on top of the mask wipe, the page slide and every slide's rise-in. The
-    // ticker springs up from rest, so a late start still looks like a smooth ease-in.
     useEffect(() => {
         if (!pageReady) return
         const id = setTimeout(() => tickerEngine.current?.start(), TICKER_START_DELAY)
@@ -1024,41 +949,36 @@ export default function Home() {
         return whenIdle(() => rest.forEach((src) => warm(src, "low")), 2000)
     }, [])
 
-    // Warm every case-study hero once the homepage is idle (4 images, low priority).
-    useEffect(() => whenIdle(() => warmAllHeroes(), 2500), [])
-
     useEffect(() => {
-        if (!vp.isDesktop) return
-        const onMove = (e) => {
-            if (e.pointerType && e.pointerType !== "mouse") return
-            pointerRef.current = { x: e.clientX, y: e.clientY }
-            cursorX.set(e.clientX)
-            cursorY.set(e.clientY)
+        if (!vp.isMobile) {
+            const cancel = whenIdle(() => warmAllHeroes(), 2500)
+            return () => cancel()
         }
-        const onLeaveWindow = () => {
-            pointerRef.current = null
-        }
-        window.addEventListener("pointermove", onMove, { passive: true })
-        document.documentElement.addEventListener("mouseleave", onLeaveWindow)
-        return () => {
-            window.removeEventListener("pointermove", onMove)
-            document.documentElement.removeEventListener("mouseleave", onLeaveWindow)
-        }
-    }, [vp.isDesktop, cursorX, cursorY])
+    }, [vp.isMobile])
 
     useEffect(() => {
         let frame = null
+        let rowOffsets = [] 
+
+        const measure = () => {
+            rowOffsets = expertiseRefs.current.map(node => 
+                node ? node.getBoundingClientRect().top + window.scrollY : 0
+            )
+        }
+
         const update = () => {
             frame = null
             if (!isDesktopRef.current) return
             const rows = expertiseRefs.current
             if (!rows.some(Boolean)) return
-            const mid = (window.innerHeight || 800) * 0.5
-
+            
+            const mid = window.scrollY + (window.innerHeight || 800) * 0.5
             let idx = null
-            rows.forEach((node, i) => {
-                if (node && node.getBoundingClientRect().top <= mid) idx = i
+            
+            rowOffsets.forEach((top, i) => {
+                if (top <= mid) idx = i 
             })
+            
             scrollIndexRef.current = idx
 
             let under = null
@@ -1079,12 +999,16 @@ export default function Home() {
         const onScroll = () => {
             if (frame === null) frame = requestAnimationFrame(update)
         }
+        
+        measure() 
         update()
         window.addEventListener("scroll", onScroll, { passive: true })
+        window.addEventListener("resize", measure) 
         window.addEventListener("resize", onScroll)
         return () => {
             if (frame !== null) cancelAnimationFrame(frame)
             window.removeEventListener("scroll", onScroll)
+            window.removeEventListener("resize", measure)
             window.removeEventListener("resize", onScroll)
         }
     }, [])
@@ -1225,7 +1149,7 @@ export default function Home() {
                   : null
         if (!dest) return
 
-        prefetchHero(heroSlugFor(projectName)) // no-op if already warmed
+        prefetchHero(heroSlugFor(projectName)) 
 
         if (pageTransition?.triggerTransition) {
             pageTransition.triggerTransition(dest)
@@ -1308,7 +1232,6 @@ export default function Home() {
                     </div>
                 ) : (
                     <div ref={tickerWrapRef} className="relative flex-shrink-0 w-full pb-[16px] m-0 overflow-hidden will-change-transform">
-                        {/* Moving content needs a pause control (WCAG 2.2.2). Hidden until keyboard focus. */}
                         <button
                             type="button"
                             onClick={toggleTickerPause}
@@ -1351,25 +1274,16 @@ export default function Home() {
                 )}
             </section>
 
-            {/* Tablet/mobile: the stacked name that is currently stuck is white; written as an attribute by the
-                scroll effect so no React render happens while scrolling. */}
             <style>{`
                 .svc-sticky-head .svc-num, .svc-sticky-head .svc-title-text { transition: color 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
                 .svc-sticky-head[data-stuck="true"] .svc-num, .svc-sticky-head[data-stuck="true"] .svc-title-text { color: #fff !important; }
-                /* Cover strip above the first name: hides the panel that slides up past it. Attached to the name,
-                   so it sticks, moves and leaves with it. Off until the panel is about to pass behind the name. */
                 .svc-sticky-head[data-pinned]::before {
                     content: ""; position: absolute; left: 0; right: 0; bottom: 100%; pointer-events: none; opacity: 0;
                     height: calc(var(--svc-stick-top, 76px) + 200px);
                     background: var(--svc-head-bg, var(--bg-dark, #050505));
                 }
                 .svc-sticky-head[data-pinned="true"]::before { opacity: 1; }
-                /* Leaving: the last panel is fully behind the stack. Panels fade out first, then the solid name
-                   backgrounds (and the cover strip) fade to transparent, so the names leave over the gradient.
-                   Coming back, the order is reversed (backgrounds first, panels after). */
                 .svc-sticky-head { transition: background-color 0.15s ease, box-shadow 0.15s ease; }
-                /* No fade on the way ON: a fade lets the image show above the name for a few frames. The fade
-                   only plays when the stack leaves (see the [data-leaving] rule below, which overrides this). */
                 .svc-sticky-head[data-pinned]::before { transition: none; }
                 .svc-panel { transition: opacity 0.15s ease 0.12s; }
                 [data-leaving="true"] .svc-panel { opacity: 0; transition: opacity 0.15s ease; }
@@ -1380,12 +1294,6 @@ export default function Home() {
                 [data-leaving="true"] .svc-sticky-head[data-pinned]::before {
                     opacity: 0 !important; transition: opacity 0.22s ease 0.14s;
                 }
-                /* Image "settle" parallax. The wrapper is taller than the frame by the travel distance (so no edge
-                   can show) and starts offset; it settles to rest by the time the image reaches the names above
-                   it. Pure CSS scroll-driven animation on a transform: no JS, no lag in Safari 26+/Chrome; older
-                   browsers simply show the image at rest. The timeline lives on the static frame (not on the
-                   moving wrapper) and its top inset is the bottom of the name stack, so nothing plays while the
-                   image is hidden behind the names. */
                 .svc-par { position: absolute; left: 0; right: 0; top: -36px; bottom: -36px; will-change: transform; }
                 @supports (animation-timeline: view()) {
                     .svc-par-box {
@@ -1411,7 +1319,6 @@ export default function Home() {
             <SunriseTransition anchorRef={transitionRef} onHeaderTone={setHeaderLight}>
                 <section
                     id="services"
-                    // Rows resize while they animate; keep the browser from nudging scrollTop in response.
                     style={{ overflowAnchor: "none" }}
                     className="relative flex flex-col justify-between w-full min-h-[100svh] pt-[48px] lg:pt-[clamp(96px,15svh,144px)] pb-[48px] md:pb-[64px] lg:pb-[var(--page-pad)] m-0 bg-transparent"
                 >
@@ -1442,12 +1349,7 @@ export default function Home() {
                                     animate={servicesListActive ? "show" : "hidden"}
                                     className="flex flex-col m-0 p-0 list-none w-full"
                                 >
-                                    {/* Tablet/mobile: the stacked names have a solid background so panels slide behind them
-                                        (see the scroll effect). When the stack leaves, [data-leaving] fades the panels and
-                                        the backgrounds out so no black block is left over the sunrise gradient. */}
                                     {SERVICES_DATA.map((service, index) => {
-                                        // Desktop: hover-selected. Tablet/mobile: every panel is always shown;
-                                        // the name that is currently stacked/stuck is the highlighted one.
                                         const isActive = vp.isDesktop ? activeIndex === index : true
                                         const isHighlighted = vp.isDesktop ? isActive : hoveredRow === index
                                         const HeadWrap = "div"
@@ -1459,14 +1361,7 @@ export default function Home() {
                                                   "data-pinned": index === 0 ? "false" : undefined,
                                                   style: {
                                                       top: `calc(var(--svc-stick-top, 76px) + ${index} * var(--svc-row-h, 84px))`,
-                                                      // Native exit: sticky keeps the head's MARGIN box inside the list, so a
-                                                      // bottom margin of (heads after it) * rowHeight makes the heads stop in
-                                                      // stack order and leave with the page together. The panel below pulls up
-                                                      // by the same amount (wrapper below), so the layout does not move.
                                                       marginBottom: `calc(${SERVICES_DATA.length - 1 - index} * var(--svc-row-h, 84px))`,
-                                                      // Solid, so panels sliding behind the stack are fully hidden. Set --svc-head-bg
-                                                      // if the section background is not --bg-dark. The 1px shadow overlaps the name
-                                                      // above, so a fractional device pixel can never open a seam between two names.
                                                       background: "var(--svc-head-bg, var(--bg-dark, #050505))",
                                                       boxShadow: "0 -1px 0 0 var(--svc-head-bg, var(--bg-dark, #050505))",
                                                   },
@@ -1529,7 +1424,6 @@ export default function Home() {
                                                     </div>
 
                                                     <div className="svc-keywords-cell min-w-0 overflow-hidden lg:pl-[48px] xl:pl-[72px]">
-                                                        {/* Desktop keeps the keywords in the row; tablet/mobile shows them inside the expanded panel instead. */}
                                                         {vp.isDesktop && (
                                                         <motion.div
                                                             animate={{
@@ -1680,7 +1574,16 @@ export default function Home() {
                                 />
                             </div>
 
-                            <div id="expertise" className="flex flex-col w-full mt-[48px] lg:mt-[clamp(72px,14svh,144px)]">
+                            <div 
+                                id="expertise" 
+                                className="flex flex-col w-full mt-[48px] lg:mt-[clamp(72px,14svh,144px)]"
+                                onPointerMove={vp.isDesktop ? (e) => {
+                                    pointerRef.current = { x: e.clientX, y: e.clientY }
+                                    cursorX.set(e.clientX)
+                                    cursorY.set(e.clientY)
+                                } : undefined}
+                                onPointerLeave={() => { pointerRef.current = null }}
+                            >
                                 <p className="H5 sm:max-md:portrait:!text-[28px] pb-[4px] nav-title mb-[48px] md:mb-[80px] lg:mb-[clamp(48px,8svh,80px)] text-[var(--text-light-primary)]">
                                     EXPERTISE
                                 </p>
@@ -1807,7 +1710,6 @@ export default function Home() {
                             </div>
                         </div>
                     </div>
-                    {/* Moved spacer outside the flex row so the sticky portrait stops exactly at the end of the list */}
                     <div className="w-full h-[48px] lg:h-[144px]" aria-hidden="true" />
                 </section>
             </SunriseTransition>

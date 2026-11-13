@@ -1,4 +1,4 @@
-// src/pages/WeyraCaseStudy.jsx
+// src/pages/OrigenCaseStudy.jsx
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
@@ -12,7 +12,7 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import MobileImageGroups, { useIsMobile } from "../components/MobileImageGroups"
-import { Img, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
+import { Img, Media, isVideo, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
 import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
@@ -26,66 +26,121 @@ const FRAME_PB = "pb-0"
 const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
 const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
 
-const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] max-md:pb-[var(--page-pad)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
+const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] max-md:pb-[var(--cs-gap)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--cs-gap))] md:pb-[var(--cs-gap)]"
 
-const PRELOAD_SRCS = [
-  "/weyra-story.jpg",
-  "/weyra-pin.jpg",
-  "/weyra-clothing.jpg",
-  "/weyra-type.jpg",
-  "/weyra-wristbands.jpg",
-  "/weyra-badge.jpg",
-  "/weyra-tote.jpg",
-  "/weyra-banner.jpg",
-  "/weyra-magazine.jpg",
-  "/weyra-profile.jpg",
-  "/weyra-phones.jpg",
-  "/weyra-poster.jpg",
-  "/weyra-board.jpg",
-  "/weyra-flags.jpg",
+const HERO_POS_MOBILE = "50% 30%"
+const HERO_POS_DESKTOP = "50% 50%"
+
+const ASSETS = {
+  hero: "/origen-hero.jpg",
+  beans: "/origen-hero.webm",
+  construction1: "/origen-logo-constuction%201.jpg",
+  construction2: "/origen-logo-constuction%202.jpg",
+  type: "/origen-type.webm",
+  typeTreatment: "/origen-type-treatment.webm",
+  packaging: "/origen-packaging.jpg",
+  color: "/origen-color.webm",
+  emboss: "/origen-emboss.jpeg",
+  iced: "/orgien-icedcoffee.jpg",
+  pouchWood: "/origen-pouch-wood.jpg",
+  box: "/origen-box.jpg",
+  cup: "/origen-cup-mockup.jpg",
+  wax: "/origen-wax.jpg",
+  wallposter: "/origen-wallposter.jpg",
+  tote: "/origen-totebag.jpg",
+  barista: "/origen-barista.jpg",
+  mountain: "/origen-mountain.jpg",
+  billboard: "/origen-billboard.jpg",
+}
+
+const R_WIDE = 686 / 438
+const R_SQ = 340 / 325
+
+const ORIGEN_RUN = [
+  { id: "pouchWood", ratio: 340 / 308, ratioClass: "aspect-[340/308]", bg: "light",
+    render: (p) => <Img src={ASSETS.pouchWood} alt="Hand holding an Origen coffee pouch on a wooden shelf" ratio={p.ratio} className={p.className} /> },
+  { id: "box", ratio: R_WIDE, ratioClass: "aspect-[686/438]", bg: "light",
+    render: (p) => <Img src={ASSETS.box} alt="Origen drip coffee box: Where coffee began" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
+  { id: "wax", ratio: R_SQ, ratioClass: "aspect-[340/325]", bg: "light",
+    render: (p) => <Img src={ASSETS.wax} alt="Origen wax seal" ratio={p.ratio} className={p.className} /> },
+  { id: "cup", ratio: R_SQ, ratioClass: "aspect-[340/325]", bg: "light",
+    render: (p) => <Img src={ASSETS.cup} alt="Origen paper cup under an espresso machine" ratio={p.ratio} className={p.className} /> },
+  { id: "wallposter", ratio: R_WIDE, ratioClass: "aspect-[686/438]", bg: "light",
+    render: (p) => <Img src={ASSETS.wallposter} alt="Three Origen wall posters" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
+  { id: "barista", ratio: R_SQ, ratioClass: "aspect-[340/325]", bg: "light",
+    render: (p) => <Img src={ASSETS.barista} alt="Barista wearing an Origen t-shirt" ratio={p.ratio} className={p.className} /> },
+  { id: "tote", ratio: R_SQ, ratioClass: "aspect-[340/325]", bg: "light",
+    render: (p) => <Img src={ASSETS.tote} alt="Origen tote bag on grass" ratio={p.ratio} className={p.className} /> },
+  { id: "mountain", ratio: R_WIDE, ratioClass: "aspect-[686/438]", bg: "light",
+    render: (p) => <Img src={ASSETS.mountain} alt="Origen stamp cards over the Ethiopian highlands" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
 ]
 
-const FRAME3_STORY_SRC = "/weyra-story.jpg"
-const FRAME3_PIN_SRC = "/weyra-pin.jpg"
+const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
 
 const HERO_TEXT =
-  "I shaped Weyra’s identity to challenge outdated narratives about Ethiopian youth, uniting 100+ participants across government, media, civil society, and youth organizations."
+  "Designing Origen’s brand identity and packaging to stand out with a distinctive, premium look in Spain’s sea of minimalist coffee brands."
 
-const FRAME5_COLOR_SRC = "/weyra-color.webm"
-const FRAME5_PHOTO_SRC = "/weyra-clothing.jpg"
+function InViewGif({ src, alt, className = "", threshold = 0.35, rounded = true }) {
+  const boxRef = useRef(null)
+  const [started, setStarted] = useState(false)
 
-const WEYRA_LETTER_SPACING_EM = -0.02
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setStarted(true)
+      return
+    }
 
-const WEYRA_RUN = [
-  { id: "banner", ratio: 1472 / 942, ratioClass: "aspect-[1472/942]", bg: "dark",
-    render: (p) => <Img src="/weyra-banner.jpg" alt="Voices That Build Outdoor Banners" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
-  { id: "magazine", ratio: 722 / 942, ratioClass: "aspect-[722/942]", bg: "dark",
-    render: (p) => <Img src="/weyra-magazine.jpg" alt="Empowering Youth For Peace Report" ratio={p.ratio} className={p.className} /> },
-  { id: "profile", ratio: 722 / 942, ratioClass: "aspect-[722/942]", bg: "dark",
-    render: (p) => <Img src="/weyra-profile.jpg" alt="Weyra Social Media Layout" ratio={p.ratio} className={p.className} /> },
-  { id: "phones", ratio: 1, ratioClass: "aspect-square", bg: "light",
-    render: (p) => (
-      <div data-reveal className={`relative w-full isolate overflow-hidden bg-[#d9f5c8] rounded-[12px] md:rounded-[16px] lg:rounded-[24px] ${p.ratio} ${p.className}`}>
-        <LazyImg src="/weyra-phones.jpg" alt="Weyra Mobile Stories" className="absolute inset-0 block w-full h-full object-contain scale-[1.35] will-change-transform" />
-      </div>
-    ) },
-  { id: "poster", ratio: 722 / 688, ratioClass: "aspect-[722/688]", bg: "dark",
-    render: (p) => <Img src="/weyra-poster.jpg" alt="Youth holding Weyra Poster" ratio={p.ratio} className={p.className} /> },
-  { id: "board", ratio: 722 / 688, ratioClass: "aspect-[722/688]", bg: "dark",
-    render: (p) => <Img src="/weyra-board.jpg" alt="Branded Basketball Backboard" ratio={p.ratio} className={p.className} /> },
-  { id: "flags", ratio: 1472 / 962, ratioClass: "aspect-[1472/962]", bg: "dark",
-    render: (p) => <Img src="/weyra-flags.jpg" alt="Weyra Outdoor Event Flags" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
-]
+    let warmIo
+    if (!isVideo(src)) {
+      warmIo = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            const warm = new Image()
+            warm.decoding = "async"
+            warm.src = src
+            warmIo.disconnect()
+          }
+        },
+        { rootMargin: "100% 0px" }
+      )
+      warmIo.observe(el)
+    }
 
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStarted(true)
+          io.disconnect()
+        }
+      },
+      { threshold }
+    )
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      warmIo?.disconnect()
+    }
+  }, [src, threshold])
 
-export default function WeyraCaseStudy() {
+  const roundingClass = rounded ? "rounded-[12px] md:rounded-[16px] lg:rounded-[24px]" : ""
+  return (
+    <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${roundingClass} ${className}`}>
+      {started && <Media src={src} alt={alt} lazy={false} className="absolute -inset-px w-[calc(100%+2px)] h-[calc(100%+2px)] max-w-none object-cover scale-[1.012]" />}
+    </div>
+  )
+}
+
+const TITLE_LETTER_SPACING_EM = -0.02
+const TITLE = "ORIGEN"
+
+export default function OrigenCaseStudy() {
   const outletCtx = useOutletContext()
   const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
   const heroFade = outletCtx?.heroFade
 
   const isMobile = useIsMobile()
-  // inline so no other rule can override the stack gap on phones
-  const mobileGap = isMobile ? { gap: "var(--page-pad)" } : undefined
+  const mobileGap = isMobile ? { gap: "var(--cs-gap)" } : undefined
   const ready = usePageReady()
   const pageTransition = usePageTransition()
 
@@ -113,10 +168,10 @@ export default function WeyraCaseStudy() {
       const ctx = document.createElement("canvas").getContext("2d")
       ctx.font = '500 100px "Borscha"'
       const w100 =
-        Array.from("WEYRA").reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) +
-        5 * WEYRA_LETTER_SPACING_EM * 100
+        Array.from(TITLE).reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) +
+        TITLE.length * TITLE_LETTER_SPACING_EM * 100
       if (!w100 || !avail) return
-      title.style.letterSpacing = `${WEYRA_LETTER_SPACING_EM}em`
+      title.style.letterSpacing = `${TITLE_LETTER_SPACING_EM}em`
       title.style.fontSize = `${Math.floor((avail / w100) * 100 * 0.90)}px`
     }
 
@@ -181,7 +236,8 @@ export default function WeyraCaseStudy() {
     return () => t.kill()
   }, [ready])
 
-  useIdlePreload(PRELOAD_SRCS, ready && heroLoaded)
+  const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
+  useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
 
   return (
@@ -189,24 +245,23 @@ export default function WeyraCaseStudy() {
       <section
         data-header-bg="dark"
         ref={heroRef}
+        style={{ "--hero-pos-m": HERO_POS_MOBILE, "--hero-pos-d": HERO_POS_DESKTOP }}
         className="sticky top-0 z-0 w-full h-[100lvh] bg-[var(--bg-surface-dark)] overflow-hidden flex flex-col justify-end px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] pb-[calc(40px_+_100lvh_-_100dvh)] md:pb-[calc(var(--cs-gap)_+_100lvh_-_100dvh)] lg:pb-[calc(64px_+_100lvh_-_100dvh)]"
       >
-        <img
-          data-hero-img
-          {...HERO_IMG_PROPS}
-          {...{ [FETCH_PRIORITY_KEY]: "high" }}
-          src="/weyra-hero.jpg"
-          alt="Weyra Brand Identity Sticker"
-          className="absolute inset-0 w-full h-full object-cover object-[35%_30%] md:object-center z-0 will-change-transform"
+        <Media
+          src={ASSETS.hero}
+          alt="Origen latte in a ceramic cup"
+          mediaProps={{ "data-hero-img": "", ...HERO_IMG_PROPS, [FETCH_PRIORITY_KEY]: "high" }}
+          className="absolute inset-0 w-full h-full object-cover [object-position:var(--hero-pos-m)] md:[object-position:var(--hero-pos-d)] z-0 will-change-transform"
         />
         <div className={CS_HERO_SCRIM} aria-hidden="true" />
 
         <div
           data-hero-meta
-          className="absolute inset-x-[var(--page-pad)] top-[22.3%] z-10 flex justify-between md:relative md:inset-x-auto md:top-auto md:grid md:grid-cols-12 md:max-lg:gap-x-[12px] lg:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
+          className="absolute inset-x-[var(--page-pad)] top-[22.3%] z-10 flex justify-between md:relative md:inset-x-auto md:top-auto md:grid md:grid-cols-12 md:gap-x-[12px] md:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
         >
           <span className="md:col-span-6">Brand Identity</span>
-          <span className="max-md:hidden md:col-start-7 md:col-span-3">Completed 2023</span>
+          <span className="max-md:hidden md:col-start-7 md:col-span-3">Completed 2025</span>
           <span className="inline-flex items-center gap-[0.4em] md:col-start-10 md:col-span-3 md:justify-self-end">
             Scroll Down
             <motion.span
@@ -250,200 +305,188 @@ export default function WeyraCaseStudy() {
 
           <MaskRevealText
             as="h1"
-            mode="letters"
+            mode="words"
             active={ready}
-            delay={0.4}
-            stagger={0.1}
-            className="CaseH1 uppercase !leading-[1.1] -my-[0.125em]"
+            delay={0}
+            className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] max-w-full"
           >
-            Weyra
+            Origen
           </MaskRevealText>
         </div>
       </section>
 
-      <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
-        <div style={mobileGap} className="flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0">
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] lg:flex lg:flex-col lg:!pt-[calc(144px+2.2vw)] lg:min-h-[min(64.95vw,100dvh)]`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] lg:items-start max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[7vw] max-md:flex max-md:flex-col max-md:flex-1">
+      <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--cs-gap)] md:px-[var(--cs-gap)] lg:px-[var(--cs-gap)] flex flex-col gap-[var(--cs-gap)] md:gap-[16px]">
+        <div style={mobileGap} className="flex flex-col gap-[var(--cs-gap)] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--cs-gap))] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:max-xl:pb-[16px] xl:pb-[16px] lg:flex lg:flex-col lg:!pt-[calc(144px+2.77vw)] lg:min-h-[min(64.95vw,100dvh)]`}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] max-lg:items-end lg:items-start mb-[32px] md:mb-[48px] lg:mb-[7vw] max-md:flex max-md:flex-col max-md:flex-1">
               <h2 className={`${CS_HEADING} lg:col-span-7 lg:-mt-[0.12em] max-md:mb-auto max-md:pb-[32px]`}>
-                An Olive Branch<br className="max-md:hidden" />{" "}Reimagined
+                Born in the<br className="max-md:hidden" />{" "}Highlands
               </h2>
               <LineMaskText as="p" className={`${CS_PARA} max-md:w-full max-md:self-stretch md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
-                Weyra needed an identity that presented peacebuilding as something young people could actively shape, not just a response to conflict. I built a contemporary visual identity around the olive branch, giving the organization a clear, recognizable voice without relying on the familiar visual language of NGOs.
+                Premium coffee shelves are full of the same quiet minimalism and no emphasis on origin. But Origen’s coffee comes from Ethiopia, coffee’s birthplace. So the identity had to look Ethiopian, not generic, and still hold its own on a Spanish specialty shelf.
               </LineMaskText>
             </div>
-            <Media
-              src="/weyra-stage.webm"
-              alt="Weyra Stage Presentation"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
+            <Img
+              src={ASSETS.beans}
+              alt="Origen logo over roasted coffee beans"
+              ratio="aspect-[1472/581]"
+              parallax={false}
+              imgClassName="scale-[1.08] max-md:object-cover"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full"
             />
           </section>
 
           <section
             data-header-bg="light"
-            className="w-full flex flex-col pt-0 pb-0 max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
+            className="w-full flex flex-col pt-0 pb-0 max-md:h-auto portrait:max-xl:h-auto landscape:md:max-xl:h-[100dvh] xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
           >
-            <div style={mobileGap} className="grid grid-cols-[minmax(0,845fr)_minmax(0,607fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-2 portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-2 gap-[var(--page-pad)] md:gap-[16px] flex-1 min-h-0">
+            <div style={mobileGap} className="grid grid-cols-[minmax(0,845fr)_minmax(0,607fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-[auto_auto] portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-[auto_auto] gap-[var(--cs-gap)] md:gap-[16px] portrait:max-xl:gap-[12px] max-md:!gap-[var(--cs-gap)] flex-1 min-h-0">
               <Img
-                src={FRAME3_STORY_SRC}
-                alt="Olive Leaves + White Dove = Weyra"
+                src={ASSETS.construction1}
+                alt="Kaldi’s goat + Origen + coffee bean"
                 ratio="aspect-auto"
-                imgClassName="min-[600px]:portrait:max-xl:object-contain min-[600px]:portrait:max-xl:!transform-none"
-                className="bg-[#d9f5c8] xl:min-h-[31.7vw]"
+                parallax={false}
+                className="bg-[#2a1810] self-start !aspect-auto [&>div]:!static [&>div]:!h-auto [&_img]:!static [&_img]:!h-auto [&_img]:!transform-none"
               />
-              <div className="flex items-center justify-center max-md:items-start">
+              <div className="flex items-center justify-center">
                 <Img
-                  src={FRAME3_PIN_SRC}
-                  alt="Weyra olive wreath pin on a green cap"
+                  src={ASSETS.construction2}
+                  alt="Origen logo over coffee crema"
                   ratio="aspect-[546/600]"
-                  className="!w-[57.6%] !aspect-[546/600] max-md:!w-auto max-md:!h-[70%] portrait:max-xl:!w-auto portrait:max-xl:!h-[70%]"
+                  className="!w-[57.6%] !aspect-[546/600]"
                 />
               </div>
             </div>
           </section>
 
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
-            <div style={mobileGap} className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
-              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
-                <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-auto max-md:pb-[32px]`}>
-                  A Clear Voice<br className="max-md:hidden" />{" "}Everywhere
+            <div style={mobileGap} className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--cs-gap)] md:gap-[16px] lg:gap-y-0 lg:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,calc((100vw-64px)*0.321))] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
+              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))] md:contents">
+                <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.234em] max-md:mb-auto max-md:pb-[32px]`}>
+                  Heritage Meets<br className="max-md:hidden" />{" "}Modernity
                 </h2>
 
-                <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-end md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-0 md:mb-[24px] lg:mb-[64px] max-md:mb-[24px]`}>
-                  Acumin Variable Concept suits signage, social media, and editorial layouts. It is geometric, clear, and approachable.
+                <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-3 md:max-w-[490px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-[24px] md:mb-[24px] lg:mb-[3.7vw] max-md:mb-[24px]`}>
+                  Cormorant Garamond brings historical weight and editorial elegance, anchoring the identity in craft and origin storytelling through its high-contrast serif structure. DM Sans provides a clean, modern counterweight, delivering geometric precision and sharp legibility across product labels, origin specs, and roasting profiles.
                 </LineMaskText>
 
-                <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col max-md:h-auto max-md:shrink-0 w-full aspect-square md:aspect-auto">
-                  <Media
-                    src="/weyra-type-treatment.webm"
-                    alt="Beyond Conflict Typography Treatment"
-                    className="w-full max-md:h-auto md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
+                <div className="lg:row-start-4 max-md:h-auto max-md:shrink-0 w-full aspect-[405/417] md:aspect-auto">
+                  <Img
+                    src={ASSETS.typeTreatment}
+                    alt="Taste the difference typography treatment over pouring coffee"
+                    ratio="aspect-[405/417] md:aspect-[755/727]"
+                    parallax={false}
+                    fade
+                    className="w-full h-full" imgClassName="object-cover"
                   />
                 </div>
               </div>
-              <div className="lg:row-start-3 lg:col-start-2 md:h-full md:min-h-0 flex flex-col aspect-square md:aspect-auto">
-                <Img
-                  src="/weyra-type.jpg"
-                  alt="Acumin Variable Concept Specimen"
-                  ratio="aspect-square"
-                  parallax={false}
-                  fade
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col tablet-hide aspect-square md:aspect-auto">
-                <Media
-                  src="/Weyra-iphone.webm"
-                  alt="Weyra Mobile App Mockup"
-                  className="w-full max-md:h-auto md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
-                />
-              </div>
+
+              <Img
+                src={ASSETS.packaging}
+                alt="Hands holding two Origen coffee pouches"
+                ratio="aspect-[404/391] md:aspect-[755/727]"
+                parallax={false}
+                className="lg:row-start-4 tablet-hide"
+              />
+              <Img
+                src={ASSETS.type}
+                alt="Cormorant Garamond and DM Sans type specimen over coffee beans"
+                ratio="aspect-[549/664] md:aspect-[755/727]"
+                parallax={false}
+                fade
+                className="lg:row-start-4 spec-natural"
+              />
             </div>
           </section>
 
           <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col lg:flex lg:flex-col pb-0 ${CS_FULL_H}`}>
-            <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
-              Familiarly<br className="max-md:hidden" />{" "}Ethiopian
-            </h2>
-            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
-              <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
-                <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
-                  Familiarly Ethiopian
+            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,calc((100vw-64px)*0.4035))] gap-x-[var(--cs-gap)] md:gap-x-[16px] gap-y-[var(--cs-gap)] md:gap-y-[16px] lg:gap-y-0 md:flex-1 lg:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
+              <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))]">
+                <h2 className={`cs-f5-heading ${CS_HEADING} md:col-span-2 lg:col-span-3 md:-mt-[0.234em] max-lg:order-1 max-md:mb-auto max-md:pb-[32px] md:max-lg:mb-[64px]`}>
+                  Highland<br className="max-md:hidden" />{" "}Inspired Color
                 </h2>
-                <LineMaskText as="p" className={`${CS_PARA} md:hidden self-start mb-[24px]`}>
-                  Familiar Ethiopian colors bring warmth and youth to the palette, keeping the visual language grounded and true to its subject.
+                
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:hidden self-start mb-[24px] max-lg:order-2`}>
+                  While competitors defaulted to sterile minimalism, we rooted the brand in the warmth and history of its original landscape.
                 </LineMaskText>
-                <div className="lg:col-start-1 lg:row-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
-                  <div className="w-full md:h-full isolate overflow-hidden rounded-[12px] md:rounded-[16px] lg:rounded-[24px] bg-transparent">
-                    <Media
-                      src={FRAME5_COLOR_SRC}
-                      alt="Weyra colour palette"
-                      className="w-full max-md:h-auto max-md:aspect-[602/581] md:h-full object-cover scale-[1.012]"
-                    />
-                  </div>
+
+                <div className="lg:col-start-1 lg:row-start-3 max-lg:order-3 flex flex-col h-full max-md:h-auto max-md:shrink-0">
+                  <InViewGif
+                    src={ASSETS.color}
+                    alt="Origen colour palette"
+                    className="cs-f5-gif bg-transparent w-full max-md:h-auto md:h-full aspect-[1205/1162] lg:aspect-auto"
+                  />
                 </div>
               </div>
-              
-              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 lg:row-start-1 md:order-1 h-full max-md:contents">
-                <Img
-                  src="/weyra-wristbands.jpg"
-                  alt="Weyra Branded Wristbands"
-                  ratio="aspect-[357/345]"
-                  className="bg-[#0b1f14] lg:!aspect-[357/345] lg:shrink-0 w-full tablet-hide max-md:order-3"
-                />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-0 md:mt-[12px] lg:mt-[var(--page-pad)] max-md:hidden`}>
-                  Familiar Ethiopian colors bring warmth and youth to the palette, keeping the visual language grounded and true to its subject.
-                </LineMaskText>
-              </div>
-              
-              <div className="lg:col-start-3 lg:row-start-1 md:order-3 flex flex-col h-full max-md:order-4">
-                <Img
-                  src={FRAME5_PHOTO_SRC}
-                  alt="Weyra branded clothing"
-                  ratio="aspect-none"
-                  parallax={false}
-                  className="bg-[#e1efdc] w-full lg:h-full object-cover" imgClassName="lg:object-top"
-                />
-              </div>
-            </div>
-          </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 ${CS_FRAME_PT} lg:h-[100dvh] lg:pb-0 lg:flex lg:flex-col`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
-              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
-                <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
-                  One Identity<br className="max-md:hidden" />{" "}In Harmony
-                </h2>
-                <Img src="/weyra-badge.jpg" alt="Weyra Event Lanyard" ratio="aspect-[726/700]" className="max-md:h-auto lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
+              <div className="cs-f5-wrap contents">
+                <Img
+                  src={ASSETS.emboss}
+                  alt="Embossed Origen goat on cream leather"
+                  ratio="aspect-[549/580]"
+                  className="bg-[#c6b984] lg:col-start-2 lg:row-start-3 lg:self-start lg:!aspect-[357/345] lg:max-h-[400px] max-lg:order-4 tablet-hide"
+                />
+                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] lg:col-start-2 lg:row-start-3 lg:self-end max-lg:order-2 max-lg:mb-[16px] md:max-lg:col-span-2 max-md:hidden`}>
+                  While competitors defaulted to sterile minimalism, we rooted the brand in the warmth and history of its original landscape.
+                </LineMaskText>
+                <Img
+                  src={ASSETS.billboard}
+                  alt="Origen billboard in a wildflower meadow: Coffee from the source"
+                  ratio="aspect-[356/236]"
+                  parallax={false}
+                  className="max-md:h-auto bg-[#26301c] lg:col-start-3 lg:row-start-3 lg:self-stretch max-lg:order-5 tablet-hide" imgClassName="max-md:object-[50%_50%] lg:object-top" />
               </div>
-              <Img src="/weyra-tote.jpg" alt="Weyra Branded Tote Bag" ratio="aspect-[726/700]" className="lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
             </div>
           </section>
         </div>
 
-        {isMobile && <MobileImageGroups items={WEYRA_RUN} padVar="--page-pad" />}
+        <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 max-md:mb-[calc(16px-var(--cs-gap))] ${CS_FRAME_PT} pb-0`}>
+          {isMobile && (
+            <div className="flex flex-col gap-[var(--cs-gap)] flex-1">
+              <div className="flex flex-col min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))]">
+                <h2 className={`${CS_HEADING} mb-auto pb-[32px]`}>
+                  A Premium Presence
+                </h2>
+                <Img src={ASSETS.iced} alt="Origen iced coffee on a branded coaster" ratio="aspect-[340/308]" className="h-auto" />
+              </div>
+              <MobileImageGroups items={ORIGEN_RUN} padVar="--cs-gap" />
+            </div>
+          )}
 
-        {!isMobile && (
-        <>
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
-          <Img
-            src="/weyra-banner.jpg"
-            alt="Voices That Build Outdoor Banners"
-            ratio="aspect-[1472/942]"
-            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
-        </section>
+          {!isMobile && (
+          <div className="flex flex-col gap-[var(--cs-gap)] md:gap-[16px] max-md:flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--cs-gap)] md:gap-[16px] max-md:flex max-md:flex-col">
+              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--cs-gap))] md:contents">
+                <h2 className={`${CS_HEADING} md:col-span-2 md:-mt-[0.234em] mb-[12px] md:mb-[16px] lg:mb-[10.8vw] max-md:mb-auto max-md:pb-[32px]`}>
+                  A Premium<br className="max-md:hidden" />{" "}Presence
+                </h2>
+                <Img src={ASSETS.iced} alt="Origen iced coffee on a branded coaster" ratio="aspect-[340/308]" className="max-md:h-auto lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
+              </div>
+              <Img src={ASSETS.pouchWood} alt="Hand holding an Origen coffee pouch on a wooden shelf" ratio="aspect-[340/308]" className="lg:!h-[clamp(30vw,calc(100dvh-376px),38.75vw)]" />
+            </div>
 
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
-          <Img src="/weyra-magazine.jpg" alt="Empowering Youth For Peace Report" ratio="aspect-[722/942]" />
-          <Img src="/weyra-profile.jpg" alt="Weyra Social Media Layout" ratio="aspect-[722/942]" />
-        </section>
+            <Img src={ASSETS.box} alt="Origen drip coffee box: Where coffee began" ratio="aspect-[686/438]" className="max-md:h-auto lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" imgClassName="max-md:object-[50%_50%]" />
 
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} md:landscape:h-[100dvh]`}>
-          <div data-reveal className="relative w-full max-md:aspect-square md:landscape:h-full isolate overflow-hidden bg-[#d9f5c8] rounded-[12px] md:rounded-[16px] lg:rounded-[24px]">
-            <LazyImg
-              src="/weyra-phones.jpg"
-              alt="Weyra Mobile Stories"
-              className="block w-full h-auto max-md:absolute max-md:inset-0 max-md:h-full max-md:object-contain max-md:scale-[1.35] md:landscape:h-full md:landscape:object-cover will-change-transform"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--cs-gap)] md:gap-[16px]">
+              <Img src={ASSETS.wax} alt="Origen wax seal" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
+              <Img src={ASSETS.cup} alt="Origen paper cup under an espresso machine" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
+            </div>
+
+            <Img src={ASSETS.wallposter} alt="Three Origen wall posters" ratio="aspect-[686/438]" className="max-md:h-auto lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" imgClassName="max-md:object-[50%_50%]" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--cs-gap)] md:gap-[16px]">
+              <Img src={ASSETS.barista} alt="Barista wearing an Origen t-shirt" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
+              <Img src={ASSETS.tote} alt="Origen tote bag on grass" ratio="aspect-[340/325]" className="lg:!h-[clamp(36vw,calc(100dvh-112px),57.5vw)]" />
+            </div>
+
+            <Img src={ASSETS.mountain} alt="Origen stamp cards over the Ethiopian highlands" ratio="aspect-[686/438]" className="max-md:h-auto lg:!h-[clamp(30vw,calc(100dvh-236px),49.3vw)]" imgClassName="max-md:object-[50%_50%]" />
           </div>
+          )}
         </section>
 
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[74.1vh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
-          <Img src="/weyra-poster.jpg" alt="Youth holding Weyra Poster" ratio="aspect-[722/688]" />
-          <Img src="/weyra-board.jpg" alt="Branded Basketball Backboard" ratio="aspect-[722/688]" />
-        </section>
-
-        <section data-header-bg="dark" className="w-full">
-          <Img
-            src="/weyra-flags.jpg"
-            alt="Weyra Outdoor Event Flags"
-            ratio="aspect-[1472/962]"
-            className="max-md:h-auto lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-        </>
-        )}
-
-        <NextProject current="weyra" />
+        <div className="w-full h-[48px] lg:h-[144px] max-md:hidden" aria-hidden="true" />
+        <NextProject current="origen" />
       </main>
     </div>
   )

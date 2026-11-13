@@ -125,7 +125,6 @@ export default function YimajCaseStudy() {
   const heroFade = outletCtx?.heroFade
 
   const isMobile = useIsMobile()
-  // inline so no stylesheet rule can override it on phones
   const mobileGap = isMobile ? { gap: "var(--page-pad)" } : undefined
   const ready = usePageReady()
   const pageTransition = usePageTransition()
@@ -222,7 +221,8 @@ export default function YimajCaseStudy() {
     return () => t.kill()
   }, [ready])
 
-  useIdlePreload(PRELOAD_SRCS, ready && heroLoaded)
+  const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
+  useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
 
   return (
@@ -294,10 +294,9 @@ export default function YimajCaseStudy() {
 
           <MaskRevealText
             as="h1"
-            mode="letters"
+            mode="words"
             active={ready}
-            delay={0.4}
-            stagger={0.1}
+            delay={0}
             className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] md:max-w-[40vw] max-md:max-w-none max-w-full"
           >
             Yimaj
