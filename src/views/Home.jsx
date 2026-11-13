@@ -62,6 +62,10 @@ const flat = (str) => str.replace(/\n/g, " ")
 const TICKER_PRIORITY_COUNT = 4
 const TICKER_START_DELAY = 1200 // ms after pageReady (preloader exit / page transition wipe still running)
 
+// Same corner radius as the Work carousel (Work.jsx CARD_RADIUS):
+// 3% of the card width, clamped to 12px–24px. --ticker-card-w is set on each slide below.
+const TICKER_CARD_RADIUS = "clamp(12px, calc(var(--ticker-card-w) * 0.03), 24px)"
+
 const SERVICES_DATA = [
     {
         id: "01",
@@ -399,7 +403,9 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
                 if (project) prefetchHero(heroSlugFor(project.name))
             }}
             onPointerLeave={() => setHovered(false)}
-            className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group outline-none"
+            // --ticker-card-w = the visible card width (slide width minus the 12px pr gutter),
+            // used by TICKER_CARD_RADIUS so the radius follows the same formula as the Work carousel.
+            className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group outline-none [--ticker-card-w:calc(72vw-12px)] md:[--ticker-card-w:calc(42vw-12px)] lg:[--ticker-card-w:340px]"
             {...a11y}
         >
             <div
@@ -407,9 +413,10 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
                 // hidden until the reveal is decided; the Web Animation above takes over from here
                 style={{
                     height: TICKER_HEIGHT,
+                    borderRadius: TICKER_CARD_RADIUS,
                     ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
                 }}
-                className="relative isolate w-full overflow-hidden rounded-[12px] md:rounded-[16px] lg:rounded-[24px] bg-[var(--bg-surface-dark)]"
+                className="relative isolate w-full overflow-hidden bg-[var(--bg-surface-dark)]"
             >
                 <div className="absolute inset-0 w-full h-full">
                     <img
