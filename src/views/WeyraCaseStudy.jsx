@@ -262,10 +262,10 @@ export default function WeyraCaseStudy() {
       </section>
 
       <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
-        <div style={mobileGap} className="flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] items-end max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:flex max-md:flex-col max-md:flex-1">
-              <h2 className={`${CS_HEADING} lg:col-span-7 max-md:mb-auto max-md:pb-[32px]`}>
+        <div style={mobileGap} className="flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0">
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] lg:flex lg:flex-col lg:!pt-[calc(144px+2.2vw)] lg:min-h-[min(64.95vw,100dvh)]`}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] lg:items-start max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[7vw] max-md:flex max-md:flex-col max-md:flex-1">
+              <h2 className={`${CS_HEADING} lg:col-span-7 lg:-mt-[0.12em] max-md:mb-auto max-md:pb-[32px]`}>
                 An Olive Branch<br className="max-md:hidden" />{" "}Reimagined
               </h2>
               <LineMaskText as="p" className={`${CS_PARA} max-md:w-full max-md:self-stretch md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
@@ -275,7 +275,7 @@ export default function WeyraCaseStudy() {
             <Media
               src="/weyra-stage.webm"
               alt="Weyra Stage Presentation"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw] w-full md:h-full object-cover rounded-lg md:rounded-[12px]"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover rounded-lg md:rounded-[12px]"
             />
           </section>
 
@@ -388,7 +388,7 @@ export default function WeyraCaseStudy() {
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 ${CS_FRAME_PT} lg:h-[100dvh] lg:pb-[var(--page-pad)] lg:flex lg:flex-col`}>
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 ${CS_FRAME_PT} lg:h-[100dvh] lg:pb-0 lg:flex lg:flex-col`}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
               <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
                 <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
@@ -405,7 +405,7 @@ export default function WeyraCaseStudy() {
 
         {!isMobile && (
         <>
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] lg:pt-[calc(var(--header-h,64px)+var(--page-pad))] lg:pb-[var(--page-pad)] flex flex-col`}>
+        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
           <Img
             src="/weyra-banner.jpg"
             alt="Voices That Build Outdoor Banners"

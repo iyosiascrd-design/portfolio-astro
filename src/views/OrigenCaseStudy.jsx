@@ -318,9 +318,9 @@ export default function OrigenCaseStudy() {
 
       <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--cs-gap)] md:px-[var(--cs-gap)] lg:px-[var(--cs-gap)] flex flex-col gap-[var(--cs-gap)] md:gap-[16px]">
         <div style={mobileGap} className="flex flex-col gap-[var(--cs-gap)] md:gap-[16px] lg:gap-0 lg:-mb-[16px]">
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--cs-gap))] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:max-xl:pb-[16px] xl:pb-[16px] ${CS_FRAME_MIN_H}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] items-end mb-[32px] md:mb-[48px] lg:mb-[4.23vw] max-md:flex max-md:flex-col max-md:flex-1">
-              <h2 className={`${CS_HEADING} lg:col-span-7 max-md:mb-auto max-md:pb-[32px]`}>
+          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--cs-gap))] max-md:pb-0 ${CS_FRAME_PT} pb-0 lg:max-xl:pb-[16px] xl:pb-[16px] lg:flex lg:flex-col lg:!pt-[calc(144px+2.77vw)] lg:min-h-[min(64.95vw,100dvh)]`}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[64px] md:gap-y-[80px] max-lg:items-end lg:items-start mb-[32px] md:mb-[48px] lg:mb-[7vw] max-md:flex max-md:flex-col max-md:flex-1">
+              <h2 className={`${CS_HEADING} lg:col-span-7 lg:-mt-[0.12em] max-md:mb-auto max-md:pb-[32px]`}>
                 Born in the<br className="max-md:hidden" />{" "}Highlands
               </h2>
               <LineMaskText as="p" className={`${CS_PARA} max-md:w-full max-md:self-stretch md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
@@ -333,7 +333,7 @@ export default function OrigenCaseStudy() {
               ratio="aspect-[1472/581]"
               parallax={false}
               imgClassName="scale-[1.08] max-md:object-cover"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:flex-1 lg:min-h-[26.5vw]"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full"
             />
           </section>
 
