@@ -65,7 +65,7 @@ const SERVICES_DATA = [
         id: "01",
         title: "Brand Identity",
         keywords: "Strategy, positioning, identity\nsystems and guidelines",
-        image: "/brand-identity.jpeg",
+        image: "/brand-identity.webp",
         captionTitle: "Make your\nDifference Visible",
         captionText:
             "Every business has an edge. I sharpen yours into a brand people recognize",
@@ -74,7 +74,7 @@ const SERVICES_DATA = [
         id: "02",
         title: "Digital Design",
         keywords: "Websites, landing pages and\ndigital experiences",
-        image: "/digital-design.jpeg",
+        image: "/digital-design.webp",
         captionTitle: "Make your website\nwork harder",
         captionText:
             "Create digital experiences people enjoy, turning curious visitors into customers",
@@ -83,7 +83,7 @@ const SERVICES_DATA = [
         id: "03",
         title: "Communication",
         keywords: "Pitch decks, presentations\nand campaign design",
-        image: "/communication.jpeg",
+        image: "/communication.webp",
         captionTitle: "Turn information\ninto influence",
         captionText:
             "From pitch decks to campaigns, turn complex ideas into clear visuals that get people to act",
@@ -92,7 +92,7 @@ const SERVICES_DATA = [
         id: "04",
         title: "3D Visuals",
         keywords: "Product visualization,\narch visualization and motion",
-        image: "/3d-visuals.jpg",
+        image: "/3d-visuals.webp",
         captionTitle: "Make products feel\npremium before launch",
         captionText:
             "High-fidelity renders that build desire and make the future instantly tangible",
@@ -106,7 +106,7 @@ const EXPERTISE_DATA = [
         title: "Brand Identity",
         description: "Complete positioning, visual systems,\nand brand guideline",
         tools: ["Adobe Illustrator", "Adobe Photoshop", "Adobe InDesign"],
-        image: "/expertise-brand.png",
+        image: "/expertise-brand.webp",
         tilt: -14,
         scale: 1,
         mobileBoost: 1.4,
@@ -116,7 +116,7 @@ const EXPERTISE_DATA = [
         title: "Web & UI Design",
         description: "High-converting landing pages and responsive Framer sites",
         tools: ["Figma", "Framer", "Webflow"],
-        image: "/expertise-web.png",
+        image: "/expertise-web.webp",
         tilt: 6,
         scale: 1.25,
     },
@@ -124,7 +124,7 @@ const EXPERTISE_DATA = [
         title: "Pitch & Presentation",
         description: "Decks that win clients,\nfunding, and board approval",
         tools: ["Canva", "PowerPoint", "Keynote"],
-        image: "/expertise-pitch.png",
+        image: "/expertise-pitch.webp",
         tilt: -10,
         scale: 1,
         desktopOffset: { x: 0, y: 40 },
@@ -134,7 +134,7 @@ const EXPERTISE_DATA = [
         title: "3D & Motion",
         description: "High-impact 3D visuals,\nproduct renders, and video motion",
         tools: ["Blender", "After Effects", "DaVinci"],
-        image: "/expertise-3d.png",
+        image: "/expertise-3d.webp",
         tilt: 12,
         scale: 1,
     },
@@ -794,15 +794,17 @@ export default function Home() {
             const ps = Array.from(list.querySelectorAll(".svc-panel"))
             if (!hs.length || hs.length !== ps.length || hs[0].offsetHeight <= 0) return
 
+            // Batch every layout read first, then write once, so the style write
+            // below can't invalidate layout between reads (forced reflow).
             const rowH = hs[0].getBoundingClientRect().height
+            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
+            const sy = window.scrollY
+            const rects = ps.map((el) => el.getBoundingClientRect())
             const rowHStr = `${rowH}px`
             if (rowHStr !== lastRowH) {
                 lastRowH = rowHStr
                 list.style.setProperty("--svc-row-h", rowHStr)
             }
-            const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
-            const sy = window.scrollY
-            const rects = ps.map((el) => el.getBoundingClientRect())
             geo = {
                 heads: hs,
                 rowH,
@@ -1491,9 +1493,10 @@ export default function Home() {
                                         )
                                     })}
 
-                                    <motion.div
+                                    <motion.li
+                                        aria-hidden="true"
                                         variants={servicesDividerVariants}
-                                        className="w-full h-[1px] bg-[var(--border-dark)] origin-left"
+                                        className="w-full h-[1px] bg-[var(--border-dark)] origin-left list-none"
                                     />
                                 </motion.ul>
                             </div>
@@ -1542,7 +1545,7 @@ export default function Home() {
                             <div className="w-[160px] h-[211px] md:w-[217px] md:h-[286px] lg:sticky lg:top-[120px]">
                                 <div className="relative w-full h-full bg-[var(--bg-surface-light)] isolate overflow-hidden rounded-[12px]">
                                     <img
-                                        src="/portrait.jpeg"
+                                        src="/portrait.webp"
                                         alt="Iyosias Portrait"
                                         loading="lazy"
                                         decoding="async"
@@ -1699,10 +1702,11 @@ export default function Home() {
                                         )
                                     })}
 
-                                    <motion.div
+                                    <motion.li
+                                        aria-hidden="true"
                                         variants={dividerVariants}
                                         style={{ backgroundColor: SITE_GREY }}
-                                        className="w-full h-[1px] origin-left"
+                                        className="w-full h-[1px] origin-left list-none"
                                     />
                                 </motion.ul>
                             </div>
