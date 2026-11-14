@@ -59,7 +59,7 @@ export default function NextProject({ current }) {
       >
         {/* Thumbnail */}
         <div
-          className="hidden md:block w-0 opacity-0 overflow-hidden rounded-lg md:rounded-[12px] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none group-hover:w-[96px] group-hover:opacity-100 group-hover:mr-[16px] h-[54px]"
+          className="hidden md:block w-0 opacity-0 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none group-hover:w-[96px] group-hover:opacity-100 group-hover:mr-[16px] h-[54px]"
         >
           <img 
             src={prev.hero} 
@@ -93,7 +93,7 @@ export default function NextProject({ current }) {
 
         {/* Thumbnail */}
         <div
-          className="hidden md:block w-0 opacity-0 overflow-hidden rounded-lg md:rounded-[12px] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none group-hover:w-[96px] group-hover:opacity-100 group-hover:ml-[16px] h-[54px]"
+          className="hidden md:block w-0 opacity-0 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none group-hover:w-[96px] group-hover:opacity-100 group-hover:ml-[16px] h-[54px]"
         >
           <img 
             src={next.hero} 
