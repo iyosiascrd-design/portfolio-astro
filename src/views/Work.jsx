@@ -101,7 +101,7 @@ const TITLE_STYLE = {
 }
 
 const LEFT_TEXT_VARS = { "--type-caption-size": "20px" }
-const CARD_RADIUS = "clamp(12px, calc(var(--card-w) * 0.03), 24px)"
+const CARD_RADIUS = "0px"
 
 const NOOP = () => {} 
 const CAROUSEL_QUERY = "(min-width: 768px)" 

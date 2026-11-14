@@ -123,7 +123,7 @@ function InViewGif({ src, alt, className = "", threshold = 0.35, rounded = true 
     }
   }, [src, threshold])
 
-  const roundingClass = rounded ? "rounded-[12px] md:rounded-[16px] lg:rounded-[24px]" : ""
+  const roundingClass = ""
   return (
     <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${roundingClass} ${className}`}>
       {started && <Media src={src} alt={alt} lazy={false} className="absolute -inset-px w-[calc(100%+2px)] h-[calc(100%+2px)] max-w-none object-cover scale-[1.012]" />}

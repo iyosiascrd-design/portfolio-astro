@@ -65,7 +65,7 @@ const WEYRA_RUN = [
     render: (p) => <Img src="/weyra-profile.jpg" alt="Weyra Social Media Layout" ratio={p.ratio} className={p.className} /> },
   { id: "phones", ratio: 1, ratioClass: "aspect-square", bg: "light",
     render: (p) => (
-      <div data-reveal className={`relative w-full isolate overflow-hidden bg-[#d9f5c8] rounded-[12px] md:rounded-[16px] lg:rounded-[24px] ${p.ratio} ${p.className}`}>
+      <div data-reveal className={`relative w-full isolate overflow-hidden bg-[#d9f5c8] ${p.ratio} ${p.className}`}>
         <LazyImg src="/weyra-phones.jpg" alt="Weyra Mobile Stories" className="absolute inset-0 block w-full h-full object-contain scale-[1.35] will-change-transform" />
       </div>
     ) },
@@ -282,7 +282,7 @@ export default function WeyraCaseStudy() {
             <Media
               src="/weyra-stage.webm"
               alt="Weyra Stage Presentation"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
+              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover"
             />
           </section>
 
@@ -324,7 +324,7 @@ export default function WeyraCaseStudy() {
                   <Media
                     src="/weyra-type-treatment.webm"
                     alt="Beyond Conflict Typography Treatment"
-                    className="w-full max-md:h-auto md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
+                    className="w-full max-md:h-auto md:h-full object-cover"
                   />
                 </div>
               </div>
@@ -342,7 +342,7 @@ export default function WeyraCaseStudy() {
                 <Media
                   src="/Weyra-iphone.webm"
                   alt="Weyra Mobile App Mockup"
-                  className="w-full max-md:h-auto md:h-full object-cover rounded-[12px] md:rounded-[16px] lg:rounded-[24px]"
+                  className="w-full max-md:h-auto md:h-full object-cover"
                 />
               </div>
             </div>
@@ -361,7 +361,7 @@ export default function WeyraCaseStudy() {
                   Familiar Ethiopian colors bring warmth and youth to the palette, keeping the visual language grounded and true to its subject.
                 </LineMaskText>
                 <div className="lg:col-start-1 lg:row-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
-                  <div className="w-full md:h-full isolate overflow-hidden rounded-[12px] md:rounded-[16px] lg:rounded-[24px] bg-transparent">
+                  <div className="w-full md:h-full isolate overflow-hidden bg-transparent">
                     <Media
                       src={FRAME5_COLOR_SRC}
                       alt="Weyra colour palette"
@@ -426,7 +426,7 @@ export default function WeyraCaseStudy() {
         </section>
 
         <section data-header-bg="light" className={`w-full ${FRAME_PB} md:landscape:h-[100dvh]`}>
-          <div data-reveal className="relative w-full max-md:aspect-square md:landscape:h-full isolate overflow-hidden bg-[#d9f5c8] rounded-[12px] md:rounded-[16px] lg:rounded-[24px]">
+          <div data-reveal className="relative w-full max-md:aspect-square md:landscape:h-full isolate overflow-hidden bg-[#d9f5c8]">
             <LazyImg
               src="/weyra-phones.jpg"
               alt="Weyra Mobile Stories"

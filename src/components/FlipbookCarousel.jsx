@@ -29,7 +29,7 @@ const EDGE_MARGIN = 8
 const DRAG_STEP = 0.55
 const CARD_TOP = 24
 const CARD_BOTTOM = 72
-const CARD_RADIUS = "clamp(12px, 5vw, 20px)"
+const CARD_RADIUS = "0px"
 
 const FLING_MIN_VELOCITY = 1.4
 const FLING_MAX_VELOCITY = 10

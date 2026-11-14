@@ -416,7 +416,7 @@ export default function YimajCaseStudy() {
                 </LineMaskText>
                 
                 <div className="lg:col-start-1 lg:row-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
-                  <div className="w-full md:h-full isolate overflow-hidden rounded-[12px] md:rounded-[16px] lg:rounded-[24px] bg-transparent">
+                  <div className="w-full md:h-full isolate overflow-hidden bg-transparent">
                     <LazyImg
                       src={ASSETS.color}
                       alt="Yimaj Heights colour palette"

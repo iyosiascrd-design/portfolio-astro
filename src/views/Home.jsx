@@ -58,7 +58,7 @@ const flat = (str) => str.replace(/\n/g, " ")
 
 const TICKER_PRIORITY_COUNT = 4
 const TICKER_START_DELAY = 1200 
-const TICKER_CARD_RADIUS = "clamp(12px, calc(var(--ticker-card-w) * 0.03), 24px)"
+const TICKER_CARD_RADIUS = "0px"
 
 const SERVICES_DATA = [
     {
@@ -483,7 +483,7 @@ const ServiceAccordionImage = ({ src, alt, active, depth = 1 }) => {
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     return (
         <div
-            className="svc-par-box relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] isolate overflow-hidden rounded-[12px] md:rounded-[16px] border border-[var(--border-dark-subtle)]"
+            className="svc-par-box relative w-full aspect-[4/3] max-h-[clamp(180px,30svh,320px)] bg-[var(--bg-surface-dark)] isolate overflow-hidden border border-[var(--border-dark-subtle)]"
             style={{ "--svc-n": depth, isolation: "isolate", transform: "translateZ(0)" }}
         >
             <div className="svc-par">
@@ -1502,7 +1502,7 @@ export default function Home() {
                             </div>
 
                             <div className="hidden lg:flex w-[332px] flex-shrink-0 flex-col justify-between m-0">
-                                <div className="relative w-full h-[clamp(150px,25svh,230px)] bg-[var(--bg-surface-dark)] isolate overflow-hidden rounded-[12px] md:rounded-[16px] border border-[var(--border-dark-subtle)]">
+                                <div className="relative w-full h-[clamp(150px,25svh,230px)] bg-[var(--bg-surface-dark)] isolate overflow-hidden border border-[var(--border-dark-subtle)]">
                                     <ServiceImageStage
                                         images={SERVICE_IMAGES}
                                         index={activeIndex}
@@ -1543,7 +1543,7 @@ export default function Home() {
                     <div className="w-full flex flex-col gap-[40px] md:gap-[48px] items-start lg:flex-row lg:items-stretch lg:gap-[64px] xl:gap-[138px]">
                         <div className="flex-shrink-0 lg:self-stretch">
                             <div className="w-[160px] h-[211px] md:w-[217px] md:h-[286px] lg:sticky lg:top-[120px]">
-                                <div className="relative w-full h-full bg-[var(--bg-surface-light)] isolate overflow-hidden rounded-[12px]">
+                                <div className="relative w-full h-full bg-[var(--bg-surface-light)] isolate overflow-hidden">
                                     <img
                                         src="/portrait.webp"
                                         alt="Iyosias Portrait"
