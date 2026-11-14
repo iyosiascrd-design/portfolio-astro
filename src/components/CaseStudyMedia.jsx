@@ -329,7 +329,7 @@ export function Img({
 }) {
   const wrapRef = useRef(null)
   const flow = FLOW_RE.test(className)
-  const roundingClass = rounded ? "rounded-lg md:rounded-[12px]" : ""
+  const roundingClass = ""
   const bg = placeholder && !/(^|\s)bg-/.test(className) ? placeholder : ""
 
   // Only keep the image on its own GPU layer while it is near the viewport.
@@ -347,7 +347,7 @@ export function Img({
       <div
         data-reveal
         {...(fade ? { "data-fade": "" } : {})}
-        className={`relative w-full overflow-hidden rounded-lg md:rounded-[12px] ${className}`}
+        className={`relative w-full overflow-hidden ${className}`}
       >
         <LazyImg src={src} alt={alt} className={`block w-full h-auto ${imgClassName}`} />
       </div>
@@ -371,7 +371,7 @@ export function Img({
         alt={alt}
         lazy={!flow}
         mediaProps={mediaProps}
-        className={`absolute inset-0 w-full h-full object-cover rounded-[inherit] ${imgClassName}`}
+        className={`absolute inset-0 w-full h-full object-cover ${imgClassName}`}
       />
     </div>
   )
@@ -419,7 +419,7 @@ export function SceneVideo({
     <div
       data-reveal
       data-fade
-      className={`relative w-full overflow-hidden rounded-lg md:rounded-[12px] ${bg} ${ratio} lg:aspect-auto ${className}`}
+      className={`relative w-full overflow-hidden ${bg} ${ratio} lg:aspect-auto ${className}`}
     >
       <style>{`
         .${name}-video::-webkit-media-controls,
