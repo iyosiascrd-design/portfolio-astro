@@ -3,7 +3,7 @@ import gsap from "gsap"
 import { usePageTransition, shouldPreload, announcePreloadDone, PRELOAD_KEY } from "./PageTransitionOverlay"
 
 const P = {
-    minWait: 2.2, // s: minimum time the preloader stays up
+    minWait: 1.2, // s: minimum time the preloader stays up
     maxWait: 6000, // ms: hard cap on waiting for assets
 
     // intro: odometer reels rise into place
@@ -15,8 +15,8 @@ const P = {
 
     // loop: after the intro, the same odometer roll repeats. The count is picked once,
     // when the intro ends, from how far along loading is (see pickLoopCount).
-    loopMin: 1, // always at least this many repeats, even if loading is instant
-    loopMax: 2, // never more than this many repeats
+    loopMin: 0, // no extra repeat when loading is already done by the end of the intro
+    loopMax: 1, // at most one repeat, even on a slow connection
     loopDuration: 1.0, // s: one repeat roll per letter
     loopEase: "power3.inOut", // starts and ends at rest, so it chains smoothly with the intro and exit
 
@@ -205,6 +205,10 @@ export default function Preloader() {
 
             const startLoop = () => {
                 const count = pickLoopCount()
+                if (count <= 0) {
+                    loopDone = true
+                    return
+                }
                 loopTl = gsap.timeline({
                     onComplete: () => {
                         loopDone = true

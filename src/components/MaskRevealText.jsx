@@ -154,7 +154,10 @@ export default function MaskRevealText({
     }
 
     return (
-        <Tag ref={containerRef} aria-label={flatLabel} className={className}>
+        <Tag ref={containerRef} className={className}>
+            {/* aria-label isn't allowed on a plain div/span, so screen readers get the
+                full sentence as real (visually hidden) text; the animated pieces stay aria-hidden. */}
+            {flatLabel && <span className="sr-only">{flatLabel}</span>}
             {tokens.map((t, i) => {
                 if (t.type === "space") return <React.Fragment key={`s${i}`}> </React.Fragment>
                 if (t.type === "node") return t.node
