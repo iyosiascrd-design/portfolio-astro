@@ -60,9 +60,9 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site)
 // Home page: the mobile LCP image is the first carousel card (Weyra).
 // It is rendered by React, so the browser can't discover it from the HTML.
 // Preloading it lets the download start immediately, while JS is still loading.
-// Note: the space in the file name must be written as %20 here.
+// The path must match the <img src> exactly, or the browser downloads it twice.
 const isHome = Astro.url.pathname === "/"
-const HOME_MOBILE_HERO = "/weyra%20home.jpeg"
+const HOME_MOBILE_HERO = "/weyra-home.webp"
 const ogImage = new URL(image, Astro.site)
 
 // Derive image MIME type from file extension
@@ -135,6 +135,7 @@ const ogImageType = IMAGE_TYPES[ext] ?? "image/png"
         rel="preload"
         as="image"
         href={HOME_MOBILE_HERO}
+        type="image/webp"
         media="(max-width: 767px)"
         fetchpriority="high"
       />

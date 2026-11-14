@@ -6,8 +6,8 @@ const DEFAULT_QUALITY = 80
 
 const jobs = {
   // detailed images that stayed heavy at q80 -> compress harder
-  "brand-identity.jpeg": { width: 900, quality: 62 },
-  "origen home.jpeg": { width: 800, quality: 65 },
+  "brand-identity.jpeg": { width: 900, quality: 50 },
+  "origen home.jpeg": { width: 800, quality: 56 },
 
   "digital-design.jpeg": { width: 900 },
   "communication.jpeg": { width: 900 },
@@ -26,7 +26,7 @@ for (const [file, { width, quality = DEFAULT_QUALITY }] of Object.entries(jobs))
   const out = file.replace(/\.(jpe?g|png)$/i, "").replace(/ /g, "-") + ".webp"
   await sharp(`public/${file}`)
     .resize({ width, withoutEnlargement: true })
-    .webp({ quality, alphaQuality: 90 })
+    .webp({ quality, alphaQuality: 90, effort: 6 })
     .toFile(`public/${out}`)
   console.log(`${file} -> ${out} (q${quality})`)
 }
