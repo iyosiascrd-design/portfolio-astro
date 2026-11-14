@@ -116,6 +116,15 @@ export default function Preloader() {
             window.sessionStorage.setItem(PRELOAD_KEY, "1")
         } catch {}
 
+        // Read the viewport height ONCE, before any DOM write, and keep it fresh on resize.
+        // Reading window.innerHeight later (inside exit(), right after style/attribute
+        // writes) forces a synchronous reflow of the whole page.
+        let viewH = window.innerHeight
+        const onResize = () => {
+            viewH = window.innerHeight
+        }
+        window.addEventListener("resize", onResize, { passive: true })
+
         document.body.style.overflow = "hidden"
 
         let ctx = gsap.context(() => {
@@ -239,7 +248,7 @@ export default function Preloader() {
                 copyRefs.current.forEach((el) => el && (el.style.display = "none"))
                 paintReels()
 
-                const H = window.innerHeight
+                const H = viewH
                 const revealAt = P.logoHold + P.revealLead
 
                 mainEl = findMain() 
@@ -277,6 +286,7 @@ export default function Preloader() {
             gsap.ticker.add(tick)
 
             return () => {
+                window.removeEventListener("resize", onResize)
                 clearTimeout(maxTimer)
                 gsap.ticker.remove(tick)
                 gsap.ticker.remove(paintReels)
