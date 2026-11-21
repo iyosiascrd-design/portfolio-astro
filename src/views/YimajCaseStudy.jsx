@@ -113,69 +113,32 @@ function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, frame, c
   )
 }
 
-// Page order of the videos; buffered one at a time once the hero has settled so they are
-// already cached by the time the reader scrolls to them, on mobile too.
+// Videos in page order.
 const VIDEO_SRCS = [ASSETS.logoAnimation, ASSETS.socials, ASSETS.color].filter((src) => isVideo(src))
+const VIDEO_RELEASE_GAP_MS = 700
 
-function useVideoWarmup(enabled) {
+// Once the hero has settled, videos are released one at a time in page order. A released
+// video mounts as a real <video> element and starts loading straight away, which is what
+// every browser (iOS Safari included) honours. The old hidden-element warmup did not.
+// Returns how many videos have been released so far.
+function useReleasedVideos(enabled) {
+  const [released, setReleased] = useState(0)
   useEffect(() => {
-    if (!enabled || typeof document === "undefined") return
-    if (navigator.connection?.saveData) return
-
-    let cancelled = false
-    const active = new Set()
-    const queue = [...VIDEO_SRCS]
-
-    const next = () => {
-      if (cancelled) return
-      const src = queue.shift()
-      if (!src) return
-      const v = document.createElement("video")
-      active.add(v)
-      v.muted = true
-      v.playsInline = true
-      v.preload = "auto"
-      let done = false
-      let t
-      const finish = () => {
-        if (done) return
-        done = true
-        clearTimeout(t)
-        active.delete(v)
-        v.removeEventListener("canplaythrough", finish)
-        v.removeEventListener("error", finish)
-        v.removeAttribute("src")
-        v.load()
-        next()
-      }
-      v.addEventListener("canplaythrough", finish)
-      v.addEventListener("error", finish)
-      t = setTimeout(finish, 10000)
-      v.src = src
-      v.load()
+    if (!enabled || typeof navigator === "undefined" || navigator.connection?.saveData) return
+    let n = 0
+    let timer
+    const tick = () => {
+      n += 1
+      setReleased(n)
+      if (n < VIDEO_SRCS.length) timer = setTimeout(tick, VIDEO_RELEASE_GAP_MS)
     }
-
-    const start = () => {
-      next()
-      next()
-    }
-    const idle = window.requestIdleCallback
-      ? window.requestIdleCallback(start, { timeout: 1500 })
-      : setTimeout(start, 400)
-
-    return () => {
-      cancelled = true
-      if (window.cancelIdleCallback && typeof idle === "number") window.cancelIdleCallback(idle)
-      else clearTimeout(idle)
-      active.forEach((v) => {
-        v.removeAttribute("src")
-        v.load()
-      })
-    }
+    timer = setTimeout(tick, 250)
+    return () => clearTimeout(timer)
   }, [enabled])
+  return released
 }
 
-function InViewGif({ src, alt, className = "", threshold = 0.35, fit = "cover" }) {
+function InViewGif({ src, alt, className = "", threshold = 0.35, fit = "cover", eager = false }) {
   const boxRef = useRef(null)
   const [started, setStarted] = useState(false)
 
@@ -220,7 +183,7 @@ function InViewGif({ src, alt, className = "", threshold = 0.35, fit = "cover" }
 
   return (
     <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${className}`}>
-      {started && (
+      {(started || eager) && (
         <Media
           src={src}
           alt={alt}
@@ -319,7 +282,9 @@ export default function YimajCaseStudy() {
   const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
   useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
-  useVideoWarmup(ready && heroLoaded)
+  const releasedVideos = useReleasedVideos(ready && heroLoaded)
+  const eagerVideo = (src) => releasedVideos > VIDEO_SRCS.indexOf(src)
+  const eagerLoad = (src) => (eagerVideo(src) ? { lazy: false } : null)
 
   return (
     <div ref={rootRef} data-page-transition="" className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
@@ -421,7 +386,7 @@ export default function YimajCaseStudy() {
             frame={{ w: 1228, h: 624 }}
             className="max-md:!py-0 max-md:mt-[12px]"
           >
-            <Fill src={ASSETS.logoAnimation} alt="Yimaj Heights logo animation" />
+            <Fill src={ASSETS.logoAnimation} alt="Yimaj Heights logo animation" {...eagerLoad(ASSETS.logoAnimation)} />
           </CenteredInset>
 
           {/* 3. PRECISION SOFTENED BY WARMTH:
@@ -462,7 +427,7 @@ export default function YimajCaseStudy() {
 
               <div className="flex flex-col gap-[16px] max-md:order-2 lg:col-start-10 lg:col-span-3 lg:gap-[32px]">
                 <div className="relative w-full aspect-square lg:aspect-[353/356]">
-                  <InViewGif src={ASSETS.socials} alt="Yimaj Heights social media stories" className="!absolute inset-0 !h-full" threshold={0.01} />
+                  <InViewGif src={ASSETS.socials} alt="Yimaj Heights social media stories" className="!absolute inset-0 !h-full" threshold={0.01} eager={eagerVideo(ASSETS.socials)} />
                 </div>
                 <p className={`${PARA_CLS} max-md:hidden`}>
                   Architectural precision sans serif meets timeless serif typography, creating a refined system that feels premium without feeling sterile.
@@ -508,6 +473,7 @@ export default function YimajCaseStudy() {
                   fit="contain"
                   src={ASSETS.color}
                   alt="Yimaj Heights colour palette"
+                  eager={eagerVideo(ASSETS.color)}
                   className="bg-transparent aspect-[725.3/700] max-md:!w-[408px] max-md:!max-w-full max-md:!aspect-[408/393.77]"
                 />
               </div>

@@ -116,69 +116,32 @@ function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, frame, c
   )
 }
 
+// Videos in page order.
 const VIDEO_SRCS = Object.values(ASSETS).filter((src) => isVideo(src))
+const VIDEO_RELEASE_GAP_MS = 700
 
-// Buffers the page's videos one at a time (in page order) once the hero has settled,
-// so they are already cached by the time the reader scrolls to them, on mobile too.
-function useVideoWarmup(enabled) {
+// Once the hero has settled, videos are released one at a time in page order. A released
+// video mounts as a real <video> element and starts loading straight away, which is what
+// every browser (iOS Safari included) honours. The old hidden-element warmup did not.
+// Returns how many videos have been released so far.
+function useReleasedVideos(enabled) {
+  const [released, setReleased] = useState(0)
   useEffect(() => {
-    if (!enabled || typeof document === "undefined") return
-    if (navigator.connection?.saveData) return
-
-    let cancelled = false
-    const active = new Set()
-    const queue = [...VIDEO_SRCS]
-
-    const next = () => {
-      if (cancelled) return
-      const src = queue.shift()
-      if (!src) return
-      const v = document.createElement("video")
-      active.add(v)
-      v.muted = true
-      v.playsInline = true
-      v.preload = "auto"
-      let done = false
-      let t
-      const finish = () => {
-        if (done) return
-        done = true
-        clearTimeout(t)
-        active.delete(v)
-        v.removeEventListener("canplaythrough", finish)
-        v.removeEventListener("error", finish)
-        v.removeAttribute("src")
-        v.load()
-        next()
-      }
-      v.addEventListener("canplaythrough", finish)
-      v.addEventListener("error", finish)
-      t = setTimeout(finish, 10000)
-      v.src = src
-      v.load()
+    if (!enabled || typeof navigator === "undefined" || navigator.connection?.saveData) return
+    let n = 0
+    let timer
+    const tick = () => {
+      n += 1
+      setReleased(n)
+      if (n < VIDEO_SRCS.length) timer = setTimeout(tick, VIDEO_RELEASE_GAP_MS)
     }
-
-    const start = () => {
-      next()
-      next()
-    }
-    const idle = window.requestIdleCallback
-      ? window.requestIdleCallback(start, { timeout: 1500 })
-      : setTimeout(start, 400)
-
-    return () => {
-      cancelled = true
-      if (window.cancelIdleCallback && typeof idle === "number") window.cancelIdleCallback(idle)
-      else clearTimeout(idle)
-      active.forEach((v) => {
-        v.removeAttribute("src")
-        v.load()
-      })
-    }
+    timer = setTimeout(tick, 250)
+    return () => clearTimeout(timer)
   }, [enabled])
+  return released
 }
 
-function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover" }) {
+function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover", eager = false }) {
   const boxRef = useRef(null)
   const [started, setStarted] = useState(false)
 
@@ -223,7 +186,7 @@ function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover" }
 
   return (
     <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${className}`}>
-      {started && (
+      {(started || eager) && (
         <Media
           src={src}
           alt={alt}
@@ -324,7 +287,9 @@ export default function ZhongshanCaseStudy() {
   const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
   useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
-  useVideoWarmup(ready && heroLoaded)
+  const releasedVideos = useReleasedVideos(ready && heroLoaded)
+  const eagerVideo = (src) => releasedVideos > VIDEO_SRCS.indexOf(src)
+  const eagerLoad = (src) => (eagerVideo(src) ? { lazy: false } : null)
 
   return (
     <div
@@ -419,7 +384,7 @@ export default function ZhongshanCaseStudy() {
 
           {/* 2. LOGO INSET */}
           <CenteredInset aspectClass="aspect-[1228/624]" mobileAspect="max-md:!aspect-[16/10]" ratio={1228 / 624} frame={{ w: 1228, h: 624 }} className="max-md:!py-0 max-md:mt-[12px]">
-            <Fill src={ASSETS.suppliers} alt="Zhongshan logo animation" />
+            <Fill src={ASSETS.suppliers} alt="Zhongshan logo animation" {...eagerLoad(ASSETS.suppliers)} />
           </CenteredInset>
 
           {/* 3. TECHNICAL BY NATURE */}
@@ -464,6 +429,7 @@ export default function ZhongshanCaseStudy() {
                 <Fill
                   src={ASSETS.typeTablet}
                   alt="Tablet showing Sourcing Simplified"
+                  {...eagerLoad(ASSETS.typeTablet)}
                   parallax={false}
                   imgClassName="object-cover"
                 />
@@ -515,6 +481,7 @@ export default function ZhongshanCaseStudy() {
                   fit="contain"
                   src={ASSETS.color}
                   alt="Zhongshan colour palette"
+                  eager={eagerVideo(ASSETS.color)}
                   className="bg-transparent w-full aspect-[725.3/700] max-md:w-full max-md:max-w-[408px] max-md:aspect-[408/393.77]"
                 />
               </div>
@@ -637,6 +604,7 @@ export default function ZhongshanCaseStudy() {
                   <Fill
                     src={ASSETS.tiles}
                     alt="3D render detail"
+                    {...eagerLoad(ASSETS.tiles)}
                     parallax={false}
                     imgClassName="w-full h-full object-cover scale-[1.05]"
                   />
@@ -656,7 +624,7 @@ export default function ZhongshanCaseStudy() {
             mobileAspect="max-md:!aspect-[816/480]"
             className="max-md:!py-0 max-md:mt-[12px]"
           >
-            <Fill src={ASSETS.floorplan} alt="3D render, wide view" />
+            <Fill src={ASSETS.floorplan} alt="3D render, wide view" {...eagerLoad(ASSETS.floorplan)} />
           </CenteredInset>
 
           {/* 13. FULL-WIDTH DOORS SHOWCASE */}
