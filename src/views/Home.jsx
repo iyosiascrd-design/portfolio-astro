@@ -1,4 +1,4 @@
-// src/pages/Home.jsx
+// src/views/Home.jsx
 
 import React, {
     useState,
@@ -25,9 +25,6 @@ import {
     taylorEase,
     TICKER_HEIGHT,
     TICKER_REVEAL,
-    servicesContainerVariants,
-    taylorServiceRowVariants,
-    dividerVariants,
     servicesListContainerVariants,
     servicesRowVariants,
     servicesDividerVariants,
@@ -40,12 +37,71 @@ import {
 import { WORK_PROJECTS, LOOPING_IMAGES } from "../lib/projects"
 import { FETCH_PRIORITY_KEY, whenIdle } from "../lib/loadingHints"
 import { prefetchHero, heroSlugFor, warmAllHeroes } from "../lib/heroPrefetch.js"
-import { createTickerLens, TICKER_LENS, isMobileDevice } from "../lib/tickerLens.js"
 
 import MaskRevealText from "../components/MaskRevealText"
 import ServiceImageStage from "../components/ServiceImageStage"
 import ScrollFillGroup from "../components/ScrollFillGroup"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
+
+const SMOOTH_SLIDE_EASE = [0.22, 1, 0.36, 1]
+
+const expertiseListVariants = {
+    hidden: {},
+    show: {
+        transition: {
+            staggerChildren: 0.16,
+            delayChildren: 0.12,
+        },
+    },
+}
+
+const expertiseRowVariants = {
+    hidden: { opacity: 0, y: 28 },
+    show: {
+        opacity: 1,
+        y: 0,
+        transition: {
+            duration: 0.95,
+            ease: SMOOTH_SLIDE_EASE,
+            staggerChildren: 0.1,
+            delayChildren: 0.08,
+        },
+    },
+}
+
+const expertiseDividerVariants = {
+    hidden: { scaleX: 0, opacity: 0.4 },
+    show: {
+        scaleX: 1,
+        opacity: 1,
+        transition: {
+            duration: 0.9,
+            ease: SMOOTH_SLIDE_EASE,
+        },
+    },
+}
+
+const expertiseTextContainerVariants = {
+    hidden: {},
+    show: {
+        transition: {
+            staggerChildren: 0.1,
+            delayChildren: 0.06,
+        },
+    },
+}
+
+const expertiseTextItemVariants = {
+    hidden: { opacity: 0, y: 22 },
+    show: {
+        opacity: 1,
+        y: 0,
+        transition: {
+            duration: 0.85,
+            ease: SMOOTH_SLIDE_EASE,
+        },
+    },
+}
 
 const glueLastWords = (str) => {
     const i = str.lastIndexOf(" ")
@@ -58,50 +114,44 @@ const flat = (str) => str.replace(/\n/g, " ")
 const TICKER_PRIORITY_COUNT = 4
 const TICKER_START_DELAY = 1200
 const TICKER_CARD_RADIUS = "0px"
-const HOVER_INTENT_MS = 110 // pointer must rest this long on a slide before its hover animation plays
+const HOVER_INTENT_MS = 110
+
+function smoothDamp(current, target, st, smoothTime, dt) {
+    const omega = 2 / Math.max(0.0001, smoothTime)
+    const x = omega * dt
+    const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x)
+    const change = current - target
+    const temp = (st.v + omega * change) * dt
+    st.v = (st.v - omega * temp) * decay
+    return target + (change + temp) * decay
+}
 
 const APPLE_EASE_CSS = "cubic-bezier(0.32, 0.72, 0, 1)"
 
-// Velocity-driven "barrel" scale on drag/flick. The whole slide (caption + card) scales together
-// around the card's centre, but the amount depends on where the slide sits in the viewport: cards at
-// the centre shrink the most and cards toward the left/right edges grow, so the row bulges outward
-// like a very wide barrel viewed from inside.
 const TICKER_ZOOM = {
-    minScale: 0.95,       // scale of the centre card at full flick speed
-    edgeGrow: 0.06,       // extra scale of cards at the viewport edges at full flick speed (1 + edgeGrow)
-    barrel: 1.6,          // curve exponent: higher keeps the middle flat and bends mostly near the edges
-    fullSpeed: 2000,      // px/s of drag/flick speed that reaches minScale
-    driftMargin: 1.25,    // ignores slow auto-drift so resting cards stay at 1.0
-    velSmoothing: 8,      // smooths measured velocity (lower = softer response)
-    spread: 0.06,         // extra gap per card at full stretch, as a share of its distance from the centre
-    tiltMax: 0,           // rotateY tilt in degrees at full flick speed (0 = off)
-    perspective: 1400,    // px, per-card 3D perspective for the tilt
-    settle: 0.7,          // seconds for stretch / tilt to ease toward target (higher = softer, lazier)
-    parallax: 0.04,       // subtle internal photo travel (0 = off)
+    minScale: 0.95,
+    fullSpeed: 2000,
+    driftMargin: 1.25,
+    velSmoothing: 8,
+    spread: 0.04,
+    tiltMax: 0,
+    perspective: 1400,
+    settle: 0.7,
+    parallax: 0.04,
 }
 
-// Touch screens (phones, tablets): thumb flicks are much faster than a mouse drag, so the effect
-// is a lighter version of the desktop one and only reaches full strength at higher speeds.
 const TICKER_ZOOM_TOUCH = {
     minScale: 0.97,
-    edgeGrow: 0.035,
     fullSpeed: 3000,
-    spread: 0.036,
+    spread: 0.024,
     tiltMax: 0,
-    parallax: 0.06,       // a little more photo travel on phones: it is the cheapest way to make photos read as glass
+    parallax: 0.06,
 }
 
-// Phone / touch ticker (the WebGL lens is off there). Two cheap, compositor-friendly stand-ins for it,
-// with no shading of their own (cards keep the same flat tint as on desktop):
-//  - cards dip very slightly in scale the further they sit from the centre
-//  - the dip deepens a touch while flicking, then eases back at rest
 const TICKER_MOBILE = {
-    restDip: 0.04,        // scale lost by a card one slide-width from the centre (0.04 = 4%). 0 = off
-    flickDip: 0.02,       // extra scale lost at full flick speed
+    restDip: 0.04,
+    flickDip: 0.02,
 }
-
-// Image scale inside a card (matches the scale-[1.12] on the DOM image), used by the WebGL lens.
-const LENS_IMG_ZOOM = 1.12
 
 const TICKER_IMG_SIZES = "(max-width: 767px) 72vw, (max-width: 1023px) 42vw, 352px"
 
@@ -335,7 +385,6 @@ const ExpertiseCursorImage = ({ x, y, hoveredIndex, ratios }) => {
     )
 }
 
-// Rolling link text: each letter rolls up and out while its twin rolls in from below.
 const RollingText = ({ text, active }) => (
     <span aria-label={text} className="relative inline-flex overflow-hidden align-top whitespace-pre">
         {Array.from(text).map((ch, i) => {
@@ -397,7 +446,6 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
         const delay = reveal.delay * 1000
         const dur = TICKER_REVEAL.duration * 1000
 
-        // The caption rises by the same distance as the card, so they appear together.
         const from = String(TICKER_REVEAL.from)
         const cardFrom = `translateY(${from})`
         const captionFrom = from.trim().endsWith("%")
@@ -466,8 +514,6 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
             onPointerEnter={(e) => {
                 if (project) prefetchHero(heroSlugFor(project.name))
                 if (e.pointerType !== "mouse") return
-                // Hover intent: the pointer has to rest on the slide briefly, and the ticker
-                // must not be mid-drag, otherwise cards sweeping past the cursor all fire at once.
                 const slide = e.currentTarget
                 const dragging = () => !!slide.closest('[data-dragging="true"]')
                 if (dragging()) return
@@ -496,43 +542,43 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
                     }}
                 >
                     <div data-zoom-group className="relative ticker-zoom-group">
-                    {project && (
+                        {project && (
+                            <div
+                                ref={captionRef}
+                                style={reveal ? undefined : { opacity: 0 }}
+                                className="flex items-end justify-between gap-[16px] pb-[14px] pointer-events-none"
+                            >
+                                <span className="ticker-caption Caption !text-[12px] uppercase !font-medium !text-[var(--text-dark-muted)] leading-[1.2]">
+                                    <RollingText text={project.name} active={hovered} />
+                                </span>
+                            </div>
+                        )}
                         <div
-                            ref={captionRef}
-                            style={reveal ? undefined : { opacity: 0 }}
-                            className="flex items-end justify-between gap-[16px] pb-[14px] pointer-events-none"
+                            ref={cardRef}
+                            data-zoom-card
+                            style={{
+                                height: TICKER_HEIGHT,
+                                borderRadius: TICKER_CARD_RADIUS,
+                                ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
+                            }}
+                            className="relative isolate w-full overflow-hidden bg-[var(--bg-surface-dark)]"
                         >
-                            <span className="ticker-caption Caption !text-[12px] uppercase !font-medium !text-[var(--text-dark-muted)] leading-[1.2]">
-                                <RollingText text={project.name} active={hovered} />
-                            </span>
+                            <div data-parallax className="absolute inset-0 w-full h-full">
+                                <img
+                                    src={src}
+                                    alt={project ? project.name : "Portfolio Work"}
+                                    draggable={false}
+                                    decoding="async"
+                                    loading={isClone ? "lazy" : "eager"}
+                                    sizes={TICKER_IMG_SIZES}
+                                    {...(project?.srcSet ? { srcSet: project.srcSet } : null)}
+                                    {...(fetchPriority ? { [FETCH_PRIORITY_KEY]: fetchPriority } : null)}
+                                    className="object-cover w-full h-full scale-[1.12] pointer-events-none select-none"
+                                />
+                            </div>
+                            <div className="ticker-dim absolute inset-0 bg-black/20 pointer-events-none" />
+                            <div className="absolute inset-0 rounded-[inherit] pointer-events-none ring-2 ring-inset ring-white opacity-0 group-focus-visible:opacity-100" />
                         </div>
-                    )}
-                    <div
-                        ref={cardRef}
-                        data-zoom-card
-                        style={{
-                            height: TICKER_HEIGHT,
-                            borderRadius: TICKER_CARD_RADIUS,
-                            ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
-                        }}
-                        className="relative isolate w-full overflow-hidden bg-[var(--bg-surface-dark)]"
-                    >
-                        <div data-parallax className="absolute inset-0 w-full h-full">
-                            <img
-                                src={src}
-                                alt={project ? project.name : "Portfolio Work"}
-                                draggable={false}
-                                decoding="async"
-                                loading={isClone ? "lazy" : "eager"}
-                                sizes={TICKER_IMG_SIZES}
-                                {...(project?.srcSet ? { srcSet: project.srcSet } : null)}
-                                {...(fetchPriority ? { [FETCH_PRIORITY_KEY]: fetchPriority } : null)}
-                                className="object-cover w-full h-full scale-[1.12] pointer-events-none select-none"
-                            />
-                        </div>
-                        <div className="ticker-dim absolute inset-0 bg-black/20 pointer-events-none" />
-                        <div className="absolute inset-0 rounded-[inherit] pointer-events-none ring-2 ring-inset ring-white opacity-0 group-focus-visible:opacity-100" />
-                    </div>
                     </div>
                 </div>
             </div>
@@ -616,6 +662,53 @@ const V_MAX = 1.6
 const LUT_SIZE = 2048
 const HEADER_TONE_THRESHOLD = 0.55
 
+const VERT_SHADER = `
+attribute vec2 aPos;
+void main() {
+    gl_Position = vec4(aPos, 0.0, 1.0);
+}
+`
+
+const FRAG_SHADER = `
+precision highp float;
+uniform sampler2D uLut;
+uniform vec2 uRes;
+uniform float uShift;
+uniform float uTopDepth;
+uniform float uBottomDepth;
+uniform float uSeed;
+
+float hash12(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+void main() {
+    float nx = gl_FragCoord.x / max(1.0, uRes.x);
+    float ny = 1.0 - (gl_FragCoord.y / max(1.0, uRes.y));
+
+    float dx = nx - 0.5;
+    float arc = 1.0 - 4.0 * dx * dx;
+    float vb = ny + uShift;
+
+    float w = clamp((1.0 - vb) / 0.6, 0.0, 1.0);
+    float mixFactor = w * w * (3.0 - 2.0 * w);
+    float depth = mix(uBottomDepth, uTopDepth, mixFactor);
+
+    float vv = clamp((vb - depth * arc) / 1.6, 0.0, 1.0);
+    float u = (vv * 2047.0 + 0.5) / 2048.0;
+    vec3 col = texture2D(uLut, vec2(u, 0.5)).rgb;
+
+    vec2 seedPos = gl_FragCoord.xy + vec2(uSeed * 137.0, uSeed * 293.0);
+    float r1 = hash12(seedPos);
+    float r2 = hash12(seedPos + vec2(17.3, 41.9));
+    float dither = (r1 + r2 - 1.0) * (3.2 / 255.0);
+
+    gl_FragColor = vec4(clamp(col + dither, 0.0, 1.0), 1.0);
+}
+`
+
 function buildLut() {
     const raw = new Float32Array(LUT_SIZE * 3)
     for (let i = 0; i < LUT_SIZE; i++) {
@@ -679,24 +772,171 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
     useEffect(() => {
         const canvas = canvasRef.current
         if (!canvas) return
-        let ctx = null
-        try {
-            ctx = canvas.getContext("2d", { alpha: false })
-        } catch (e) {
-            console.warn("2D context error:", e)
-        }
-        if (!ctx) return
 
         const lut = buildLut()
         const lutScale = (LUT_SIZE - 1) / V_MAX
-        const noise = new Float32Array(4096)
-        for (let i = 0; i < noise.length; i++) noise[i] = (Math.random() - 0.5) * 2.4
+        let lastLight = null
+
+        const syncHeaderTone = (shift) => {
+            if (typeof onHeaderTone !== "function") return
+            const headerCenter = window.innerWidth < 768 ? 36 : 47
+            const headerV = headerCenter / (window.innerHeight || 800)
+            const vv = headerV + shift
+            const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
+            const lum = (0.2126 * lut[k * 3] + 0.7152 * lut[k * 3 + 1] + 0.0722 * lut[k * 3 + 2]) / 255
+            const light = lum > HEADER_TONE_THRESHOLD
+            if (light !== lastLight) {
+                lastLight = light
+                onHeaderTone(light)
+            }
+        }
+
+        const computeParams = (sv) => {
+            const shift = BASE_SHIFT + SPEED * sv
+            const clamp01 = (n) => Math.min(1, Math.max(0, n))
+            const bottomDepth = BEND * Math.sin(Math.PI * clamp01(sv / 0.75))
+            const topDepth = TOP_BEND * Math.sin(Math.PI * clamp01((sv + 0.35) / 1.1))
+            return { shift, bottomDepth, topDepth }
+        }
+
+        let gl = null
+        try {
+            gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false })
+        } catch {
+            gl = null
+        }
 
         let W = 0
         let H = 0
+
+        if (gl) {
+            const compile = (type, src) => {
+                const sh = gl.createShader(type)
+                gl.shaderSource(sh, src)
+                gl.compileShader(sh)
+                if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+                    gl.deleteShader(sh)
+                    return null
+                }
+                return sh
+            }
+
+            const vs = compile(gl.VERTEX_SHADER, VERT_SHADER)
+            const fs = compile(gl.FRAGMENT_SHADER, FRAG_SHADER)
+            const prog = vs && fs ? gl.createProgram() : null
+
+            if (prog) {
+                gl.attachShader(prog, vs)
+                gl.attachShader(prog, fs)
+                gl.linkProgram(prog)
+            }
+
+            if (prog && gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+                gl.useProgram(prog)
+                const buf = gl.createBuffer()
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf)
+                gl.bufferData(
+                    gl.ARRAY_BUFFER,
+                    new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+                    gl.STATIC_DRAW
+                )
+                const aPos = gl.getAttribLocation(prog, "aPos")
+                gl.enableVertexAttribArray(aPos)
+                gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0)
+
+                const lutTex = gl.createTexture()
+                gl.activeTexture(gl.TEXTURE0)
+                gl.bindTexture(gl.TEXTURE_2D, lutTex)
+                gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+                gl.texImage2D(
+                    gl.TEXTURE_2D,
+                    0,
+                    gl.RGB,
+                    LUT_SIZE,
+                    1,
+                    0,
+                    gl.RGB,
+                    gl.UNSIGNED_BYTE,
+                    lut
+                )
+
+                const uLut = gl.getUniformLocation(prog, "uLut")
+                const uRes = gl.getUniformLocation(prog, "uRes")
+                const uShift = gl.getUniformLocation(prog, "uShift")
+                const uTopDepth = gl.getUniformLocation(prog, "uTopDepth")
+                const uBottomDepth = gl.getUniformLocation(prog, "uBottomDepth")
+                const uSeed = gl.getUniformLocation(prog, "uSeed")
+
+                gl.uniform1i(uLut, 0)
+
+                const resize = () => {
+                    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+                    W = Math.max(2, Math.round((window.innerWidth || 1280) * dpr))
+                    H = Math.max(2, Math.round((window.innerHeight || 800) * dpr))
+                    canvas.width = W
+                    canvas.height = H
+                    gl.viewport(0, 0, W, H)
+                    gl.uniform2f(uRes, W, H)
+                }
+
+                const draw = (sv) => {
+                    const { shift, bottomDepth, topDepth } = computeParams(sv)
+                    gl.uniform1f(uShift, shift)
+                    gl.uniform1f(uTopDepth, topDepth)
+                    gl.uniform1f(uBottomDepth, bottomDepth)
+                    gl.uniform1f(uSeed, Math.random())
+                    gl.drawArrays(gl.TRIANGLES, 0, 6)
+                    syncHeaderTone(shift)
+                }
+
+                resize()
+                draw(travel.get())
+
+                let raf = 0
+                const schedule = () => {
+                    if (raf) return
+                    raf = requestAnimationFrame(() => {
+                        raf = 0
+                        draw(travel.get())
+                    })
+                }
+                const unsubscribe = travel.on("change", schedule)
+                const onResize = () => {
+                    resize()
+                    draw(travel.get())
+                }
+                window.addEventListener("resize", onResize)
+
+                return () => {
+                    unsubscribe()
+                    if (raf) cancelAnimationFrame(raf)
+                    window.removeEventListener("resize", onResize)
+                    gl.deleteTexture(lutTex)
+                    gl.deleteBuffer(buf)
+                    gl.deleteProgram(prog)
+                    gl.deleteShader(vs)
+                    gl.deleteShader(fs)
+                }
+            }
+        }
+
+        let ctx = null
+        try {
+            ctx = canvas.getContext("2d", { alpha: false })
+        } catch {
+            ctx = null
+        }
+        if (!ctx) return
+
+        const noise = new Float32Array(4096)
+        for (let i = 0; i < noise.length; i++) noise[i] = (Math.random() - 0.5) * 2.4
+
         let img = null
         let arc = null
-        let lastLight = null
 
         const resize = () => {
             const currentRes = window.innerWidth > 1200 ? 0.25 : RES
@@ -707,7 +947,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
             try {
                 img = ctx.createImageData(W, H)
                 for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255
-            } catch (err) {
+            } catch {
                 img = null
             }
             arc = new Float32Array(W)
@@ -719,11 +959,8 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
 
         const draw = (sv) => {
             if (!img || !arc) return
-            const shift = BASE_SHIFT + SPEED * sv
+            const { shift, bottomDepth, topDepth } = computeParams(sv)
             const clamp01 = (n) => Math.min(1, Math.max(0, n))
-            const bottomDepth = BEND * Math.sin(Math.PI * clamp01(sv / 0.75))
-            const topDepth = TOP_BEND * Math.sin(Math.PI * clamp01((sv + 0.35) / 1.1))
-
             const data = img.data
             const off = (Math.random() * 4096) | 0
             let i = 0
@@ -749,19 +986,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
             }
 
             ctx.putImageData(img, 0, 0)
-
-            if (typeof onHeaderTone === "function") {
-                const headerCenter = window.innerWidth < 768 ? 36 : 47
-                const headerV = headerCenter / window.innerHeight
-                const vv = headerV + shift
-                const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
-                const lum = (0.2126 * lut[k * 3] + 0.7152 * lut[k * 3 + 1] + 0.0722 * lut[k * 3 + 2]) / 255
-                const light = lum > HEADER_TONE_THRESHOLD
-                if (light !== lastLight) {
-                    lastLight = light
-                    onHeaderTone(light)
-                }
-            }
+            syncHeaderTone(shift)
         }
 
         resize()
@@ -808,9 +1033,22 @@ export default function Home() {
     const outletCtx = useOutletContext()
     const setHeaderLight = outletCtx?.setHeaderLight || (() => {})
 
+    const transitionRef = useRef(null)
+
     useEffect(() => {
         if (window.location.hash) return
         window.scrollTo(0, 0)
+    }, [])
+
+    useEffect(() => {
+        return whenIdle(() => {
+            SERVICE_IMAGES.forEach((src) => {
+                const img = new Image()
+                img.decoding = "async"
+                img.src = src
+                img.decode?.().catch(() => {})
+            })
+        }, 1200)
     }, [])
 
     const [fontsReady, setFontsReady] = useState(
@@ -880,7 +1118,6 @@ export default function Home() {
 
     const [activeIndex, setActiveIndex] = useState(0)
     const [hoveredRow, setHoveredRow] = useState(null)
-    const [openIndexes, setOpenIndexes] = useState([0])
 
     useLayoutEffect(() => {
         const list = servicesListRef.current
@@ -1119,19 +1356,13 @@ export default function Home() {
     const hoverRef = useRef(null)
     const isDesktopRef = useRef(vp.isDesktop)
     isDesktopRef.current = vp.isDesktop
-    const transitionRef = useRef(null)
 
     const tickerViewportRef = useRef(null)
     const tickerRef = useRef(null)
     const tickerWrapRef = useRef(null)
-    const lensCanvasRef = useRef(null)
     const workSectionRef = useRef(null)
     const tickerEngine = useRef(null)
     const [tickerReady, setTickerReady] = useState(false)
-    // Decided once: phones and touch tablets skip the WebGL lens and get the lighter DOM treatment.
-    const [lensOn] = useState(
-        () => typeof window !== "undefined" && !(TICKER_LENS.disableOnMobile && isMobileDevice())
-    )
     const pageReadyRef = useRef(pageReady)
     pageReadyRef.current = pageReady
 
@@ -1162,10 +1393,6 @@ export default function Home() {
         if (wrap) wrap.style.transform = ""
     }, [vp.isMobile])
 
-    // Velocity-driven card scale / tilt / spread on drag and flick, plus a centre-slide emphasis on phones.
-    // Everything is computed from createTicker's own state (getState), so there are no per-frame DOM
-    // reads and the engine's compositor glide stays on the compositor. Scale and tilt are shared CSS
-    // variables on the track, and only slides near the viewport get a transform (data-near).
     useEffect(() => {
         if (!tickerReady) return
         const engine = tickerEngine.current
@@ -1175,18 +1402,11 @@ export default function Home() {
 
         const reduce = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
         const touch = vp.isMobile || !!window.matchMedia?.("(pointer: coarse)").matches
-        const emphasis = vp.isMobile || !lensOn
+        const emphasis = vp.isMobile
         const fx = !reduce
 
-        // WebGL lens: draws the card images itself (bent + chromatic aberration at the edges).
-        // If WebGL is missing, the plain DOM cards stay as they are.
-        const pad = TICKER_LENS.pad
         const wrap = tickerWrapRef.current
-        let restoreDom = () => {}
-        const lens = lensCanvasRef.current
-            ? createTickerLens(lensCanvasRef.current, () => restoreDom())
-            : null
-        if (!fx && !emphasis && !lens) return
+        if (!fx && !emphasis) return
 
         const Z = touch ? { ...TICKER_ZOOM, ...TICKER_ZOOM_TOUCH } : TICKER_ZOOM
         const baseSpeed = vp.isMobile ? TICKER_MOTION_MOBILE.baseSpeed : TICKER_MOTION.baseSpeed
@@ -1195,18 +1415,6 @@ export default function Home() {
         const clamp01 = gsap.utils.clamp(0, 1)
 
         let cards = []
-        let lensCY = 0
-        let lensW = 0
-        let lensH = 0
-        const sizeLens = () => {
-            if (!lens || !wrap) return
-            lensW = wrap.clientWidth
-            lensH = wrap.clientHeight + pad * 2
-            if (lensW > 0) lens.resize(lensW, lensH, window.devicePixelRatio || 1)
-        }
-        restoreDom = () => {
-            cards.forEach((c) => c.slide.removeAttribute("data-gl"))
-        }
         const measure = () => {
             const slides = Array.from(track.children)
             const padR = slides[0] ? parseFloat(getComputedStyle(slides[0]).paddingRight) || 0 : 0
@@ -1216,14 +1424,11 @@ export default function Home() {
                 const img = el?.querySelector("[data-parallax]")
                 if (el && card) {
                     el.style.setProperty("--oy", `${card.offsetTop + card.offsetHeight / 2}px`)
-                    lensCY = el.offsetTop + card.offsetTop + card.offsetHeight / 2
                 }
                 return {
                     slide,
                     el,
                     card,
-                    imgEl: img?.querySelector("img") || null,
-                    gl: false,
                     img,
                     padR,
                     setImg: img ? gsap.quickSetter(img, "x", "px") : null,
@@ -1237,12 +1442,10 @@ export default function Home() {
         }
         measure()
 
-        sizeLens()
         const mo = new MutationObserver(measure)
         mo.observe(track, { childList: true })
         const ro = new ResizeObserver(() => {
             measure()
-            sizeLens()
         })
         ro.observe(viewport)
         ro.observe(track)
@@ -1250,10 +1453,8 @@ export default function Home() {
         document.fonts?.ready?.then(measure)
 
         const s = { amt: 0, rot: 0 }
-        const toAmt = gsap.quickTo(s, "amt", { duration: Z.settle, ease: "power3.out" })
-        const toRot = gsap.quickTo(s, "rot", { duration: Z.settle * 1.15, ease: "power3.out" })
-        const glCards = []
-        let lastTarget = 0
+        const dAmt = { v: 0 }
+        const dRot = { v: 0 }
         let vel = 0
         let zooming = false
         let lastTilt = ""
@@ -1268,23 +1469,27 @@ export default function Home() {
             if (!st.visible || !st.vpW || !n || st.lefts.length !== n) return
             const dt = Math.min(Math.max(deltaMs, 1) / 1000, 0.064)
 
-            // Velocity comes straight from the engine (drag, flick, wheel or cruise)
             vel += (st.vel - vel) * (1 - Math.exp(-Z.velSmoothing * dt))
             const mag = Math.max(0, Math.abs(vel) - driftDeadband)
             const speedNorm = fx ? Math.min(1, mag / Z.fullSpeed) : 0
 
-            // Soft follow: quickTo eases the stretch and tilt toward their targets (no overshoot)
-            const changed = speedNorm === 0 ? lastTarget !== 0 : Math.abs(speedNorm - lastTarget) > 0.002
-            if (changed) {
-                lastTarget = speedNorm
-                toAmt(speedNorm)
-                toRot((vel < 0 ? -1 : 1) * speedNorm * Z.tiltMax)
+            const rotTarget = (vel < 0 ? -1 : 1) * speedNorm * Z.tiltMax
+            const upTime = Z.settle * 0.3
+            const downTime = Z.settle * 0.55
+            s.amt = smoothDamp(s.amt, speedNorm, dAmt, speedNorm > s.amt ? upTime : downTime, dt)
+            s.rot = smoothDamp(s.rot, rotTarget, dRot, downTime * 1.15, dt)
+            if (speedNorm === 0 && Math.abs(s.amt) < 0.0005 && Math.abs(dAmt.v) < 0.0005) {
+                s.amt = 0
+                dAmt.v = 0
+            }
+            if (rotTarget === 0 && Math.abs(s.rot) < 0.005 && Math.abs(dRot.v) < 0.005) {
+                s.rot = 0
+                dRot.v = 0
             }
 
             const amt = clamp01(s.amt)
             const rot = s.rot
 
-            // Flick amount for the CSS-only emphasis (scale dip deepens a touch while flicking)
             if (emphasis) {
                 const a = Math.round(amt * 100) / 100
                 if (a !== lastAmt) {
@@ -1323,15 +1528,11 @@ export default function Home() {
             const vCenter = st.vpW * 0.5
             const pitch = n > 1 ? st.lefts[1] - st.lefts[0] : st.widths[0] || 1
 
-            const wr = lens && wrap ? wrap.getBoundingClientRect() : null
-            glCards.length = 0
-
             for (let i = 0; i < n; i++) {
                 const c = cards[i]
                 const w = st.widths[i] - c.padR
                 const left = st.lefts[i] + st.x
 
-                // Only slides within one slide-width of the viewport get a transform / 3D layer
                 const near = left + w > -pitch && left < st.vpW + pitch
                 if (near !== c.near) {
                     c.near = near
@@ -1348,18 +1549,13 @@ export default function Home() {
                 const off = left + w * 0.5 - vCenter
 
                 if (active && c.el) {
-                    // Spread: cards drift away from the viewport centre, so every gap stretches
                     const tx = off * Z.spread * amt
                     if (Number.isNaN(c.dx) || Math.abs(tx - c.dx) > 0.05) {
                         c.dx = tx
                         c.el.style.setProperty("--dx", `${tx.toFixed(2)}px`)
                     }
 
-                    // Barrel: smallest at the viewport centre, growing toward both edges
-                    const u = clamp01(Math.abs(off) / (st.vpW * 0.5))
-                    const centreScale = 1 - amt * (1 - Z.minScale)
-                    const edgeScale = 1 + amt * Z.edgeGrow
-                    const zs = centreScale + (edgeScale - centreScale) * Math.pow(u, Z.barrel)
+                    const zs = 1 - amt * (1 - Z.minScale)
                     if (Number.isNaN(c.zs) || Math.abs(zs - c.zs) > 0.0004) {
                         c.zs = zs
                         c.el.style.setProperty("--zs", zs.toFixed(4))
@@ -1376,47 +1572,12 @@ export default function Home() {
                     }
                 }
 
-                // Phones: the slide nearest the centre is fully lit, its neighbours are dimmed
                 if (emphasis) {
                     const a = clamp01(1 - Math.abs(off) / (pitch * 1.2))
-                    const e = a * a * a * (a * (a * 6 - 15) + 10) // smootherstep: no visible knee at either end
+                    const e = a * a * a * (a * (a * 6 - 15) + 10)
                     if (Math.abs(e - c.act) > 0.002) {
                         c.act = e
                         c.slide.style.setProperty("--act", e.toFixed(3))
-                    }
-                }
-
-                // Lens: hand this card's current on-screen rectangle (all transforms included) to WebGL
-                if (wr && c.card && c.imgEl) {
-                    const r = c.card.getBoundingClientRect()
-                    glCards.push({
-                        c,
-                        img: c.imgEl,
-                        x: r.left - wr.left,
-                        y: r.top - wr.top + pad,
-                        w: r.width,
-                        h: r.height,
-                        opacity: parseFloat(getComputedStyle(c.card).opacity),
-                        dim: 0.2,
-                        shift: c.imgX,
-                        zoom: LENS_IMG_ZOOM,
-                    })
-                }
-            }
-
-            if (lens && wr && lensW > 0) {
-                const drawn = lens.draw({
-                    width: lensW,
-                    height: lensH,
-                    centerY: pad + lensCY,
-                    strength: TICKER_LENS.rest + (1 - TICKER_LENS.rest) * amt,
-                    cards: glCards,
-                })
-                for (let k = 0; k < drawn.length; k++) {
-                    const c = glCards[drawn[k]].c
-                    if (!c.gl) {
-                        c.gl = true
-                        c.slide.setAttribute("data-gl", "true")
                     }
                 }
             }
@@ -1426,11 +1587,8 @@ export default function Home() {
 
         return () => {
             gsap.ticker.remove(onTick)
-            gsap.killTweensOf(s)
             mo.disconnect()
             ro.disconnect()
-            restoreDom()
-            lens?.destroy()
             track.removeAttribute("data-zooming")
             track.removeAttribute("data-emphasis")
             ;["--tilt", "--zoom-persp", "--amt"].forEach((v) => track.style.removeProperty(v))
@@ -1515,11 +1673,17 @@ export default function Home() {
 
         measure()
         update()
+        const ro = new ResizeObserver(() => {
+            measure()
+            if (frame === null) frame = requestAnimationFrame(update)
+        })
+        ro.observe(document.documentElement)
         window.addEventListener("scroll", onScroll, { passive: true })
         window.addEventListener("resize", measure)
         window.addEventListener("resize", onScroll)
         return () => {
             if (frame !== null) cancelAnimationFrame(frame)
+            ro.disconnect()
             window.removeEventListener("scroll", onScroll)
             window.removeEventListener("resize", measure)
             window.removeEventListener("resize", onScroll)
@@ -1556,12 +1720,20 @@ export default function Home() {
                 force3D: true,
             })
         })
-        if (allTexts.length) gsap.set(allTexts, { color: SITE_GREY })
+        if (allTexts.length) gsap.set(allTexts, { opacity: 0.42, force3D: true })
         toolsLists.forEach((tools) => {
-            if (tools) gsap.set(tools, { color: SITE_GREY })
+            if (tools) gsap.set(tools, { opacity: 0.42, force3D: true })
         })
 
+        let rowTops = []
+        const measureTops = () => {
+            rowTops = rows.map((node) =>
+                node ? node.getBoundingClientRect().top + window.scrollY : Infinity
+            )
+        }
+
         let current
+        let raf = 0
 
         const apply = (idx) => {
             if (idx === current) return
@@ -1595,16 +1767,16 @@ export default function Home() {
                 }
                 if (texts[i].length) {
                     gsap.to(texts[i], {
-                        color: active ? "#000000" : SITE_GREY,
-                        duration: reduce ? 0 : 0.3,
+                        opacity: active ? 1 : 0.42,
+                        duration: reduce ? 0 : 0.35,
                         ease: "power3.out",
                         overwrite: "auto",
                     })
                 }
                 if (toolsLists[i]) {
                     gsap.to(toolsLists[i], {
-                        color: active ? SITE_SECONDARY_GREY : SITE_GREY,
-                        duration: reduce ? 0 : 0.3,
+                        opacity: active ? 0.9 : 0.38,
+                        duration: reduce ? 0 : 0.35,
                         ease: "power3.out",
                         overwrite: "auto",
                     })
@@ -1612,35 +1784,46 @@ export default function Home() {
             })
         }
 
-        const onScroll = () => {
-            const mid = (window.innerHeight || 800) * 0.65
+        const evaluate = () => {
+            raf = 0
+            const triggerLine = window.scrollY + (window.innerHeight || 800) * 0.65
             let idx = null
-            for (let i = 0; i < rows.length; i++) {
-                if (rows[i] && rows[i].getBoundingClientRect().top <= mid) idx = i
+            for (let i = 0; i < rowTops.length; i++) {
+                if (rowTops[i] <= triggerLine) idx = i
             }
             apply(idx)
         }
 
-        onScroll()
-        window.addEventListener("scroll", onScroll, { passive: true })
-        window.addEventListener("resize", onScroll)
+        const schedule = () => {
+            if (!raf) raf = requestAnimationFrame(evaluate)
+        }
+
+        measureTops()
+        evaluate()
+
+        const ro = new ResizeObserver(() => {
+            measureTops()
+            schedule()
+        })
+        ro.observe(document.documentElement)
+
+        window.addEventListener("scroll", schedule, { passive: true })
+        window.addEventListener("resize", measureTops)
+        window.addEventListener("resize", schedule)
         return () => {
-            window.removeEventListener("scroll", onScroll)
-            window.removeEventListener("resize", onScroll)
+            if (raf) cancelAnimationFrame(raf)
+            ro.disconnect()
+            window.removeEventListener("scroll", schedule)
+            window.removeEventListener("resize", measureTops)
+            window.removeEventListener("resize", schedule)
             gsap.killTweensOf([...imgs.filter(Boolean), ...allTexts, ...toolsLists.filter(Boolean)])
             gsap.set(imgs.filter(Boolean), { clearProps: "transform,transformOrigin" })
-            gsap.set([...allTexts, ...toolsLists.filter(Boolean)], { clearProps: "color" })
+            gsap.set([...allTexts, ...toolsLists.filter(Boolean)], { clearProps: "opacity,transform" })
         }
     }, [vp.isDesktop, vp.isMobile])
 
     const handleRowPress = (index) => {
         if (vp.isDesktop) selectService(index)
-    }
-
-    const toggleAccordion = (index) => {
-        setOpenIndexes((current) =>
-            current.includes(index) ? current.filter((i) => i !== index) : [...current, index]
-        )
     }
 
     const selectService = (index) => {
@@ -1738,14 +1921,6 @@ export default function Home() {
                         ref={tickerWrapRef}
                         className="relative z-20 flex-shrink-0 w-full pb-[20px] max-md:pb-[var(--page-pad-y)] m-0 overflow-x-clip overflow-y-visible will-change-transform"
                     >
-                        {lensOn && (
-                            <canvas
-                                ref={lensCanvasRef}
-                                aria-hidden="true"
-                                className="absolute left-0 z-[5] pointer-events-none"
-                                style={{ top: -TICKER_LENS.pad }}
-                            />
-                        )}
                         <div
                             ref={tickerViewportRef}
                             role="region"
@@ -1802,12 +1977,11 @@ export default function Home() {
                     opacity: 0 !important; transition: opacity 0.22s ease 0.14s;
                 }
                 .ticker-zoom-group { transform-origin: 50% var(--oy, 50%); }
+                [data-near="true"] .ticker-zoom-group { transform: translateZ(0); will-change: transform; }
                 [data-zooming="true"] [data-near="true"] .ticker-zoom-group {
                     transform: perspective(var(--zoom-persp, 1400px)) translate3d(var(--dx, 0px), 0, 0) rotateY(var(--tilt, 0deg)) scale(var(--zs, 1));
                     will-change: transform;
                 }
-                [data-gl="true"] [data-zoom-card] { background-color: transparent; }
-                [data-gl="true"] [data-parallax], [data-gl="true"] .ticker-dim { visibility: hidden; }
                 [data-emphasis="true"] [data-near="true"] .ticker-zoom-group {
                     transform: scale(calc(1 - (${TICKER_MOBILE.restDip} + ${TICKER_MOBILE.flickDip} * var(--amt, 0)) * (1 - var(--act, 1))));
                     will-change: transform;
@@ -2110,9 +2284,15 @@ export default function Home() {
                                 } : undefined}
                                 onPointerLeave={() => { pointerRef.current = null }}
                             >
-                                <p className="H5 sm:max-md:portrait:!text-[28px] pb-[4px] nav-title mb-[48px] md:mb-[80px] lg:mb-[clamp(48px,8svh,80px)] text-[var(--text-light-primary)]">
+                                <motion.p
+                                    initial={{ opacity: 0, y: 20 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true, amount: 0.2 }}
+                                    transition={{ duration: 0.8, ease: SMOOTH_SLIDE_EASE }}
+                                    className="H5 sm:max-md:portrait:!text-[28px] pb-[4px] nav-title mb-[48px] md:mb-[80px] lg:mb-[clamp(48px,8svh,80px)] text-[var(--text-light-primary)]"
+                                >
                                     EXPERTISE
-                                </p>
+                                </motion.p>
 
                                 {vp.isDesktop && (
                                     <ExpertiseCursorImage
@@ -2124,10 +2304,10 @@ export default function Home() {
                                 )}
 
                                 <motion.ul
-                                    variants={servicesContainerVariants}
+                                    variants={expertiseListVariants}
                                     initial="hidden"
                                     whileInView="show"
-                                    viewport={{ once: true, amount: 0.15 }}
+                                    viewport={{ once: true, amount: 0.2 }}
                                     onMouseLeave={() => {
                                         hoverRef.current = null
                                         setHoveredExpertise(null)
@@ -2145,7 +2325,7 @@ export default function Home() {
                                                 ref={(el) => {
                                                     expertiseRefs.current[index] = el
                                                 }}
-                                                variants={taylorServiceRowVariants}
+                                                variants={expertiseRowVariants}
                                                 onMouseMove={
                                                     vp.isDesktop
                                                         ? (e) => {
@@ -2163,7 +2343,7 @@ export default function Home() {
                                                 className="flex flex-col w-full m-0"
                                             >
                                                 <motion.div
-                                                    variants={dividerVariants}
+                                                    variants={expertiseDividerVariants}
                                                     style={{ backgroundColor: SITE_GREY }}
                                                     className="w-full h-[1px] origin-left"
                                                 />
@@ -2173,31 +2353,58 @@ export default function Home() {
                                                     animate={{
                                                         x: vp.isDesktop && isActive ? EXPERTISE_SHIFT : 0,
                                                     }}
-                                                    transition={{ duration: 0.45, ease: taylorEase }}
+                                                    transition={{
+                                                        type: "spring",
+                                                        stiffness: 170,
+                                                        damping: 26,
+                                                        mass: 0.9,
+                                                    }}
                                                     className="grid grid-cols-1 gap-[16px] md:grid-cols-2 md:gap-[24px] lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px] pt-[24px] pb-[48px] md:pt-[28px] md:pb-[56px] lg:pt-[clamp(16px,2.5svh,28px)] lg:pb-[clamp(24px,5svh,56px)] will-change-transform relative items-start"
                                                 >
-                                                    <h3 data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="H2 expertise-title rwd-balance m-0 tracking-[-0.02em] uppercase !text-[28px] lg:!text-[30px] xl:!text-[44px] lg:transition-colors lg:duration-500">
+                                                    <motion.h3
+                                                        data-exp-text
+                                                        variants={expertiseTextItemVariants}
+                                                        animate={vp.isDesktop ? { opacity: isDimmed ? 0.42 : 1 } : undefined}
+                                                        style={{ color: "#000000" }}
+                                                        transition={{ duration: 0.55, ease: SMOOTH_SLIDE_EASE }}
+                                                        className="H2 expertise-title rwd-balance m-0 tracking-[-0.02em] uppercase !text-[28px] lg:!text-[30px] xl:!text-[44px] will-change-[transform,opacity]"
+                                                    >
                                                         {item.title}
-                                                    </h3>
+                                                    </motion.h3>
 
-                                                    <div
+                                                    <motion.div
                                                         data-exp-copy
+                                                        variants={expertiseTextContainerVariants}
                                                         className="flex flex-col justify-between h-full pr-[120px] md:pr-0"
                                                         style={vp.isDesktop ? { paddingRight: EXPERTISE_SHIFT } : undefined}
                                                     >
-                                                        <p data-exp-text style={{ color: isDimmed ? SITE_GREY : "#000000" }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] rwd-balance whitespace-pre-line m-0 lg:transition-colors lg:duration-500">
+                                                        <motion.p
+                                                            data-exp-text
+                                                            variants={expertiseTextItemVariants}
+                                                            animate={vp.isDesktop ? { opacity: isDimmed ? 0.42 : 1 } : undefined}
+                                                            style={{ color: "#000000" }}
+                                                            transition={{ duration: 0.55, ease: SMOOTH_SLIDE_EASE }}
+                                                            className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] rwd-balance whitespace-pre-line m-0 will-change-[transform,opacity]"
+                                                        >
                                                             {glueLastWords(item.description)}
-                                                        </p>
+                                                        </motion.p>
 
-                                                        <ul data-exp-tools style={{ color: isDimmed ? SITE_GREY : SITE_SECONDARY_GREY }} className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] flex flex-col lg:flex-row lg:flex-wrap lg:gap-x-[6px] m-0 p-0 list-none lg:transition-colors lg:duration-500 mt-[24px] lg:mt-[12px]">
+                                                        <motion.ul
+                                                            data-exp-tools
+                                                            variants={expertiseTextItemVariants}
+                                                            animate={vp.isDesktop ? { opacity: isDimmed ? 0.38 : 0.9 } : undefined}
+                                                            style={{ color: SITE_SECONDARY_GREY }}
+                                                            transition={{ duration: 0.55, ease: SMOOTH_SLIDE_EASE }}
+                                                            className="svc-size H6 !leading-[1.35] !tracking-[-0.005em] !text-[16px] ![font-family:var(--font-body)] flex flex-col lg:flex-row lg:flex-wrap lg:gap-x-[6px] m-0 p-0 list-none mt-[24px] lg:mt-[12px] will-change-[transform,opacity]"
+                                                        >
                                                             {item.tools.map((tool, i) => (
                                                                 <li key={tool}>
                                                                     {tool}
                                                                     {i < item.tools.length - 1 ? "," : ""}
                                                                 </li>
                                                             ))}
-                                                        </ul>
-                                                    </div>
+                                                        </motion.ul>
+                                                    </motion.div>
 
                                                     {(() => {
                                                         const fitted = fitByArea(
@@ -2230,7 +2437,7 @@ export default function Home() {
 
                                     <motion.li
                                         aria-hidden="true"
-                                        variants={dividerVariants}
+                                        variants={expertiseDividerVariants}
                                         style={{ backgroundColor: SITE_GREY }}
                                         className="w-full h-[1px] origin-left list-none"
                                     />

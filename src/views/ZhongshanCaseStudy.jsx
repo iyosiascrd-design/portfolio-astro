@@ -116,6 +116,68 @@ function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, frame, c
   )
 }
 
+const VIDEO_SRCS = Object.values(ASSETS).filter((src) => isVideo(src))
+
+// Buffers the page's videos one at a time (in page order) once the hero has settled,
+// so they are already cached by the time the reader scrolls to them, on mobile too.
+function useVideoWarmup(enabled) {
+  useEffect(() => {
+    if (!enabled || typeof document === "undefined") return
+    if (navigator.connection?.saveData) return
+
+    let cancelled = false
+    const active = new Set()
+    const queue = [...VIDEO_SRCS]
+
+    const next = () => {
+      if (cancelled) return
+      const src = queue.shift()
+      if (!src) return
+      const v = document.createElement("video")
+      active.add(v)
+      v.muted = true
+      v.playsInline = true
+      v.preload = "auto"
+      let done = false
+      let t
+      const finish = () => {
+        if (done) return
+        done = true
+        clearTimeout(t)
+        active.delete(v)
+        v.removeEventListener("canplaythrough", finish)
+        v.removeEventListener("error", finish)
+        v.removeAttribute("src")
+        v.load()
+        next()
+      }
+      v.addEventListener("canplaythrough", finish)
+      v.addEventListener("error", finish)
+      t = setTimeout(finish, 10000)
+      v.src = src
+      v.load()
+    }
+
+    const start = () => {
+      next()
+      next()
+    }
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(start, { timeout: 1500 })
+      : setTimeout(start, 400)
+
+    return () => {
+      cancelled = true
+      if (window.cancelIdleCallback && typeof idle === "number") window.cancelIdleCallback(idle)
+      else clearTimeout(idle)
+      active.forEach((v) => {
+        v.removeAttribute("src")
+        v.load()
+      })
+    }
+  }, [enabled])
+}
+
 function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover" }) {
   const boxRef = useRef(null)
   const [started, setStarted] = useState(false)
@@ -150,7 +212,7 @@ function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover" }
           io.disconnect()
         }
       },
-      { threshold, rootMargin: "120px 0px" }
+      { threshold, rootMargin: isVideo(src) ? "150% 0px" : "120px 0px" }
     )
     io.observe(el)
     return () => {
@@ -262,6 +324,7 @@ export default function ZhongshanCaseStudy() {
   const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
   useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
+  useVideoWarmup(ready && heroLoaded)
 
   return (
     <div
@@ -330,7 +393,7 @@ export default function ZhongshanCaseStudy() {
       </section>
 
       <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] max-md:overflow-x-clip">
-        <div className={`${CONTAINER} flex flex-col gap-[12px] md:gap-[16px] lg:gap-0`}>
+        <div className={`${CONTAINER} flex flex-col gap-0 md:gap-[16px] lg:gap-0`}>
           {/* 1. SPLIT INTRO */}
           <section
             data-header-bg="light"
@@ -348,21 +411,21 @@ export default function ZhongshanCaseStudy() {
                 </p>
               </div>
 
-              <div className="relative w-full aspect-[4/5] max-md:aspect-[4/5] max-md:mt-[16px] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-7 lg:col-span-6 overflow-hidden">
+              <div className="relative w-full aspect-[4/5] max-md:aspect-[4/5] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-7 lg:col-span-6 overflow-hidden">
                 <Fill src={ASSETS.logoConstruction} alt="Zhongshan identity introduction" parallax={false} className="bg-[#1b1b1b]" />
               </div>
             </div>
           </section>
 
           {/* 2. LOGO INSET */}
-          <CenteredInset aspectClass="aspect-[1228/624]" mobileAspect="max-md:!aspect-[16/10]" ratio={1228 / 624} frame={{ w: 1228, h: 624 }}>
+          <CenteredInset aspectClass="aspect-[1228/624]" mobileAspect="max-md:!aspect-[16/10]" ratio={1228 / 624} frame={{ w: 1228, h: 624 }} className="max-md:!py-0 max-md:mt-[12px]">
             <Fill src={ASSETS.suppliers} alt="Zhongshan logo animation" />
           </CenteredInset>
 
           {/* 3. TECHNICAL BY NATURE */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] max-md:!pt-[40px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <h2 className={`${HEADING_CLS} mb-[68px] max-md:mb-[28px] md:mb-[48px] lg:mb-[64px]`}>
               Technical by<br className="md:hidden" /> nature Editorial<br className="md:hidden" /> by design
@@ -407,7 +470,7 @@ export default function ZhongshanCaseStudy() {
               </div>
 
               <div className="flex flex-col gap-[16px] max-md:order-2 lg:col-start-10 lg:col-span-3 lg:gap-[32px]">
-                <div className="relative w-full aspect-square lg:aspect-[353/356] overflow-hidden">
+                <div className="relative w-full aspect-square max-md:aspect-auto max-md:flex-1 max-md:min-h-0 lg:aspect-[353/356] overflow-hidden">
                   <Fill src={ASSETS.book} alt="Stack of teal Zhongshan product books" parallax={false} />
                 </div>
                 <p className={`${PARA_CLS} max-md:hidden`}>
@@ -420,7 +483,7 @@ export default function ZhongshanCaseStudy() {
           {/* 4. CONTRAST WITH PURPOSE */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] max-md:!pt-[64px] md:pt-[80px] lg:pt-[150px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[150px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[54px]`}>
               Contrast<br /> with Purpose
@@ -461,7 +524,7 @@ export default function ZhongshanCaseStudy() {
           {/* 5. PRECISION IN EVERY DETAIL */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] max-md:!pt-[64px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
               Precision<br /> In Every Detail
@@ -473,7 +536,7 @@ export default function ZhongshanCaseStudy() {
 
             <div className={`${FLOW_GRID} lg:items-start`}>
               <div className="flex flex-col gap-[24px] max-md:order-2 lg:col-start-1 lg:col-span-4 lg:gap-[32px]">
-                <div className="relative w-full aspect-[477/385] max-md:aspect-[4/3] overflow-hidden">
+                <div className="relative w-full aspect-[477/385] max-md:aspect-[816/466] overflow-hidden">
                   <Fill src={ASSETS.brass} alt="Navy hang tag with foil logo" parallax={false} className="max-md:hidden" />
                   <Fill src={ASSETS.folder} alt="Zhongshan catalogues" parallax={false} className="md:hidden" />
                 </div>
@@ -481,32 +544,28 @@ export default function ZhongshanCaseStudy() {
                   A visual identity that balances the precision of architectural sourcing with the sophistication of editorial design.
                 </p>
               </div>
-              <div className="relative w-full aspect-[4/3] max-md:aspect-[4/3] max-md:order-1 lg:aspect-[975/700] lg:col-start-5 lg:col-span-8 overflow-hidden">
+              <div className="relative w-full aspect-[4/3] max-md:aspect-[816/774] max-md:order-1 lg:aspect-[975/700] lg:col-start-5 lg:col-span-8 overflow-hidden">
                 <Fill src={ASSETS.flyer} alt="Brochure on stone material samples" />
               </div>
             </div>
           </section>
 
           {/* 6. WIDE INSET */}
-          <CenteredInset aspectClass="aspect-[1212/616]" mobileAspect="max-md:!aspect-[16/10]" ratio={1212 / 616} frame={{ w: 1212, h: 616 }}>
+          <CenteredInset aspectClass="aspect-[1212/616]" mobileAspect="max-md:!aspect-[16/10]" ratio={1212 / 616} frame={{ w: 1212, h: 616 }} className="max-md:hidden">
             <Fill src={ASSETS.screen} alt="Display screen: Sourcing without the guesswork" />
           </CenteredInset>
 
           {/* 7. SPLIT */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:pt-[12px] lg:pt-[100px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
           >
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0">
-              <div className="md:hidden col-span-2 relative w-full aspect-[16/10] overflow-hidden">
-                <Fill src={ASSETS.flyer} alt="Brochure on stone material samples" />
-              </div>
-
-              <div className="relative w-full aspect-[3/4] max-md:aspect-[4/5] md:aspect-[4/5] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-1 lg:col-span-5 overflow-hidden">
+              <div className="relative w-full aspect-[3/4] max-md:aspect-[320/418] md:aspect-[4/5] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-1 lg:col-span-5 overflow-hidden">
                 <Fill src={ASSETS.poster} alt="Poster: A home is only as good as its details" />
               </div>
 
-              <div className="md:hidden relative w-full aspect-[4/5] overflow-hidden">
+              <div className="md:hidden relative w-full aspect-[320/418] overflow-hidden">
                 <Fill src={ASSETS.cargo} alt="Zhongshan cargo truck" />
               </div>
 
@@ -517,7 +576,7 @@ export default function ZhongshanCaseStudy() {
           </section>
 
           {/* 8. WIDE INSET */}
-          <CenteredInset aspectClass="aspect-[1212/706]" mobileAspect="max-md:!aspect-[16/10]" ratio={1212 / 706} frame={{ w: 1212, h: 706 }}>
+          <CenteredInset aspectClass="aspect-[1212/706]" mobileAspect="max-md:!aspect-[654/515]" ratio={1212 / 706} frame={{ w: 1212, h: 706 }} className="max-md:!py-0 max-md:mt-[12px]">
             <Fill src={ASSETS.cardboard} alt="Zhongshan catalogues" className="md:hidden" />
             <Fill src={ASSETS.folder} alt="Person carrying a Zhongshan folder" className="max-md:hidden" />
           </CenteredInset>
@@ -525,18 +584,18 @@ export default function ZhongshanCaseStudy() {
           {/* 9. SPLIT */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:pt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
           >
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start">
-              <div className="md:hidden col-span-2 relative w-full aspect-[16/10] overflow-hidden">
+              <div className="md:hidden col-span-2 relative w-full aspect-[654/576] overflow-hidden">
                 <Fill src={ASSETS.construction} alt="Construction hoarding with interior renders" />
               </div>
 
-              <div className="relative w-full aspect-[3/4] max-md:aspect-[4/5] md:aspect-[602/452] lg:self-end lg:col-start-1 lg:col-span-5 overflow-hidden">
+              <div className="relative w-full aspect-[3/4] max-md:aspect-[320/418] md:aspect-[602/452] lg:self-end lg:col-start-1 lg:col-span-5 overflow-hidden">
                 <Fill src={ASSETS.boxes} alt="Branded boxes in a warehouse" />
               </div>
 
-              <div className="md:hidden relative w-full aspect-[4/5] overflow-hidden">
+              <div className="md:hidden relative w-full aspect-[320/418] overflow-hidden">
                 <Fill src={ASSETS.brass} alt="Zhongshan embossed brand detail" />
               </div>
 
@@ -559,22 +618,22 @@ export default function ZhongshanCaseStudy() {
           {/* 11. 3D RENDERS THAT FEEL REAL */}
           <section
             data-header-bg="light"
-            className="block w-full pt-[105px] max-md:!pt-[72px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
+            className="block w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
               3D Renders<br /> That Feel Real
             </h2>
 
-            <p className={`${PARA_CLS} md:hidden mb-[16px]`}>
+            <p className={`${PARA_CLS} md:hidden mb-[12px]`}>
               A visual identity that balances the precision of architectural sourcing with the sophistication of editorial design.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0">
-              <div className="relative w-full aspect-[4/3] lg:aspect-auto lg:h-full lg:min-h-0 max-md:order-2 md:col-span-2 lg:col-start-1 lg:col-span-8 overflow-hidden">
+              <div className="relative w-full aspect-[4/3] max-md:aspect-square lg:aspect-auto lg:h-full lg:min-h-0 max-md:order-2 md:col-span-2 lg:col-start-1 lg:col-span-8 overflow-hidden">
                 <Fill src={ASSETS.wallPanel} alt="3D render of the building" />
               </div>
               <div className="w-full flex flex-col gap-[24px] max-md:order-1 md:col-span-2 lg:col-start-9 lg:col-span-4 lg:gap-[32px] lg:self-stretch">
-                <div className="relative w-full aspect-[4/3] lg:aspect-[477/404] overflow-hidden">
+                <div className="relative w-full aspect-[4/3] max-md:aspect-[816/642] lg:aspect-[477/404] overflow-hidden">
                   <Fill
                     src={ASSETS.tiles}
                     alt="3D render detail"
@@ -594,8 +653,8 @@ export default function ZhongshanCaseStudy() {
             aspectClass="aspect-[1212/647]"
             ratio={1212 / 647}
             frame={{ w: 1212, h: 647 }}
-            mobileAspect="max-md:!aspect-[16/10]"
-            className="max-md:!py-[36px]"
+            mobileAspect="max-md:!aspect-[816/480]"
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill src={ASSETS.floorplan} alt="3D render, wide view" />
           </CenteredInset>
@@ -603,9 +662,9 @@ export default function ZhongshanCaseStudy() {
           {/* 13. FULL-WIDTH DOORS SHOWCASE */}
           <section
             data-header-bg="light"
-            className="block w-full pt-[88px] max-md:pt-[12px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="block w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
-            <div className="relative w-full aspect-[4/3] lg:aspect-[1472/784] overflow-hidden">
+            <div className="relative w-full aspect-[4/3] max-md:aspect-[816/596] lg:aspect-[1472/784] overflow-hidden">
               <Fill src={ASSETS.doors} alt="Zhongshan full-width doors render" />
             </div>
           </section>
@@ -613,14 +672,14 @@ export default function ZhongshanCaseStudy() {
           {/* 14. SPLIT: Kitchen & Bathroom 3D renders */}
           <section
             data-header-bg="light"
-            className="block w-full pt-0 max-md:pt-[12px] lg:pb-[20px] lg:flex lg:flex-col"
+            className="block w-full pt-0 max-md:mt-[12px] lg:pb-[20px] lg:flex lg:flex-col"
           >
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start">
-              <div className="relative w-full aspect-[4/5] max-md:order-1 md:order-2 lg:aspect-[726/962] lg:col-start-1 lg:col-span-6 overflow-hidden">
+              <div className="relative w-full aspect-[4/5] max-md:aspect-[396/542] max-md:order-2 md:order-2 lg:aspect-[726/962] lg:col-start-1 lg:col-span-6 overflow-hidden">
                 <Fill src={ASSETS.kitchen} alt="Kitchen render" />
               </div>
 
-              <div className="relative w-full aspect-[4/5] max-md:order-2 md:order-1 lg:aspect-[723/633] lg:col-start-7 lg:col-span-6 overflow-hidden">
+              <div className="relative w-full aspect-[4/5] max-md:aspect-[396/542] max-md:order-1 md:order-1 lg:aspect-[723/633] lg:col-start-7 lg:col-span-6 overflow-hidden">
                 <Fill src={ASSETS.bathroom} alt="Bathroom render" />
               </div>
             </div>
@@ -629,14 +688,16 @@ export default function ZhongshanCaseStudy() {
           {/* 15. CLOSING SHOWCASE (1472 x 724, 54px gap above NextProject): living room */}
           <section
             data-header-bg="light"
-            className="block w-full pt-0 max-md:pt-[12px] pb-[var(--page-pad)] max-md:pb-[48px] md:pt-0 lg:pt-[100px] lg:pb-[20px] lg:min-h-[calc(100dvh-140px)] lg:flex lg:flex-col lg:justify-center"
+            className="block w-full pt-0 max-md:mt-[12px] pb-[var(--page-pad)] max-md:!pb-0 md:pt-0 lg:pt-[100px] lg:pb-[20px] lg:min-h-[calc(100dvh-140px)] lg:flex lg:flex-col lg:justify-center"
           >
-            <div className="relative w-full aspect-[1472/724] max-md:!aspect-[16/10] lg:mb-[54px] overflow-hidden">
+            <div className="relative w-full aspect-[1472/724] max-md:!aspect-[816/492] lg:mb-[54px] overflow-hidden">
               <Fill src={ASSETS.living} alt="Zhongshan closing showcase" />
             </div>
           </section>
 
-          <NextProject current="zhongshan" />
+          <div className="max-md:mt-[12px]">
+            <NextProject current="zhongshan" />
+          </div>
         </div>
       </main>
     </div>

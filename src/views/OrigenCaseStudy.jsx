@@ -92,6 +92,68 @@ function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, frame, c
   )
 }
 
+// Page order of the videos; buffered one at a time once the hero has settled so they are
+// already cached by the time the reader scrolls to them, on mobile too.
+const VIDEO_SRCS = [ASSETS.beans, ASSETS.type, ASSETS.typeTreatment, ASSETS.color].filter((src) => isVideo(src))
+
+function useVideoWarmup(enabled) {
+  useEffect(() => {
+    if (!enabled || typeof document === "undefined") return
+    if (navigator.connection?.saveData) return
+
+    let cancelled = false
+    const active = new Set()
+    const queue = [...VIDEO_SRCS]
+
+    const next = () => {
+      if (cancelled) return
+      const src = queue.shift()
+      if (!src) return
+      const v = document.createElement("video")
+      active.add(v)
+      v.muted = true
+      v.playsInline = true
+      v.preload = "auto"
+      let done = false
+      let t
+      const finish = () => {
+        if (done) return
+        done = true
+        clearTimeout(t)
+        active.delete(v)
+        v.removeEventListener("canplaythrough", finish)
+        v.removeEventListener("error", finish)
+        v.removeAttribute("src")
+        v.load()
+        next()
+      }
+      v.addEventListener("canplaythrough", finish)
+      v.addEventListener("error", finish)
+      t = setTimeout(finish, 10000)
+      v.src = src
+      v.load()
+    }
+
+    const start = () => {
+      next()
+      next()
+    }
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(start, { timeout: 1500 })
+      : setTimeout(start, 400)
+
+    return () => {
+      cancelled = true
+      if (window.cancelIdleCallback && typeof idle === "number") window.cancelIdleCallback(idle)
+      else clearTimeout(idle)
+      active.forEach((v) => {
+        v.removeAttribute("src")
+        v.load()
+      })
+    }
+  }, [enabled])
+}
+
 function InViewGif({ src, alt, className = "", mediaClassName = "", threshold = 0.35 }) {
   const boxRef = useRef(null)
   const [started, setStarted] = useState(false)
@@ -126,7 +188,7 @@ function InViewGif({ src, alt, className = "", mediaClassName = "", threshold = 
           io.disconnect()
         }
       },
-      { threshold }
+      { threshold, rootMargin: isVideo(src) ? "150% 0px" : "0px" }
     )
     io.observe(el)
     return () => {
@@ -231,6 +293,7 @@ export default function OrigenCaseStudy() {
   const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
   useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
+  useVideoWarmup(ready && heroLoaded)
 
   return (
     <div ref={rootRef} data-page-transition="" className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
@@ -292,7 +355,7 @@ export default function OrigenCaseStudy() {
       </section>
 
       <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] max-md:overflow-x-clip">
-        <div className={`${CONTAINER} flex flex-col gap-[12px] md:gap-[16px] lg:gap-0`}>
+        <div className={`${CONTAINER} flex flex-col gap-0 md:gap-[16px] lg:gap-0`}>
           {/* 1. SPLIT INTRO: heading top-left, copy bottom-left (cols 1-5); construction1 (723 x 862) right (cols 7-12) */}
           <section
             data-header-bg="light"
@@ -310,7 +373,7 @@ export default function OrigenCaseStudy() {
                 </p>
               </div>
 
-              <div className="relative w-full aspect-[4/5] max-md:aspect-[816/1038.6] max-md:mt-[16px] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-7 lg:col-span-6">
+              <div className="relative w-full aspect-[4/5] max-md:aspect-[816/1038.6] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-7 lg:col-span-6">
                 <Fill
                   src={ASSETS.construction1}
                   alt="Kaldi’s goat + Origen + coffee bean"
@@ -327,6 +390,7 @@ export default function OrigenCaseStudy() {
             mobileAspect="max-md:!aspect-[816/502]"
             ratio={1224 / 581}
             frame={{ w: 1224, h: 581 }}
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Media
               src={ASSETS.beans}
@@ -338,7 +402,7 @@ export default function OrigenCaseStudy() {
           {/* 3. HERITAGE MEETS MODERNITY */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] max-md:!pt-[40px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
               Heritage Meets<br /> Modernity
@@ -349,10 +413,10 @@ export default function OrigenCaseStudy() {
             </p>
 
             <div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start max-md:!grid-cols-[1.352fr_1fr]"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start max-md:!grid-cols-1"
             >
               {/* Left: Cormorant Garamond & DM Sans specimen (cols 1-5) */}
-              <div className="relative w-full aspect-[7/8] max-md:aspect-[477/548] max-md:order-1 lg:aspect-[600.45/547.5] lg:col-start-1 lg:col-span-5 lg:row-start-1">
+              <div className="relative w-full aspect-[7/8] max-md:aspect-[816/744] max-md:order-1 lg:aspect-[600.45/547.5] lg:col-start-1 lg:col-span-5 lg:row-start-1">
                 <Fill
                   src={ASSETS.type}
                   alt="Cormorant Garamond and DM Sans type specimen over coffee beans"
@@ -363,7 +427,7 @@ export default function OrigenCaseStudy() {
               </div>
 
               {/* Center: typography treatment over pouring coffee (cols 6-9) */}
-              <div className="relative w-full aspect-[7/8] max-md:aspect-[816/560] max-md:col-span-2 max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-6 lg:col-span-4 lg:aspect-[476/548] lg:row-start-1">
+              <div className="relative w-full aspect-[7/8] max-md:aspect-[816/748] max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-6 lg:col-span-4 lg:aspect-[476/548] lg:row-start-1">
                 <Fill
                   src={ASSETS.typeTreatment}
                   alt="Taste the difference typography treatment over pouring coffee"
@@ -374,7 +438,7 @@ export default function OrigenCaseStudy() {
               </div>
 
               {/* Right: wax seal + caption (cols 10-12) */}
-              <div className="flex flex-col gap-[16px] max-md:order-2 lg:col-start-10 lg:col-span-3 lg:row-start-1 lg:gap-[32px]">
+              <div className="flex flex-col gap-[16px] max-md:hidden lg:col-start-10 lg:col-span-3 lg:row-start-1 lg:gap-[32px]">
                 <div className="relative w-full aspect-square lg:aspect-[353/356]">
                   <Fill src={ASSETS.wax} alt="Origen wax seal" parallax={false} />
                 </div>
@@ -388,7 +452,7 @@ export default function OrigenCaseStudy() {
           {/* 4. HIGHLAND INSPIRED COLOR */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] md:pt-[80px] lg:pt-[186px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-between"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[186px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-between"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[54px]`}>
               Highland<br /> Inspired Color
@@ -433,19 +497,23 @@ export default function OrigenCaseStudy() {
               Desktop: iced (left) | pouchWood (right) at ~555px height */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] max-md:!pt-[88px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
-            <h2 className={`${HEADING_CLS} mb-[32px] max-md:mb-[44px] md:mb-[48px] lg:mb-[54px]`}>
+            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[54px]`}>
               A Premium<br /> Presence
             </h2>
+
+            <p className={`${PARA_CLS} md:hidden mb-[12px]`}>
+              In a Spanish coffee market full of quiet minimalism, Origen stands out with rich texture, deep greens and a confident mark, so it feels premium on the shelf, in the cup and in the hand.
+            </p>
 
             <div
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-end"
             >
-              <div className="relative w-full aspect-[340/308] max-md:aspect-[816/560] max-md:order-1 md:aspect-auto md:h-[555px] lg:col-start-1 lg:col-span-6">
+              <div className="relative w-full aspect-[340/308] max-md:aspect-[816/648] max-md:order-1 md:aspect-auto md:h-[555px] lg:col-start-1 lg:col-span-6">
                 <Fill src={ASSETS.iced} alt="Origen iced coffee on a branded coaster" />
               </div>
-              <div className="relative w-full aspect-[340/308] max-md:aspect-[816/560] max-md:order-2 md:aspect-auto md:h-[555px] lg:col-start-7 lg:col-span-6">
+              <div className="relative w-full aspect-[340/308] max-md:aspect-[816/543] max-md:order-2 md:aspect-auto md:h-[555px] lg:col-start-7 lg:col-span-6">
                 <Fill src={ASSETS.pouchWood} alt="Hand holding an Origen coffee pouch on a wooden shelf" />
               </div>
             </div>
@@ -456,7 +524,7 @@ export default function OrigenCaseStudy() {
               Desktop: 478 x 632 centered */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:!pt-[44px] max-md:!pb-[12px] lg:py-[150px] lg:min-h-[100dvh] flex flex-col items-center justify-center"
+            className="w-full pt-[88px] max-md:hidden lg:py-[150px] lg:min-h-[100dvh] flex flex-col items-center justify-center"
           >
             <div className="relative w-full max-w-[478px] max-md:!max-w-[56%] max-md:mx-auto aspect-[478/632] max-md:aspect-[348/503]">
               <Fill src={ASSETS.barista} alt="Barista wearing an Origen t-shirt" />
@@ -468,10 +536,10 @@ export default function OrigenCaseStudy() {
               Desktop: 1182 x 724 inset */}
           <CenteredInset
             aspectClass="aspect-[1182/724]"
-            mobileAspect="max-md:!aspect-[816/640]"
+            mobileAspect="max-md:!aspect-[816/760]"
             ratio={1182 / 724}
             frame={{ w: 1182, h: 724 }}
-            className="max-md:!pt-[24px] max-md:!pb-[24px]"
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill
               src={ASSETS.wallposter}
@@ -495,24 +563,24 @@ export default function OrigenCaseStudy() {
 
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:!pt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
           >
             <div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:items-start"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] max-md:grid-cols-2 lg:gap-x-[20px] lg:flex-1 lg:items-start"
             >
               {/* Mobile-only beat 1: portrait packaging */}
-              <div className="md:hidden relative w-full max-w-[56%] mx-auto aspect-[348/503] max-md:order-1">
+              <div className="md:hidden relative w-full aspect-[275/432] max-md:order-1">
                 <Fill src={ASSETS.packaging} alt="Hands holding two Origen coffee pouches" />
               </div>
 
-              {/* Mobile-only beat 2: full-width drip box */}
-              <div className="md:hidden relative w-full aspect-[816/560] max-md:order-2">
-                <Fill src={ASSETS.box} alt="Origen drip coffee box: Where coffee began" />
+              {/* Mobile-only beat 1b: barista beside packaging */}
+              <div className="md:hidden relative w-full aspect-[275/432] max-md:order-2">
+                <Fill src={ASSETS.barista} alt="Barista wearing an Origen t-shirt" />
               </div>
 
-              {/* Mobile-only beat 3: portrait cup */}
-              <div className="md:hidden relative w-full max-w-[56%] mx-auto aspect-[348/503] max-md:order-3">
-                <Fill src={ASSETS.cup} alt="Origen paper cup under an espresso machine" />
+              {/* Mobile-only beat 2: full-width drip box */}
+              <div className="md:hidden col-span-2 relative w-full aspect-[575/520] max-md:order-3">
+                <Fill src={ASSETS.box} alt="Origen drip coffee box: Where coffee began" />
               </div>
 
               {/* Desktop / Tablet left: cup */}
@@ -530,9 +598,9 @@ export default function OrigenCaseStudy() {
           {/* 9. CLOSING MOUNTAIN SHOWCASE (1472 x 724, 54px gap above NextProject) */}
           <section
             data-header-bg="light"
-            className="w-full pb-[var(--page-pad)] max-md:pt-[12px] max-md:!pb-0 lg:pt-[100px] lg:pb-[20px] lg:min-h-[calc(100dvh-140px)] lg:flex lg:flex-col lg:justify-center"
+            className="w-full pb-[var(--page-pad)] max-md:mt-[12px] max-md:!pb-0 lg:pt-[100px] lg:pb-[20px] lg:min-h-[calc(100dvh-140px)] lg:flex lg:flex-col lg:justify-center"
           >
-            <div className="relative w-full aspect-[1472/724] max-md:aspect-[816/560] lg:mb-[54px]">
+            <div className="relative w-full aspect-[1472/724] max-md:aspect-[575/612] lg:mb-[54px]">
               <Fill
                 src={ASSETS.mountain}
                 alt="Origen coffee sachets over Ethiopian highland mountains"
@@ -541,7 +609,9 @@ export default function OrigenCaseStudy() {
             </div>
           </section>
 
-          <NextProject current="origen" />
+          <div className="max-md:mt-[12px]">
+            <NextProject current="origen" />
+          </div>
         </div>
       </main>
     </div>

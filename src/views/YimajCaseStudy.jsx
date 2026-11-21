@@ -113,6 +113,68 @@ function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, frame, c
   )
 }
 
+// Page order of the videos; buffered one at a time once the hero has settled so they are
+// already cached by the time the reader scrolls to them, on mobile too.
+const VIDEO_SRCS = [ASSETS.logoAnimation, ASSETS.socials, ASSETS.color].filter((src) => isVideo(src))
+
+function useVideoWarmup(enabled) {
+  useEffect(() => {
+    if (!enabled || typeof document === "undefined") return
+    if (navigator.connection?.saveData) return
+
+    let cancelled = false
+    const active = new Set()
+    const queue = [...VIDEO_SRCS]
+
+    const next = () => {
+      if (cancelled) return
+      const src = queue.shift()
+      if (!src) return
+      const v = document.createElement("video")
+      active.add(v)
+      v.muted = true
+      v.playsInline = true
+      v.preload = "auto"
+      let done = false
+      let t
+      const finish = () => {
+        if (done) return
+        done = true
+        clearTimeout(t)
+        active.delete(v)
+        v.removeEventListener("canplaythrough", finish)
+        v.removeEventListener("error", finish)
+        v.removeAttribute("src")
+        v.load()
+        next()
+      }
+      v.addEventListener("canplaythrough", finish)
+      v.addEventListener("error", finish)
+      t = setTimeout(finish, 10000)
+      v.src = src
+      v.load()
+    }
+
+    const start = () => {
+      next()
+      next()
+    }
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(start, { timeout: 1500 })
+      : setTimeout(start, 400)
+
+    return () => {
+      cancelled = true
+      if (window.cancelIdleCallback && typeof idle === "number") window.cancelIdleCallback(idle)
+      else clearTimeout(idle)
+      active.forEach((v) => {
+        v.removeAttribute("src")
+        v.load()
+      })
+    }
+  }, [enabled])
+}
+
 function InViewGif({ src, alt, className = "", threshold = 0.35, fit = "cover" }) {
   const boxRef = useRef(null)
   const [started, setStarted] = useState(false)
@@ -147,7 +209,7 @@ function InViewGif({ src, alt, className = "", threshold = 0.35, fit = "cover" }
           io.disconnect()
         }
       },
-      { threshold }
+      { threshold, rootMargin: isVideo(src) ? "150% 0px" : "0px" }
     )
     io.observe(el)
     return () => {
@@ -257,6 +319,7 @@ export default function YimajCaseStudy() {
   const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
   useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
+  useVideoWarmup(ready && heroLoaded)
 
   return (
     <div ref={rootRef} data-page-transition="" className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
@@ -321,7 +384,7 @@ export default function YimajCaseStudy() {
       </section>
 
       <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] max-md:overflow-x-clip">
-        <div className={`${CONTAINER} flex flex-col gap-[12px] md:gap-[16px] lg:gap-0`}>
+        <div className={`${CONTAINER} flex flex-col gap-0 md:gap-[16px] lg:gap-0`}>
           {/* 1. SPLIT INTRO: heading top-left, copy bottom-left (cols 1-5); logoConstruction right (cols 7-12) */}
           <section
             data-header-bg="light"
@@ -339,7 +402,7 @@ export default function YimajCaseStudy() {
                 </p>
               </div>
 
-              <div className="relative w-full aspect-[4/5] max-md:aspect-[816/1154] max-md:mt-[16px] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-7 lg:col-span-6">
+              <div className="relative w-full aspect-[4/5] max-md:aspect-[816/1154] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-7 lg:col-span-6">
                 <Fill
                   src={ASSETS.logoConstruction}
                   alt="Aspiration plus Generational Bridge equals Yimaj Heights"
@@ -356,6 +419,7 @@ export default function YimajCaseStudy() {
             mobileAspect="max-md:!aspect-[816/502]"
             ratio={1228 / 624}
             frame={{ w: 1228, h: 624 }}
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill src={ASSETS.logoAnimation} alt="Yimaj Heights logo animation" />
           </CenteredInset>
@@ -365,7 +429,7 @@ export default function YimajCaseStudy() {
               Desktop: typeSpecimen (cols 1-4) | typeApplied (cols 5-9) | socials + caption (cols 10-12) */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:!pt-[40px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
               Precision Softened<br /> By Warmth
@@ -375,7 +439,7 @@ export default function YimajCaseStudy() {
               Architectural precision sans serif meets timeless serif typography, creating a refined system that feels premium without feeling sterile.
             </p>
 
-            <div className={`${FLOW_GRID} lg:items-start max-md:!grid-cols-[1.352fr_1fr]`}>
+            <div className={`${FLOW_GRID} lg:items-start max-md:!grid-cols-1`}>
               <div className="relative w-full aspect-[477/548] max-md:order-1 lg:col-start-1 lg:col-span-4">
                 <Fill
                   src={ASSETS.typeSpecimen}
@@ -386,7 +450,7 @@ export default function YimajCaseStudy() {
                 />
               </div>
 
-              <div className="relative w-full aspect-[602/548] max-md:aspect-[816/560] max-md:col-span-2 max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-5 lg:col-span-5">
+              <div className="relative w-full aspect-[602/548] max-md:aspect-[816/560] max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-5 lg:col-span-5">
                 <Fill
                   src={ASSETS.typeApplied}
                   alt="Yimaj Heights welcome signage with serif script"
@@ -398,7 +462,7 @@ export default function YimajCaseStudy() {
 
               <div className="flex flex-col gap-[16px] max-md:order-2 lg:col-start-10 lg:col-span-3 lg:gap-[32px]">
                 <div className="relative w-full aspect-square lg:aspect-[353/356]">
-                  <Fill src={ASSETS.socials} alt="Yimaj Heights social media stories" parallax={false} />
+                  <InViewGif src={ASSETS.socials} alt="Yimaj Heights social media stories" className="!absolute inset-0 !h-full" threshold={0.01} />
                 </div>
                 <p className={`${PARA_CLS} max-md:hidden`}>
                   Architectural precision sans serif meets timeless serif typography, creating a refined system that feels premium without feeling sterile.
@@ -412,7 +476,7 @@ export default function YimajCaseStudy() {
               Desktop: colorCard + caption (cols 1-3) | logoPin (cols 4-6) | palette 725.3 x 700 (cols 7-12) */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] md:pt-[80px] lg:pt-[150px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[150px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[54px]`}>
               Contrast<br /> with Purpose
@@ -424,7 +488,7 @@ export default function YimajCaseStudy() {
 
             <div className={`${FLOW_GRID} lg:items-start`}>
               <div
-                className="grid grid-cols-1 max-md:grid-cols-2 max-md:order-2 md:grid-cols-2 md:col-span-2 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:col-start-1 lg:col-span-6 items-start"
+                className="grid grid-cols-1 max-md:grid-cols-2 max-md:order-2 md:grid-cols-2 md:col-span-2 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:col-start-1 lg:col-span-6 items-start max-md:items-stretch"
               >
                 <div className="flex flex-col gap-[24px] max-md:order-2 lg:gap-[32px]">
                   <div className="relative w-full aspect-[348/491] max-md:aspect-[396/510]">
@@ -434,7 +498,7 @@ export default function YimajCaseStudy() {
                     Instead of following the cold, minimal language common in luxury real estate, Yimaj uses warm mineral tones to make the brand feel more human.
                   </p>
                 </div>
-                <div className="relative w-full aspect-[351/388] max-md:aspect-[396/340] max-md:order-1">
+                <div className="relative w-full aspect-[351/388] max-md:aspect-auto max-md:order-1">
                   <Fill src={ASSETS.logoPin} alt="Yimaj Heights star logo in brushed metal on a wood wall" parallax={false} />
                 </div>
               </div>
@@ -455,7 +519,7 @@ export default function YimajCaseStudy() {
               Desktop: businessCard + caption (cols 1-4) | brochure (cols 5-12) */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
               Bring It To Life With<br /> Warmth &amp; Legacy
@@ -490,6 +554,7 @@ export default function YimajCaseStudy() {
             mobileAspect="max-md:!aspect-[816/502]"
             ratio={1476 / 792}
             frame={{ w: 1476, h: 792 }}
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill src={ASSETS.presentation} alt="Yimaj Heights investor presentation on a monitor" />
           </CenteredInset>
@@ -499,7 +564,7 @@ export default function YimajCaseStudy() {
               Desktop: tall iphone (cols 1-5, full height) | wayfinding (cols 8-12, 602 x 450) */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:pt-0 lg:pt-[100px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
           >
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0">
               {/* Mobile-only full-width wayfinding beat */}
@@ -526,9 +591,10 @@ export default function YimajCaseStudy() {
           {/* 8. WIDE INSET (1212 x 706): billboard */}
           <CenteredInset
             aspectClass="aspect-[1212/706]"
-            mobileAspect="max-md:!aspect-[816/502]"
+            mobileAspect="max-md:!aspect-[816/620]"
             ratio={1212 / 706}
             frame={{ w: 1212, h: 706 }}
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill src={ASSETS.billboard} alt="Where Luxury Meets Community billboard" />
           </CenteredInset>
@@ -538,11 +604,11 @@ export default function YimajCaseStudy() {
               Desktop: keytag (cols 1-5, 602 x 452) | folder (cols 8-12, 602 x 862) */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:pt-0 lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start">
               {/* Mobile-only full-width envelope */}
-              <div className="md:hidden relative w-full aspect-[816/478]">
+              <div className="md:hidden relative w-full aspect-[816/620]">
                 <Fill src={ASSETS.envelope} alt="Yimaj Heights envelope on marble" className="bg-[#e8e1d8]" />
               </div>
 
@@ -577,7 +643,7 @@ export default function YimajCaseStudy() {
               Desktop: half-width exterior (cols 1-6) | half-width courtyard + caption (cols 7-12) */}
           <section
             data-header-bg="light"
-            className="w-full pt-[105px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
+            className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
           >
             <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
               62 Million In Sales<br /> Pre-Construction
@@ -588,11 +654,11 @@ export default function YimajCaseStudy() {
             </p>
 
             <div className={FILL_GRID}>
-              <div className="relative w-full aspect-[726/680] max-md:aspect-[516/310] max-md:order-1 md:col-span-1 lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-1 lg:col-span-8">
+              <div className="relative w-full aspect-[726/680] max-md:aspect-[354/226] max-md:order-1 md:col-span-1 lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-1 lg:col-span-8">
                 <Fill src={ASSETS.exterior} alt="Yimaj Heights towers exterior render" />
               </div>
               <div className="w-full flex flex-col gap-[24px] max-md:order-2 md:col-span-1 lg:col-start-9 lg:col-span-4 lg:gap-[32px] lg:self-stretch">
-                <div className="relative w-full aspect-[726/480] lg:aspect-[477/404] max-md:aspect-[516/425] overflow-hidden">
+                <div className="relative w-full aspect-[726/480] lg:aspect-[477/404] max-md:aspect-[354/290] overflow-hidden">
                   <Fill
                     src={ASSETS.courtyard}
                     alt="Yimaj Heights courtyard and amenity block"
@@ -612,15 +678,15 @@ export default function YimajCaseStudy() {
             aspectClass="aspect-[1212/647]"
             ratio={1212 / 647}
             frame={{ w: 1212, h: 647 }}
-            mobileAspect="max-md:!aspect-[516/312]"
-            className="max-md:!py-0"
+            mobileAspect="max-md:!aspect-[354/212]"
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill src={ASSETS.football} alt="Yimaj Heights rooftop football court from above" />
           </CenteredInset>
 
           {/* 12b. MOBILE ONLY: pool joins the exterior group (desktop keeps it as the closing image) */}
-          <section data-header-bg="light" className="md:hidden w-full">
-            <div className="relative w-full aspect-[516/312]">
+          <section data-header-bg="light" className="md:hidden w-full max-md:mt-[12px]">
+            <div className="relative w-full aspect-[354/255]">
               <Fill src={ASSETS.pool} alt="Yimaj Heights indoor swimming pool" />
             </div>
           </section>
@@ -630,9 +696,9 @@ export default function YimajCaseStudy() {
               Desktop/Tablet: living room render (1472 x 784), 20px above next split */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:pt-[44px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
-            <div className="md:hidden relative w-full aspect-[4/5] max-md:aspect-[516/262]">
+            <div className="md:hidden relative w-full aspect-[354/297]">
               <Fill src={ASSETS.living} alt="Yimaj Heights living room render" />
             </div>
             <div className="max-md:hidden relative w-full aspect-[4/3] lg:aspect-[1472/784]">
@@ -645,11 +711,11 @@ export default function YimajCaseStudy() {
               Desktop/Tablet: kitchen (cols 1-6, 962px tall) | bedroom (cols 7-12, 723 x 633), 20px below living */}
           <section
             data-header-bg="light"
-            className="w-full pt-0 lg:pb-[20px] lg:flex lg:flex-col"
+            className="w-full pt-0 max-md:mt-[12px] lg:pb-[20px] lg:flex lg:flex-col"
           >
-            <div className={`${FLOW_GRID} lg:items-start max-md:!grid-cols-2`}>
+            <div className={`${FLOW_GRID} lg:items-start max-md:!grid-cols-1`}>
               {/* Mobile-only kitchen (left of the pair) */}
-              <div className="md:hidden relative w-full aspect-[4/5]">
+              <div className="md:hidden relative w-full aspect-[354/307]">
                 <Fill src={ASSETS.kitchen} alt="Yimaj Heights kitchen and dining render" />
               </div>
 
@@ -657,7 +723,7 @@ export default function YimajCaseStudy() {
                 <Fill src={ASSETS.kitchen} alt="Yimaj Heights kitchen and dining render" />
               </div>
 
-              <div className="relative w-full aspect-[723/633] max-md:aspect-[4/5] lg:col-start-7 lg:col-span-6">
+              <div className="relative w-full aspect-[723/633] max-md:aspect-[354/288] lg:col-start-7 lg:col-span-6">
                 <Fill src={ASSETS.bedroom} alt="Yimaj Heights bedroom render" />
               </div>
             </div>
@@ -666,10 +732,10 @@ export default function YimajCaseStudy() {
           {/* 14b. FLOORPLAN INSET (Frame 411): before the swimming pool showcase */}
           <CenteredInset
             aspectClass="aspect-[1212/706]"
-            mobileAspect="max-md:!aspect-[516/315]"
+            mobileAspect="max-md:!aspect-[354/316]"
             ratio={1212 / 706}
             frame={{ w: 1212, h: 706 }}
-            className="max-md:!pt-[44px] max-md:!pb-[56px]"
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill src={ASSETS.floorplan} alt="Yimaj Heights isometric apartment floor plan" />
           </CenteredInset>
@@ -684,7 +750,9 @@ export default function YimajCaseStudy() {
             </div>
           </section>
 
-          <NextProject current="yimaj" />
+          <div className="max-md:mt-[12px]">
+            <NextProject current="yimaj" />
+          </div>
         </div>
       </main>
     </div>
