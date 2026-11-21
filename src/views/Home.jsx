@@ -666,6 +666,46 @@ const V_MAX = 1.6
 const LUT_SIZE = 2048
 const HEADER_TONE_THRESHOLD = 0.55
 
+// The gradient is pre-rendered once into a tall layer covering pattern coordinates
+// SR_TOP..SR_TOP+SR_SPAN (in viewport heights) and then only *moved* with a transform.
+// Outside that range the pattern is flat, so plain dark / white blocks continue it.
+const SR_TOP = -0.2
+const SR_SPAN = 2
+const SR_BOTTOM = SR_TOP + SR_SPAN
+const BEND_REDRAW_MS = 32
+// Drive the layer with a CSS scroll timeline (compositor-thread, Safari 26+/Chromium).
+// Older browsers fall back to a JS-updated transform. Set false to force the fallback.
+const USE_SCROLL_TIMELINE = true
+
+const supportsScrollTimeline = () =>
+    typeof window !== "undefined" &&
+    USE_SCROLL_TIMELINE &&
+    !!window.CSS?.supports?.("animation-timeline: scroll()")
+
+const SUNRISE_CSS = `
+.sunrise-group {
+    position: absolute; left: 0; top: 0; width: 100%;
+    height: ${SR_SPAN * 100}lvh;
+    will-change: transform;
+    transform: translate3d(0, var(--sr-from, 0px), 0);
+}
+.sunrise-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sunrise-dark, .sunrise-light { position: absolute; left: 0; width: 100%; height: 100lvh; }
+.sunrise-dark { bottom: 100%; background: rgb(5, 5, 5); }
+.sunrise-light { top: 100%; background: #fff; }
+@keyframes sunrise-shift {
+    from { transform: translate3d(0, var(--sr-from), 0); }
+    to { transform: translate3d(0, var(--sr-to), 0); }
+}
+@supports (animation-timeline: scroll()) {
+    .sunrise-group[data-native="true"] {
+        animation: sunrise-shift linear both;
+        animation-timeline: scroll(root block);
+        animation-range: var(--sr-s0) var(--sr-s1);
+    }
+}
+`
+
 const VERT_SHADER = `
 attribute vec2 aPos;
 void main() {
@@ -677,10 +717,10 @@ const FRAG_SHADER = `
 precision highp float;
 uniform sampler2D uLut;
 uniform vec2 uRes;
-uniform float uShift;
 uniform float uTopDepth;
 uniform float uBottomDepth;
-uniform float uSeed;
+uniform float uTop;
+uniform float uSpan;
 
 float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -690,11 +730,11 @@ float hash12(vec2 p) {
 
 void main() {
     float nx = gl_FragCoord.x / max(1.0, uRes.x);
-    float ny = 1.0 - (gl_FragCoord.y / max(1.0, uRes.y));
+    float t = 1.0 - (gl_FragCoord.y / max(1.0, uRes.y));
 
     float dx = nx - 0.5;
     float arc = 1.0 - 4.0 * dx * dx;
-    float vb = ny + uShift;
+    float vb = uTop + t * uSpan;
 
     float w = clamp((1.0 - vb) / 0.6, 0.0, 1.0);
     float mixFactor = w * w * (3.0 - 2.0 * w);
@@ -704,9 +744,8 @@ void main() {
     float u = (vv * 2047.0 + 0.5) / 2048.0;
     vec3 col = texture2D(uLut, vec2(u, 0.5)).rgb;
 
-    vec2 seedPos = gl_FragCoord.xy + vec2(uSeed * 137.0, uSeed * 293.0);
-    float r1 = hash12(seedPos);
-    float r2 = hash12(seedPos + vec2(17.3, 41.9));
+    float r1 = hash12(gl_FragCoord.xy);
+    float r2 = hash12(gl_FragCoord.xy + vec2(17.3, 41.9));
     float dither = (r1 + r2 - 1.0) * (3.2 / 255.0);
 
     gl_FragColor = vec4(clamp(col + dither, 0.0, 1.0), 1.0);
@@ -748,8 +787,7 @@ function buildLut() {
 }
 
 // Eases the drawn value toward the scroll-derived target with critically damped smoothing,
-// so irregular scroll sampling (momentum scroll on phones) turns into an even glide
-// instead of visible steps. Only runs frames while the value is still settling.
+// so irregular scroll sampling (older browsers without scroll timelines) becomes an even glide.
 function createFollower(draw, initial) {
     let cur = initial
     let target = initial
@@ -791,34 +829,51 @@ function createFollower(draw, initial) {
 }
 
 function SunriseTransition({ children, anchorRef, onHeaderTone }) {
+    const stageRef = useRef(null)
+    const groupRef = useRef(null)
     const canvasRef = useRef(null)
     const toneRef = useRef(onHeaderTone)
     toneRef.current = onHeaderTone
+    const [epoch, setEpoch] = useState(0)
     const { scrollY } = useScroll()
     const travel = useMotionValue(0)
 
+    // Scroll progress + native scroll-timeline geometry. All layout reads live in measure(),
+    // which only runs on resize / document size change, never per scroll tick.
     useEffect(() => {
+        const native = supportsScrollTimeline()
         let anchorTop = 0
         let vh = 0
 
-        // Layout reads happen here (resize / content size change), never per scroll tick.
-        // The canvas fills the 100lvh sticky box, so its height stays constant while mobile
-        // browser chrome collapses; window.innerHeight does not, which made progress jump.
         const measure = () => {
             const el = anchorRef?.current
-            vh = canvasRef.current?.clientHeight || window.innerHeight || 800
-            if (el) anchorTop = el.getBoundingClientRect().top + scrollY.get()
+            // 100lvh stage height is constant while mobile browser chrome collapses
+            vh = stageRef.current?.clientHeight || window.innerHeight || 800
+            if (el) anchorTop = el.getBoundingClientRect().top + window.scrollY
+
+            const g = groupRef.current
+            if (!g || !native) return
+            const s0 = anchorTop - vh
+            if (s0 > 0) {
+                g.style.setProperty("--sr-from", `${(SR_TOP - BASE_SHIFT) * vh}px`)
+                g.style.setProperty("--sr-to", `${(SR_TOP - (BASE_SHIFT + SPEED)) * vh}px`)
+                g.style.setProperty("--sr-s0", `${s0}px`)
+                g.style.setProperty("--sr-s1", `${s0 + vh * 1.5}px`)
+                g.setAttribute("data-native", "true")
+            } else {
+                g.removeAttribute("data-native")
+            }
         }
 
-        const update = () => {
+        const update = (y) => {
             if (!vh) return
-            const progress = (vh - (anchorTop - scrollY.get())) / (vh * 1.5)
+            const progress = (vh - (anchorTop - y)) / (vh * 1.5)
             travel.set(Math.max(0, Math.min(1, progress)))
         }
 
         const remeasure = () => {
             measure()
-            update()
+            update(window.scrollY)
         }
 
         remeasure()
@@ -836,15 +891,21 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
     }, [anchorRef, scrollY, travel])
 
     useEffect(() => {
+        const stage = stageRef.current
+        const group = groupRef.current
         const canvas = canvasRef.current
-        if (!canvas) return
+        if (!stage || !group || !canvas) return
 
         const lut = buildLut()
         const lutScale = (LUT_SIZE - 1) / V_MAX
+        const clamp01 = (n) => Math.min(1, Math.max(0, n))
+        const touch = !!window.matchMedia?.("(pointer: coarse)").matches
+        let disposed = false
         let lastLight = null
         let viewH = 0
+
         const measureView = () => {
-            viewH = canvas.clientHeight || window.innerHeight || 800
+            viewH = stage.clientHeight || window.innerHeight || 800
         }
         measureView()
 
@@ -865,30 +926,27 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
 
         const computeParams = (sv) => {
             const shift = BASE_SHIFT + SPEED * sv
-            const clamp01 = (n) => Math.min(1, Math.max(0, n))
             const bottomDepth = BEND * Math.sin(Math.PI * clamp01(sv / 0.75))
             const topDepth = TOP_BEND * Math.sin(Math.PI * clamp01((sv + 0.35) / 1.1))
             return { shift, bottomDepth, topDepth }
         }
 
-        let gl = null
-        try {
-            gl = canvas.getContext("webgl", {
-                alpha: false,
-                antialias: false,
-                depth: false,
-                stencil: false,
-                preserveDrawingBuffer: false,
-            })
-        } catch {
-            gl = null
-        }
+        // ------------------------------------------------------------ WebGL layer
+        const createGlLayer = () => {
+            let gl = null
+            try {
+                gl = canvas.getContext("webgl", {
+                    alpha: false,
+                    antialias: false,
+                    depth: false,
+                    stencil: false,
+                    preserveDrawingBuffer: false,
+                })
+            } catch {
+                gl = null
+            }
+            if (!gl) return null
 
-        let W = 0
-        let H = 0
-        let lastWidth = 0
-
-        if (gl) {
             const compile = (type, src) => {
                 const sh = gl.createShader(type)
                 gl.shaderSource(sh, src)
@@ -903,197 +961,255 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
             const vs = compile(gl.VERTEX_SHADER, VERT_SHADER)
             const fs = compile(gl.FRAGMENT_SHADER, FRAG_SHADER)
             const prog = vs && fs ? gl.createProgram() : null
+            if (!prog) return null
+            gl.attachShader(prog, vs)
+            gl.attachShader(prog, fs)
+            gl.linkProgram(prog)
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null
 
-            if (prog) {
-                gl.attachShader(prog, vs)
-                gl.attachShader(prog, fs)
-                gl.linkProgram(prog)
+            gl.useProgram(prog)
+            const buf = gl.createBuffer()
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf)
+            gl.bufferData(
+                gl.ARRAY_BUFFER,
+                new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+                gl.STATIC_DRAW
+            )
+            const aPos = gl.getAttribLocation(prog, "aPos")
+            gl.enableVertexAttribArray(aPos)
+            gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0)
+
+            const lutTex = gl.createTexture()
+            gl.activeTexture(gl.TEXTURE0)
+            gl.bindTexture(gl.TEXTURE_2D, lutTex)
+            gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, LUT_SIZE, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, lut)
+
+            const uRes = gl.getUniformLocation(prog, "uRes")
+            const uTopDepth = gl.getUniformLocation(prog, "uTopDepth")
+            const uBottomDepth = gl.getUniformLocation(prog, "uBottomDepth")
+            gl.uniform1i(gl.getUniformLocation(prog, "uLut"), 0)
+            gl.uniform1f(gl.getUniformLocation(prog, "uTop"), SR_TOP)
+            gl.uniform1f(gl.getUniformLocation(prog, "uSpan"), SR_SPAN)
+
+            const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS)
+            const limit = Math.min(dims[0], dims[1], 4096)
+            let W = 0
+            let lastW = 0
+            let lastH = 0
+
+            const resize = (force) => {
+                const vw = window.innerWidth || 1280
+                if (!force && W > 0 && Math.abs(vw - lastW) < 2 && Math.abs(viewH - lastH) < 2) return false
+                lastW = vw
+                lastH = viewH
+                const dpr = Math.min(window.devicePixelRatio || 1, touch ? TOUCH_MAX_DPR : 2)
+                const w = vw * dpr
+                const h = viewH * SR_SPAN * dpr
+                const k = Math.min(1, limit / Math.max(w, h))
+                W = Math.max(2, Math.round(w * k))
+                const H = Math.max(2, Math.round(h * k))
+                canvas.width = W
+                canvas.height = H
+                gl.viewport(0, 0, W, H)
+                gl.uniform2f(uRes, W, H)
+                return true
             }
 
-            if (prog && gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-                gl.useProgram(prog)
-                const buf = gl.createBuffer()
-                gl.bindBuffer(gl.ARRAY_BUFFER, buf)
-                gl.bufferData(
-                    gl.ARRAY_BUFFER,
-                    new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
-                    gl.STATIC_DRAW
-                )
-                const aPos = gl.getAttribLocation(prog, "aPos")
-                gl.enableVertexAttribArray(aPos)
-                gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0)
+            const onLost = (e) => e.preventDefault()
+            const onRestored = () => {
+                if (!disposed) setEpoch((n) => n + 1)
+            }
+            canvas.addEventListener("webglcontextlost", onLost)
+            canvas.addEventListener("webglcontextrestored", onRestored)
 
-                const lutTex = gl.createTexture()
-                gl.activeTexture(gl.TEXTURE0)
-                gl.bindTexture(gl.TEXTURE_2D, lutTex)
-                gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-                gl.texImage2D(
-                    gl.TEXTURE_2D,
-                    0,
-                    gl.RGB,
-                    LUT_SIZE,
-                    1,
-                    0,
-                    gl.RGB,
-                    gl.UNSIGNED_BYTE,
-                    lut
-                )
-
-                const uLut = gl.getUniformLocation(prog, "uLut")
-                const uRes = gl.getUniformLocation(prog, "uRes")
-                const uShift = gl.getUniformLocation(prog, "uShift")
-                const uTopDepth = gl.getUniformLocation(prog, "uTopDepth")
-                const uBottomDepth = gl.getUniformLocation(prog, "uBottomDepth")
-                const uSeed = gl.getUniformLocation(prog, "uSeed")
-
-                gl.uniform1i(uLut, 0)
-
-                const resize = (force = false) => {
-                    const vw = window.innerWidth || 1280
-                    const vh = window.innerHeight || 800
-                    if (!force && lastWidth && Math.abs(vw - lastWidth) < 2 && W > 0 && H > 0) return
-                    lastWidth = vw
-                    const maxDpr = window.matchMedia?.("(pointer: coarse)").matches ? TOUCH_MAX_DPR : 2
-                    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr)
-                    W = Math.max(2, Math.round(vw * dpr))
-                    H = Math.max(2, Math.round(vh * dpr))
-                    canvas.width = W
-                    canvas.height = H
-                    gl.viewport(0, 0, W, H)
-                    gl.uniform2f(uRes, W, H)
-                }
-
-                const draw = (sv) => {
-                    const { shift, bottomDepth, topDepth } = computeParams(sv)
-                    gl.uniform1f(uShift, shift)
+            return {
+                resize,
+                paint(topDepth, bottomDepth) {
                     gl.uniform1f(uTopDepth, topDepth)
                     gl.uniform1f(uBottomDepth, bottomDepth)
-                    gl.uniform1f(uSeed, sv * 12.345)
                     gl.drawArrays(gl.TRIANGLES, 0, 6)
-                    syncHeaderTone(shift)
-                }
-
-                resize(true)
-                draw(travel.get())
-
-                const follower = createFollower(draw, travel.get())
-                const unsubscribe = travel.on("change", (v) => follower.set(v))
-                const onResize = () => {
-                    measureView()
-                    resize(false)
-                    follower.jump(travel.get())
-                }
-                window.addEventListener("resize", onResize)
-
-                return () => {
-                    unsubscribe()
-                    follower.stop()
-                    window.removeEventListener("resize", onResize)
+                },
+                destroy() {
+                    canvas.removeEventListener("webglcontextlost", onLost)
+                    canvas.removeEventListener("webglcontextrestored", onRestored)
                     gl.deleteTexture(lutTex)
                     gl.deleteBuffer(buf)
                     gl.deleteProgram(prog)
                     gl.deleteShader(vs)
                     gl.deleteShader(fs)
-                }
+                },
             }
         }
 
-        let ctx = null
-        try {
-            ctx = canvas.getContext("2d", { alpha: false })
-        } catch {
-            ctx = null
-        }
-        if (!ctx) return
-
-        const noise = new Float32Array(4096)
-        for (let i = 0; i < noise.length; i++) noise[i] = (Math.random() - 0.5) * 2.4
-
-        let img = null
-        let arc = null
-
-        const resize = (force = false) => {
-            const vw = window.innerWidth || 1280
-            const vh = window.innerHeight || 800
-            if (!force && lastWidth && Math.abs(vw - lastWidth) < 2 && W > 0 && H > 0) return
-            lastWidth = vw
-            const currentRes = vw > 1200 ? 0.25 : RES
-            W = Math.max(2, Math.round(vw * currentRes))
-            H = Math.max(2, Math.round(vh * currentRes))
-            canvas.width = W
-            canvas.height = H
+        // ------------------------------------------------------------ 2D fallback layer
+        const create2dLayer = () => {
+            let ctx = null
             try {
-                img = ctx.createImageData(W, H)
-                for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255
+                ctx = canvas.getContext("2d", { alpha: false })
             } catch {
-                img = null
+                ctx = null
             }
-            arc = new Float32Array(W)
-            for (let x = 0; x < W; x++) {
-                const dx = x / (W - 1) - 0.5
-                arc[x] = 1 - 4 * dx * dx
+            if (!ctx) return null
+
+            const noise = new Float32Array(4096)
+            for (let i = 0; i < noise.length; i++) noise[i] = (Math.random() - 0.5) * 2.4
+
+            let img = null
+            let arc = null
+            let W = 0
+            let H = 0
+            let lastW = 0
+            let lastH = 0
+
+            const resize = (force) => {
+                const vw = window.innerWidth || 1280
+                if (!force && W > 0 && Math.abs(vw - lastW) < 2 && Math.abs(viewH - lastH) < 2) return false
+                lastW = vw
+                lastH = viewH
+                const res = vw > 1200 ? 0.25 : RES
+                W = Math.max(2, Math.round(vw * res))
+                H = Math.max(2, Math.round(viewH * SR_SPAN * res))
+                canvas.width = W
+                canvas.height = H
+                try {
+                    img = ctx.createImageData(W, H)
+                    for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255
+                } catch {
+                    img = null
+                }
+                arc = new Float32Array(W)
+                for (let x = 0; x < W; x++) {
+                    const dx = x / (W - 1) - 0.5
+                    arc[x] = 1 - 4 * dx * dx
+                }
+                return true
+            }
+
+            return {
+                resize,
+                paint(topDepth, bottomDepth) {
+                    if (!img || !arc) return
+                    const data = img.data
+                    let i = 0
+                    for (let y = 0; y < H; y++) {
+                        const vb = SR_TOP + (y / H) * SR_SPAN
+                        const w = clamp01((1.0 - vb) / 0.6)
+                        const mix = w * w * (3 - 2 * w)
+                        const depth = topDepth * mix + bottomDepth * (1 - mix)
+                        for (let x = 0; x < W; x++) {
+                            const vv = vb - depth * arc[x]
+                            const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
+                            const j = k * 3
+                            const n = noise[i & 4095]
+                            const o = i * 4
+                            data[o] = lut[j] + n
+                            data[o + 1] = lut[j + 1] + n
+                            data[o + 2] = lut[j + 2] + n
+                            i++
+                        }
+                    }
+                    ctx.putImageData(img, 0, 0)
+                },
+                destroy() {},
             }
         }
 
-        const draw = (sv) => {
-            if (!img || !arc) return
-            const { shift, bottomDepth, topDepth } = computeParams(sv)
-            const clamp01 = (n) => Math.min(1, Math.max(0, n))
-            const data = img.data
-            const off = Math.floor(sv * 4096) & 4095
-            let i = 0
+        const layer = createGlLayer() || create2dLayer()
+        if (!layer) return
 
-            for (let y = 0; y < H; y++) {
-                const vb = y / H + shift
-                const w = clamp01((1.0 - vb) / 0.6)
-                const mix = w * w * (3 - 2 * w)
-                const depth = topDepth * mix + bottomDepth * (1 - mix)
+        // ------------------------------------------------------------ painting (slow part)
+        // Only the subtle horizon "bend" depends on scroll in a way a transform can't express.
+        // It changes slowly, so repainting it at ~30Hz is invisible and keeps GPU commits sparse.
+        let drawnTop = NaN
+        let drawnBottom = NaN
+        let lastPaint = 0
+        let pending = null
+        let timer = 0
 
-                for (let x = 0; x < W; x++) {
-                    const vv = vb - depth * arc[x]
-                    const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
-                    const j = k * 3
-                    const n = noise[(i + off) & 4095]
-                    const o = i * 4
-
-                    data[o] = lut[j] + n
-                    data[o + 1] = lut[j + 1] + n
-                    data[o + 2] = lut[j + 2] + n
-                    i++
-                }
+        const paintNow = (topDepth, bottomDepth) => {
+            pending = null
+            drawnTop = topDepth
+            drawnBottom = bottomDepth
+            lastPaint = performance.now()
+            layer.paint(topDepth, bottomDepth)
+        }
+        const flush = () => {
+            timer = 0
+            if (pending) paintNow(pending[0], pending[1])
+        }
+        const requestPaint = (topDepth, bottomDepth) => {
+            if (Math.abs(topDepth - drawnTop) < 0.0008 && Math.abs(bottomDepth - drawnBottom) < 0.0008) {
+                pending = null
+                return
             }
+            const wait = BEND_REDRAW_MS - (performance.now() - lastPaint)
+            if (wait <= 0) {
+                paintNow(topDepth, bottomDepth)
+                return
+            }
+            pending = [topDepth, bottomDepth]
+            if (!timer) timer = setTimeout(flush, wait)
+        }
 
-            ctx.putImageData(img, 0, 0)
+        // ------------------------------------------------------------ per-frame (cheap part)
+        const isNative = () => group.getAttribute("data-native") === "true"
+
+        const render = (sv) => {
+            const { shift, bottomDepth, topDepth } = computeParams(sv)
+            if (!isNative()) {
+                group.style.transform = `translate3d(0, ${((SR_TOP - shift) * viewH).toFixed(2)}px, 0)`
+            }
+            requestPaint(topDepth, bottomDepth)
             syncHeaderTone(shift)
         }
 
-        resize(true)
-        draw(travel.get())
+        const follower = createFollower(render, travel.get())
 
-        const follower = createFollower(draw, travel.get())
-        const unsubscribe = travel.on("change", (v) => follower.set(v))
+        layer.resize(true)
+        render(travel.get())
+
+        const unsubscribe = travel.on("change", (v) => {
+            if (isNative()) render(v)
+            else follower.set(v)
+        })
+
         const onResize = () => {
             measureView()
-            resize(false)
+            if (layer.resize(false)) {
+                drawnTop = NaN
+                lastPaint = 0
+            }
             follower.jump(travel.get())
         }
         window.addEventListener("resize", onResize)
 
         return () => {
+            disposed = true
             unsubscribe()
             follower.stop()
+            clearTimeout(timer)
             window.removeEventListener("resize", onResize)
+            layer.destroy()
         }
-    }, [travel])
+    }, [travel, epoch])
 
     return (
         <div className="relative w-full">
-            <div className="sticky top-0 z-0 w-full h-[100lvh] overflow-hidden pointer-events-none bg-[var(--bg-dark)]">
-                <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 w-full h-full" />
+            <style>{SUNRISE_CSS}</style>
+            <div
+                ref={stageRef}
+                className="sticky top-0 z-0 w-full h-[100lvh] overflow-hidden pointer-events-none bg-[var(--bg-dark)]"
+            >
+                <div ref={groupRef} className="sunrise-group" aria-hidden="true">
+                    <div className="sunrise-dark" />
+                    <canvas ref={canvasRef} className="sunrise-canvas" />
+                    <div className="sunrise-light" />
+                </div>
             </div>
             <div className="relative z-10 -mt-[100lvh]">{children}</div>
         </div>
