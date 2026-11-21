@@ -647,6 +647,10 @@ const ServiceAccordionImage = ({ src, alt, active, depth = 1 }) => {
 }
 
 const RES = 0.5
+// Tunables for the mobile stutter fix. Raise SMOOTH_S for a softer glide (more trailing),
+// lower it for tighter tracking. Raise TOUCH_MAX_DPR if grain/banding is visible on phones.
+const GRADIENT_SMOOTH_S = 0.06
+const TOUCH_MAX_DPR = 1
 const BASE_SHIFT = -1.0
 const SPEED = 2.6
 const BEND = 0.1
@@ -741,6 +745,49 @@ function buildLut() {
     const out = new Uint8ClampedArray(LUT_SIZE * 3)
     for (let i = 0; i < out.length; i++) out[i] = src[i]
     return out
+}
+
+// Eases the drawn value toward the scroll-derived target with critically damped smoothing,
+// so irregular scroll sampling (momentum scroll on phones) turns into an even glide
+// instead of visible steps. Only runs frames while the value is still settling.
+function createFollower(draw, initial) {
+    let cur = initial
+    let target = initial
+    let raf = 0
+    let last = 0
+    const st = { v: 0 }
+
+    const step = (now) => {
+        const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000))
+        last = now
+        cur = smoothDamp(cur, target, st, GRADIENT_SMOOTH_S, dt)
+        const done = Math.abs(cur - target) < 0.00005 && Math.abs(st.v) < 0.0005
+        if (done) {
+            cur = target
+            st.v = 0
+        }
+        draw(cur)
+        raf = done ? 0 : requestAnimationFrame(step)
+    }
+
+    return {
+        set(v) {
+            target = v
+            if (!raf) {
+                last = performance.now()
+                raf = requestAnimationFrame(step)
+            }
+        },
+        jump(v) {
+            cur = target = v
+            st.v = 0
+            draw(v)
+        },
+        stop() {
+            if (raf) cancelAnimationFrame(raf)
+            raf = 0
+        },
+    }
 }
 
 function SunriseTransition({ children, anchorRef, onHeaderTone }) {
@@ -910,7 +957,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                     const vh = window.innerHeight || 800
                     if (!force && lastWidth && Math.abs(vw - lastWidth) < 2 && W > 0 && H > 0) return
                     lastWidth = vw
-                    const maxDpr = window.matchMedia?.("(pointer: coarse)").matches ? 1.5 : 2
+                    const maxDpr = window.matchMedia?.("(pointer: coarse)").matches ? TOUCH_MAX_DPR : 2
                     const dpr = Math.min(window.devicePixelRatio || 1, maxDpr)
                     W = Math.max(2, Math.round(vw * dpr))
                     H = Math.max(2, Math.round(vh * dpr))
@@ -933,18 +980,18 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                 resize(true)
                 draw(travel.get())
 
-                // travel only changes inside framer's per-frame scroll callback (or on resize),
-                // so draw immediately instead of queueing another rAF (that cost one frame of lag)
-                const unsubscribe = travel.on("change", (v) => draw(v))
+                const follower = createFollower(draw, travel.get())
+                const unsubscribe = travel.on("change", (v) => follower.set(v))
                 const onResize = () => {
                     measureView()
                     resize(false)
-                    draw(travel.get())
+                    follower.jump(travel.get())
                 }
                 window.addEventListener("resize", onResize)
 
                 return () => {
                     unsubscribe()
+                    follower.stop()
                     window.removeEventListener("resize", onResize)
                     gl.deleteTexture(lutTex)
                     gl.deleteBuffer(buf)
@@ -1027,16 +1074,18 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         resize(true)
         draw(travel.get())
 
-        const unsubscribe = travel.on("change", (v) => draw(v))
+        const follower = createFollower(draw, travel.get())
+        const unsubscribe = travel.on("change", (v) => follower.set(v))
         const onResize = () => {
             measureView()
             resize(false)
-            draw(travel.get())
+            follower.jump(travel.get())
         }
         window.addEventListener("resize", onResize)
 
         return () => {
             unsubscribe()
+            follower.stop()
             window.removeEventListener("resize", onResize)
         }
     }, [travel])
