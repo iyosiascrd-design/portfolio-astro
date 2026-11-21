@@ -801,13 +801,20 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
 
         let gl = null
         try {
-            gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false })
+            gl = canvas.getContext("webgl", {
+                alpha: false,
+                antialias: false,
+                depth: false,
+                stencil: false,
+                preserveDrawingBuffer: true,
+            })
         } catch {
             gl = null
         }
 
         let W = 0
         let H = 0
+        let lastWidth = 0
 
         if (gl) {
             const compile = (type, src) => {
@@ -873,10 +880,14 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
 
                 gl.uniform1i(uLut, 0)
 
-                const resize = () => {
+                const resize = (force = false) => {
+                    const vw = window.innerWidth || 1280
+                    const vh = window.innerHeight || 800
+                    if (!force && lastWidth && Math.abs(vw - lastWidth) < 2 && W > 0 && H > 0) return
+                    lastWidth = vw
                     const dpr = Math.min(window.devicePixelRatio || 1, 2)
-                    W = Math.max(2, Math.round((window.innerWidth || 1280) * dpr))
-                    H = Math.max(2, Math.round((window.innerHeight || 800) * dpr))
+                    W = Math.max(2, Math.round(vw * dpr))
+                    H = Math.max(2, Math.round(vh * dpr))
                     canvas.width = W
                     canvas.height = H
                     gl.viewport(0, 0, W, H)
@@ -888,12 +899,12 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                     gl.uniform1f(uShift, shift)
                     gl.uniform1f(uTopDepth, topDepth)
                     gl.uniform1f(uBottomDepth, bottomDepth)
-                    gl.uniform1f(uSeed, Math.random())
+                    gl.uniform1f(uSeed, sv * 12.345)
                     gl.drawArrays(gl.TRIANGLES, 0, 6)
                     syncHeaderTone(shift)
                 }
 
-                resize()
+                resize(true)
                 draw(travel.get())
 
                 let raf = 0
@@ -906,7 +917,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                 }
                 const unsubscribe = travel.on("change", schedule)
                 const onResize = () => {
-                    resize()
+                    resize(false)
                     draw(travel.get())
                 }
                 window.addEventListener("resize", onResize)
@@ -938,10 +949,14 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         let img = null
         let arc = null
 
-        const resize = () => {
-            const currentRes = window.innerWidth > 1200 ? 0.25 : RES
-            W = Math.max(2, Math.round(window.innerWidth * currentRes))
-            H = Math.max(2, Math.round(window.innerHeight * currentRes))
+        const resize = (force = false) => {
+            const vw = window.innerWidth || 1280
+            const vh = window.innerHeight || 800
+            if (!force && lastWidth && Math.abs(vw - lastWidth) < 2 && W > 0 && H > 0) return
+            lastWidth = vw
+            const currentRes = vw > 1200 ? 0.25 : RES
+            W = Math.max(2, Math.round(vw * currentRes))
+            H = Math.max(2, Math.round(vh * currentRes))
             canvas.width = W
             canvas.height = H
             try {
@@ -962,7 +977,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
             const { shift, bottomDepth, topDepth } = computeParams(sv)
             const clamp01 = (n) => Math.min(1, Math.max(0, n))
             const data = img.data
-            const off = (Math.random() * 4096) | 0
+            const off = Math.floor(sv * 4096) & 4095
             let i = 0
 
             for (let y = 0; y < H; y++) {
@@ -989,7 +1004,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
             syncHeaderTone(shift)
         }
 
-        resize()
+        resize(true)
         draw(travel.get())
 
         let raf = 0
@@ -1002,7 +1017,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         }
         const unsubscribe = travel.on("change", schedule)
         const onResize = () => {
-            resize()
+            resize(false)
             draw(travel.get())
         }
         window.addEventListener("resize", onResize)
