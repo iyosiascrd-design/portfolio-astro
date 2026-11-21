@@ -2,13 +2,14 @@
 // Shared type + scrim styles for every case study page.
 // Change a value here and all four case studies update together.
 
-// Section headings (Borscha, uppercase, tight)
+// Chapter headings (Borscha, uppercase). They are the H1 step of the heading scale in index.css
+// (54px desktop / 48px tablet / 40px mobile), so size, line-height and tracking all come from the tokens.
 export const CS_HEADING =
-  "[font-family:var(--font-display)] font-medium uppercase text-[clamp(40px,calc(6.04px+5.66vw),64px)] lg:text-[clamp(44px,4.233vw,80px)] leading-[1] tracking-[-0.04em] [text-wrap:balance] lg:[text-wrap:wrap]"
+  "[font-family:var(--font-display)] font-medium uppercase text-[length:var(--type-h1-size)] leading-[var(--type-h1-line-height)] tracking-[var(--type-h1-letter-spacing)] [text-wrap:balance] lg:[text-wrap:wrap]"
 
-// Body paragraphs (BDO Grotesk): fixed 18px at every width
+// Body paragraphs (BDO Grotesk): fixed 16px at every width
 export const CS_PARA =
-  "[font-family:var(--font-body)] font-normal text-[var(--text-light-body)] text-[18px] leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]"
+  "[font-family:var(--font-body)] font-normal text-[var(--text-light-body)] text-[16px] leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]"
 
 // Frame 1 hero paragraph (white): 20px at 375px wide scaling to 24px at 1440px wide
 export const CS_HERO_PARA =

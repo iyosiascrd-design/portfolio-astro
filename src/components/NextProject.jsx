@@ -11,12 +11,37 @@ export const PROJECTS = [
   { slug: "zhongshan", route: "/work/zhongshan", title: "Zhongshan", disciplines: ["Brand Identity", "3D Visuals"], year: "2026", hero: "/zhongshan-house.jpg" },
 ]
 
+// Rolling link text (same as the ticker titles on Home): each letter rolls up and out while its twin rolls in from below.
+const RollingText = ({ text, active }) => (
+  <span aria-label={text} className="relative inline-flex overflow-hidden align-top whitespace-pre">
+    {Array.from(text).map((ch, i) => {
+      const glyph = ch === " " ? "\u00A0" : ch
+      return (
+        <span
+          key={i}
+          aria-hidden="true"
+          className="relative inline-block"
+          style={{
+            transform: active ? "translateY(-100%)" : "translateY(0)",
+            transition: "transform 550ms cubic-bezier(0.25, 0.8, 0.25, 1)",
+            transitionDelay: `${i * 18}ms`,
+          }}
+        >
+          <span className="block">{glyph}</span>
+          <span className="absolute left-0 top-full block">{glyph}</span>
+        </span>
+      )
+    })}
+  </span>
+)
+
 const SHOW_MARGIN = "0px 0px -5% 0px"
 
 export default function NextProject({ current }) {
   const pageTransition = usePageTransition()
   const rowRef = useRef(null)
   const [visible, setVisible] = useState(false)
+  const [hovered, setHovered] = useState(null) // "prev" | "next" | null
 
   const index = PROJECTS.findIndex((p) => p.slug === current)
   const next = PROJECTS[(index + 1) % PROJECTS.length]
@@ -55,6 +80,10 @@ export default function NextProject({ current }) {
       <Link
         to={prev.route}
         onClick={(e) => go(e, prev.route)}
+        onPointerEnter={(e) => e.pointerType === "mouse" && setHovered("prev")}
+        onPointerLeave={() => setHovered(null)}
+        onFocus={(e) => e.currentTarget.matches(":focus-visible") && setHovered("prev")}
+        onBlur={() => setHovered(null)}
         className="group flex items-center text-[var(--text-light-primary)]"
       >
         {/* Thumbnail */}
@@ -69,11 +98,11 @@ export default function NextProject({ current }) {
         </div>
 
         <span
-          className={`block pb-[0.04em] [font-family:var(--font-heading)] font-medium uppercase text-[clamp(32px,3.3vw,64px)] leading-[1.02] tracking-[-0.04em] transition-transform duration-[700ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
+          className={`block pb-[0.04em] [font-family:var(--font-heading)] font-medium uppercase text-[clamp(32px,2.778vw,64px)] leading-[1.02] tracking-[-0.04em] transition-transform duration-[700ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
             visible ? "translate-y-0" : "translate-y-[110%]"
           }`}
         >
-          BACK
+          <RollingText text="BACK" active={hovered === "prev"} />
         </span>
       </Link>
 
@@ -81,14 +110,18 @@ export default function NextProject({ current }) {
       <Link
         to={next.route}
         onClick={(e) => go(e, next.route)}
+        onPointerEnter={(e) => e.pointerType === "mouse" && setHovered("next")}
+        onPointerLeave={() => setHovered(null)}
+        onFocus={(e) => e.currentTarget.matches(":focus-visible") && setHovered("next")}
+        onBlur={() => setHovered(null)}
         className="group flex items-center justify-end text-[var(--text-light-primary)]"
       >
         <span
-          className={`block pb-[0.04em] [font-family:var(--font-heading)] font-medium uppercase text-[clamp(32px,3.3vw,64px)] leading-[1.02] tracking-[-0.04em] transition-transform duration-[700ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
+          className={`block pb-[0.04em] [font-family:var(--font-heading)] font-medium uppercase text-[clamp(32px,2.778vw,64px)] leading-[1.02] tracking-[-0.04em] transition-transform duration-[700ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
             visible ? "translate-y-0" : "translate-y-[110%]"
           }`}
         >
-          NEXT
+          <RollingText text="NEXT" active={hovered === "next"} />
         </span>
 
         {/* Thumbnail */}

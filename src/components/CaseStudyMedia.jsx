@@ -326,6 +326,7 @@ export function Img({
   natural = false,
   placeholder = "",
   hideOnError = false,
+  children,
 }) {
   const wrapRef = useRef(null)
   const flow = FLOW_RE.test(className)
@@ -373,6 +374,7 @@ export function Img({
         mediaProps={mediaProps}
         className={`absolute inset-0 w-full h-full object-cover ${imgClassName}`}
       />
+      {children}
     </div>
   )
 }
@@ -398,6 +400,7 @@ export function SceneVideo({
   name = "scene",
   videoClassName = "absolute inset-0 w-full h-full",
   placeholder = "",
+  children,
 }) {
   const bg = placeholder && !/(^|\s)bg-/.test(className) ? placeholder : ""
   const videoRef = useRef(null)
@@ -419,7 +422,7 @@ export function SceneVideo({
     <div
       data-reveal
       data-fade
-      className={`relative w-full overflow-hidden ${bg} ${ratio} lg:aspect-auto ${className}`}
+      className={`relative w-full overflow-hidden ${children ? "isolate" : ""} ${bg} ${ratio} lg:aspect-auto ${className}`}
     >
       <style>{`
         .${name}-video::-webkit-media-controls,
@@ -445,6 +448,7 @@ export function SceneVideo({
         <source src={mp4} type="video/mp4" />
         <source src={src} type="video/webm" />
       </video>
+      {children}
     </div>
   )
 }

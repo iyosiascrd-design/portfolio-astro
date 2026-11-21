@@ -1,7 +1,6 @@
 // src/pages/WeyraCaseStudy.jsx
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { motion } from "framer-motion"
 import { useOutletContext } from "react-router-dom"
 import { ArrowDown } from "lucide-react"
 import gsap from "gsap"
@@ -12,21 +11,22 @@ import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageHeroReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
 import MobileImageGroups, { useIsMobile } from "../components/MobileImageGroups"
-import { Img, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
+import { Img as BaseImg, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
 import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
-import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM } from "../lib/caseStudyStyles.JS"
+import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM } from "../lib/caseStudyStyles.js"
 
 gsap.registerPlugin(ScrollTrigger)
 
-const FRAME_PB = "pb-0"
-
-const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
-const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
-
-const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] max-md:pb-[var(--page-pad)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
+/*
+  EDITORIAL LAYOUT SYSTEM (12-col desktop grid, 20px gutters, 1680px ceiling)
+  Same system as ZhongshanCaseStudy: horizontal sizes are fr/percent of the content width, vertical
+  anchors are fixed px (72 / 80 top, 20 bottom) or dvh, so every desktop spread is one full viewport tall.
+  - Standalone wide visuals alternate between CenteredInset pauses and full-bleed showcases.
+  - Paired visuals sit on the same 12-col grid with a 20px gutter.
+*/
 
 const PRELOAD_SRCS = [
   "/weyra-story.jpg",
@@ -47,14 +47,42 @@ const PRELOAD_SRCS = [
 
 const FRAME3_STORY_SRC = "/weyra-story.jpg"
 const FRAME3_PIN_SRC = "/weyra-pin.jpg"
+const FRAME5_COLOR_SRC = "/weyra-color.webm"
+const FRAME5_PHOTO_SRC = "/weyra-clothing.jpg"
 
 const HERO_TEXT =
   "I shaped Weyra’s identity to challenge outdated narratives about Ethiopian youth, uniting 100+ participants across government, media, civil society, and youth organizations."
 
-const FRAME5_COLOR_SRC = "/weyra-color.webm"
-const FRAME5_PHOTO_SRC = "/weyra-clothing.jpg"
+const MEDIA_PLACEHOLDER = "bg-[#ece7df]"
 
-const WEYRA_LETTER_SPACING_EM = -0.02
+// Shared editorial layout tokens
+const CONTAINER = "w-full max-w-[1680px] mx-auto"
+const HEADING_CLS = `${CS_HEADING} [text-wrap:balance] lg:-mt-[0.12em]`
+const PARA_CLS = `${CS_PARA} [text-wrap:pretty]`
+
+const Img = (props) => <BaseImg placeholder={MEDIA_PLACEHOLDER} hideOnError {...props} />
+
+// Note: Replace utility overrides once CaseStudyMedia's BaseImg exposes a native `fill` prop.
+const Fill = ({ className = "", ...props }) => (
+  <Img className={`!absolute !inset-0 !w-full !h-full !aspect-auto ${className}`} {...props} />
+)
+
+// Reusable centered pause frame for standalone wide visuals.
+function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, children, className = "" }) {
+  return (
+    <section
+      data-header-bg="light"
+      className={`w-full py-[48px] lg:min-h-[100dvh] lg:py-[clamp(72px,10dvh,120px)] flex flex-col lg:justify-center ${className}`}
+    >
+      <div
+        className={`relative w-full ${aspectClass} lg:mx-auto`}
+        style={{ maxWidth: `min(82%, calc(72dvh * ${ratio.toFixed(3)}))` }}
+      >
+        {children}
+      </div>
+    </section>
+  )
+}
 
 const WEYRA_RUN = [
   { id: "banner", ratio: 1472 / 942, ratioClass: "aspect-[1472/942]", bg: "dark",
@@ -92,45 +120,6 @@ export default function WeyraCaseStudy() {
   const heroRef = useRef(null)
   const [heroLoaded, setHeroLoaded] = useState(false)
 
-  useLayoutEffect(() => {
-    const hero = heroRef.current
-    const title = hero?.querySelector("h1")
-    if (!hero || !title) return
-
-    const mq = window.matchMedia("(max-width: 767px)")
-    let cancelled = false
-
-    const fit = () => {
-      if (cancelled) return
-      if (!mq.matches) {
-        title.style.removeProperty("font-size")
-        title.style.removeProperty("letter-spacing")
-        return
-      }
-      const cs = getComputedStyle(hero)
-      const avail = hero.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-      const ctx = document.createElement("canvas").getContext("2d")
-      ctx.font = '500 100px "Borscha"'
-      const w100 =
-        Array.from("WEYRA").reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) +
-        5 * WEYRA_LETTER_SPACING_EM * 100
-      if (!w100 || !avail) return
-      title.style.letterSpacing = `${WEYRA_LETTER_SPACING_EM}em`
-      title.style.fontSize = `${Math.floor((avail / w100) * 100 * 0.90)}px`
-    }
-
-    const load = document.fonts?.load
-      ? document.fonts.load('500 100px "Borscha"')
-      : Promise.resolve()
-    load.then(fit, fit)
-
-    window.addEventListener("resize", fit)
-    return () => {
-      cancelled = true
-      window.removeEventListener("resize", fit)
-    }
-  }, [])
-
   useEffect(() => {
     setHeaderLight(false)
     window.scrollTo(0, 0)
@@ -143,28 +132,27 @@ export default function WeyraCaseStudy() {
     if (prefersReducedMotion()) return
     if (!pageTransition?.isSharedEntry?.()) gsap.set("[data-hero-img]", { scale: 1.25 })
     gsap.set("[data-hero-meta]", { opacity: 0 })
-  }, [])
+  }, [pageTransition])
 
   useEffect(() => {
     const img = heroRef.current?.querySelector("[data-hero-img]")
     let cancelled = false
-    
+
     const settled = () => {
-      if (cancelled) return
-      setHeroLoaded(true)
+      if (!cancelled) setHeroLoaded(true)
     }
-    
+
     const decoded = img?.decode ? img.decode() : Promise.resolve()
     decoded.then(settled, settled)
-    const fallback = setTimeout(() => { if (!cancelled) setHeroLoaded(true) }, 4000)
-    
+    const fallback = setTimeout(settled, 4000)
+
     return () => {
       cancelled = true
       clearTimeout(fallback)
     }
   }, [])
 
-  // Hero image scales down in sync with the overlay lifting (heroReady = mask wipe start)
+  // Hero image scales down in sync with the overlay lifting
   useEffect(() => {
     if (!heroReady || prefersReducedMotion()) return
     const ctx = gsap.context(() => {
@@ -173,20 +161,29 @@ export default function WeyraCaseStudy() {
     return () => ctx.revert()
   }, [heroReady])
 
-  // Meta row fades in after the text has begun (ready = overlay mostly cleared)
+  // Meta row fade + unified GSAP scroll-arrow cue (respects prefers-reduced-motion)
   useEffect(() => {
     if (!ready || prefersReducedMotion()) return
     const ctx = gsap.context(() => {
       gsap.to("[data-hero-meta]", { opacity: 1, duration: 0.9, delay: 0.6, ease: "power2.out" })
+      gsap
+        .timeline({ repeat: -1, repeatDelay: 0.8 })
+        .fromTo(
+          "[data-scroll-arrow]",
+          { y: -8, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.42, ease: "power2.out" }
+        )
+        .to("[data-scroll-arrow]", { y: 10, opacity: 0, duration: 0.78, ease: "power2.in" })
     }, heroRef)
     return () => ctx.revert()
   }, [ready])
 
+  // Refresh ScrollTrigger when page settles or mobile/desktop gallery layout switches
   useEffect(() => {
     if (!ready) return
-    const t = gsap.delayedCall(1.3, () => ScrollTrigger.refresh())
+    const t = gsap.delayedCall(0.3, () => ScrollTrigger.refresh())
     return () => t.kill()
-  }, [ready])
+  }, [ready, isMobile])
 
   const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
   useIdlePreload(assetsToPreload, ready && heroLoaded)
@@ -194,10 +191,11 @@ export default function WeyraCaseStudy() {
 
   return (
     <div ref={rootRef} data-page-transition="" className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
+      {/* HERO */}
       <section
         data-header-bg="dark"
         ref={heroRef}
-        className="sticky top-0 z-0 w-full h-[100lvh] bg-[var(--bg-surface-dark)] overflow-hidden flex flex-col justify-end px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] pb-[calc(40px_+_100lvh_-_100dvh)] md:pb-[calc(var(--cs-gap)_+_100lvh_-_100dvh)] lg:pb-[calc(64px_+_100lvh_-_100dvh)]"
+        className="sticky top-0 z-0 w-full h-[100lvh] bg-[var(--bg-surface-dark)] overflow-hidden flex flex-col justify-end px-[var(--page-pad)] pb-[calc(40px_+_100lvh_-_100dvh)] md:pb-[calc(var(--cs-gap)_+_100lvh_-_100dvh)] lg:pb-[calc(64px_+_100lvh_-_100dvh)]"
       >
         <img
           data-hero-img
@@ -209,248 +207,294 @@ export default function WeyraCaseStudy() {
         />
         <div className={CS_HERO_SCRIM} aria-hidden="true" />
 
-        <div
-          data-hero-meta
-          className="absolute inset-x-[var(--page-pad)] top-[22.3%] z-10 flex justify-between md:relative md:inset-x-auto md:top-auto md:grid md:grid-cols-12 md:max-lg:gap-x-[12px] lg:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
-        >
-          <span className="md:col-span-6">Brand Identity</span>
-          <span className="max-md:hidden md:col-start-7 md:col-span-3">Completed 2023</span>
-          <span className="inline-flex items-center gap-[0.4em] md:col-start-10 md:col-span-3 md:justify-self-end">
-            Scroll Down
-            <motion.span
-              className="inline-flex"
-              animate={{ y: [-8, 0, 10], opacity: [0, 1, 0] }}
-              transition={{
-                duration: 1.2,
-                times: [0, 0.35, 1],
-                ease: "easeInOut",
-                repeat: Infinity,
-                repeatDelay: 0.8,
-              }}
-            >
-              <ArrowDown className="w-[1.1em] h-[1.1em]" strokeWidth={2.2} aria-hidden="true" />
-            </motion.span>
-          </span>
-        </div>
-
-        <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-end w-full text-white pt-0 md:pt-[100px] lg:pt-[180px]">
-          <div className="max-w-[min(660px,46vw)] max-md:max-w-none md:max-lg:max-w-[50vw] max-md:mb-[64px]">
-            <MaskRevealText
-              as="span"
-              active={ready}
-              delay={0.1}
-              stagger={0.06}
-              className="block text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold mb-[32px] [font-family:var(--font-display)]"
-            >
-              What I Did
-            </MaskRevealText>
-            <MaskRevealText
-              as="p"
-              active={ready}
-              mode="words"
-              delay={0.25}
-              stagger={0.05}
-              className={CS_HERO_PARA}
-            >
-              {HERO_TEXT}
-            </MaskRevealText>
+        <div className={`${CONTAINER} relative z-10`}>
+          <div
+            data-hero-meta
+            className="max-md:fixed max-md:inset-x-[var(--page-pad)] max-md:top-[22.3%] md:relative flex justify-between max-md:items-start md:grid md:grid-cols-12 md:max-lg:gap-x-[12px] lg:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
+          >
+            <span className="md:col-span-6">Brand Identity</span>
+            <span className="max-md:hidden md:col-start-7 md:col-span-3">Completed 2023</span>
+            <span className="inline-flex items-center gap-[0.4em] md:col-start-10 md:col-span-3 md:justify-self-end">
+              Scroll Down
+              <span data-scroll-arrow className="inline-flex">
+                <ArrowDown className="w-[1.1em] h-[1.1em]" strokeWidth={2.2} aria-hidden="true" />
+              </span>
+            </span>
           </div>
 
-          <MaskRevealText
-            as="h1"
-            mode="words"
-            active={ready}
-            delay={0}
-            className="CaseH1 uppercase !leading-[1.1] -my-[0.125em]"
-          >
-            Weyra
-          </MaskRevealText>
+          {/* Query container sits on the title row only, so the fixed meta row above keeps the viewport as its containing block */}
+          <div className="[container-type:inline-size] flex flex-col lg:flex-row justify-between lg:items-end w-full text-white pt-0 md:pt-[100px] lg:pt-[180px]">
+            <div className="max-w-[min(660px,46vw)] max-lg:max-w-none md:max-lg:max-w-[60vw] max-lg:mb-[64px]">
+              <MaskRevealText
+                as="span"
+                active={ready}
+                delay={0.1}
+                stagger={0.06}
+                className="block text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold mb-[32px] [font-family:var(--font-display)]"
+              >
+                What I Did
+              </MaskRevealText>
+              <MaskRevealText
+                as="p"
+                active={ready}
+                mode="words"
+                delay={0.25}
+                stagger={0.05}
+                className={`${CS_HERO_PARA} [text-wrap:pretty]`}
+              >
+                {HERO_TEXT}
+              </MaskRevealText>
+            </div>
+
+            <MaskRevealText
+              as="h1"
+              mode="words"
+              active={ready}
+              delay={0}
+              className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] whitespace-nowrap max-lg:tracking-[-0.02em] max-lg:text-[clamp(2.5rem,24cqw,7.5rem)]"
+            >
+              Weyra
+            </MaskRevealText>
+          </div>
         </div>
       </section>
 
-      <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
-        <div style={mobileGap} className="flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0">
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] lg:flex lg:flex-col lg:!pt-[calc(144px+2.2vw)] lg:min-h-[min(64.95vw,100dvh)]`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] lg:items-start max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[7vw] max-md:flex max-md:flex-col max-md:flex-1">
-              <h2 className={`${CS_HEADING} lg:col-span-7 lg:-mt-[0.12em] max-md:mb-auto max-md:pb-[32px]`}>
-                An Olive Branch<br className="max-md:hidden" />{" "}Reimagined
-              </h2>
-              <LineMaskText as="p" className={`${CS_PARA} max-md:w-full max-md:self-stretch md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
-                Weyra needed an identity that presented peacebuilding as something young people could actively shape, not just a response to conflict. I built a contemporary visual identity around the olive branch, giving the organization a clear, recognizable voice without relying on the familiar visual language of NGOs.
-              </LineMaskText>
-            </div>
-            <Media
-              src="/weyra-stage.webm"
-              alt="Weyra Stage Presentation"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover"
-            />
-          </section>
-
+      <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)]">
+        <div style={mobileGap} className={`${CONTAINER} flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0`}>
+          {/* 1. AN OLIVE BRANCH REIMAGINED: heading cols 1-5, copy cols 8-12, stage media fills the rest of the viewport */}
           <section
             data-header-bg="light"
-            className="w-full flex flex-col pt-0 pb-0 max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
+            className="w-full pt-[88px] lg:pt-[80px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
           >
-            <div style={mobileGap} className="grid grid-cols-[minmax(0,845fr)_minmax(0,607fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-2 portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-2 gap-[var(--page-pad)] md:gap-[16px] flex-1 min-h-0">
-              <Img
-                src={FRAME3_STORY_SRC}
-                alt="Olive Leaves + White Dove = Weyra"
-                ratio="aspect-auto"
-                imgClassName="min-[600px]:portrait:max-xl:object-contain min-[600px]:portrait:max-xl:!transform-none"
-                className="bg-[#d9f5c8] xl:min-h-[31.7vw]"
-              />
-              <div className="flex items-center justify-center max-md:items-start">
+            <div
+              style={mobileGap}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-[var(--page-pad)] md:gap-[16px] lg:gap-x-[20px] lg:gap-y-0 lg:grid-rows-[auto_minmax(0,1fr)] lg:flex-1"
+            >
+              <h2 className={`${HEADING_CLS} lg:col-start-1 lg:col-span-5`}>
+                An Olive Branch<br className="max-md:hidden" /> Reimagined
+              </h2>
+              <LineMaskText as="p" className={`${PARA_CLS} md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
+                Weyra needed an identity that presented peacebuilding as something young people could actively shape, not just a response to conflict. I built a contemporary visual identity around the olive branch, giving the organization a clear, recognizable voice without relying on the familiar visual language of NGOs.
+              </LineMaskText>
+
+              <div className="relative w-full aspect-square md:aspect-[3/2] lg:aspect-auto lg:col-span-12 lg:row-start-2 lg:mt-[7vw] lg:min-h-[26.5vw]">
+                <Media
+                  src="/weyra-stage.webm"
+                  alt="Weyra Stage Presentation"
+                  className="!absolute !inset-0 !w-full !h-full !aspect-auto object-cover"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* 2. OLIVE LEAVES + DOVE: 845fr | 607fr, pin mark centred in its column */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[88px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
+          >
+            <div
+              style={mobileGap}
+              className="grid grid-cols-1 lg:grid-cols-[845fr_607fr] lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0"
+            >
+              <div className="relative w-full aspect-[5/4] lg:aspect-auto lg:h-full bg-[#d9f5c8]">
+                <Fill
+                  src={FRAME3_STORY_SRC}
+                  alt="Olive Leaves + White Dove = Weyra"
+                  parallax={false}
+                  className="bg-[#d9f5c8]"
+                  imgClassName="md:max-lg:object-contain md:max-lg:!transform-none"
+                />
+              </div>
+              <div className="flex items-center justify-center">
                 <Img
                   src={FRAME3_PIN_SRC}
                   alt="Weyra olive wreath pin on a green cap"
                   ratio="aspect-[546/600]"
-                  className="!w-[57.6%] !aspect-[546/600] max-md:!w-auto max-md:!h-[70%] portrait:max-xl:!w-auto portrait:max-xl:!h-[70%]"
+                  className="!w-[70%] lg:!w-[57.6%] !aspect-[546/600]"
                 />
               </div>
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
-            <div style={mobileGap} className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
-              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
-                <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-auto max-md:pb-[32px]`}>
-                  A Clear Voice<br className="max-md:hidden" />{" "}Everywhere
-                </h2>
+          {/* 3. A CLEAR VOICE EVERYWHERE: bottom 20. Three equal squares, caption 32px beneath the phone mockup */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[88px] lg:pt-0 lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+          >
+            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[55px]`}>
+              A Clear Voice<br className="max-md:hidden" /> Everywhere
+            </h2>
 
-                <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-end md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-0 md:mb-[24px] lg:mb-[64px] max-md:mb-[24px]`}>
-                  Acumin Variable Concept suits signage, social media, and editorial layouts. It is geometric, clear, and approachable.
-                </LineMaskText>
-
-                <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col max-md:h-auto max-md:shrink-0 w-full aspect-square md:aspect-auto">
-                  <Media
-                    src="/weyra-type-treatment.webm"
-                    alt="Beyond Conflict Typography Treatment"
-                    className="w-full max-md:h-auto md:h-full object-cover"
-                  />
-                </div>
+            <div
+              style={mobileGap}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--page-pad)] md:gap-[16px] lg:gap-x-[20px] lg:items-start"
+            >
+              <div className="relative w-full aspect-square">
+                <Media
+                  src="/weyra-type-treatment.webm"
+                  alt="Beyond Conflict Typography Treatment"
+                  className="!absolute !inset-0 !w-full !h-full !aspect-auto object-cover"
+                />
               </div>
-              <div className="lg:row-start-3 lg:col-start-2 md:h-full md:min-h-0 flex flex-col aspect-square md:aspect-auto">
-                <Img
+
+              <div className="relative w-full aspect-square">
+                <Fill
                   src="/weyra-type.jpg"
                   alt="Acumin Variable Concept Specimen"
-                  ratio="aspect-square"
                   parallax={false}
                   fade
-                  className="w-full h-full object-cover"
+                  imgClassName="object-cover"
                 />
               </div>
-              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col tablet-hide aspect-square md:aspect-auto">
-                <Media
-                  src="/Weyra-iphone.webm"
-                  alt="Weyra Mobile App Mockup"
-                  className="w-full max-md:h-auto md:h-full object-cover"
-                />
+
+              <div className="flex flex-col gap-[24px] md:col-span-2 lg:col-span-1 lg:gap-[32px]">
+                <div className="relative w-full aspect-square tablet-hide">
+                  <Media
+                    src="/Weyra-iphone.webm"
+                    alt="Weyra Mobile App Mockup"
+                    className="!absolute !inset-0 !w-full !h-full !aspect-auto object-cover"
+                  />
+                </div>
+                <LineMaskText as="p" className={`${PARA_CLS} md:max-w-[520px] lg:max-w-none`}>
+                  Acumin Variable Concept suits signage, social media, and editorial layouts. It is geometric, clear, and approachable.
+                </LineMaskText>
               </div>
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col lg:flex lg:flex-col pb-0 ${CS_FULL_H}`}>
-            <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
-              Familiarly<br className="max-md:hidden" />{" "}Ethiopian
+          {/* 4. FAMILIARLY ETHIOPIAN: bottom 20. Palette cols 1-5, wristbands + copy cols 6-8, clothing cols 9-12, tops AND bottoms aligned */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[88px] lg:pt-0 lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+          >
+            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[47.5px]`}>
+              Familiarly<br className="max-md:hidden" /> Ethiopian
             </h2>
-            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
-              <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
-                <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
-                  Familiarly Ethiopian
-                </h2>
-                <LineMaskText as="p" className={`${CS_PARA} md:hidden self-start mb-[24px]`}>
-                  Familiar Ethiopian colors bring warmth and youth to the palette, keeping the visual language grounded and true to its subject.
-                </LineMaskText>
-                <div className="lg:col-start-1 lg:row-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
-                  <div className="w-full md:h-full isolate overflow-hidden bg-transparent">
-                    <Media
-                      src={FRAME5_COLOR_SRC}
-                      alt="Weyra colour palette"
-                      className="w-full max-md:h-auto max-md:aspect-[602/581] md:h-full object-cover scale-[1.012]"
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="cs-f5-wrap flex flex-col justify-between lg:col-start-2 lg:row-start-1 md:order-1 h-full max-md:contents">
-                <Img
-                  src="/weyra-wristbands.jpg"
-                  alt="Weyra Branded Wristbands"
-                  ratio="aspect-[357/345]"
-                  className="bg-[#0b1f14] lg:!aspect-[357/345] lg:shrink-0 w-full tablet-hide max-md:order-3"
+
+            <div
+              style={mobileGap}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[var(--page-pad)] md:gap-[16px] lg:gap-x-[20px] lg:items-stretch"
+            >
+              <div className="w-full isolate overflow-hidden bg-transparent md:col-span-2 lg:col-span-5">
+                <Media
+                  src={FRAME5_COLOR_SRC}
+                  alt="Weyra colour palette"
+                  className="w-full aspect-[602/581] object-cover object-left-top [clip-path:inset(1px)]"
                 />
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-0 md:mt-[12px] lg:mt-[var(--page-pad)] max-md:hidden`}>
+              </div>
+
+              <div className="flex flex-col justify-between gap-[24px] md:col-span-2 lg:col-span-3 lg:h-full">
+                <div className="relative w-full aspect-[357/345] bg-[#0b1f14] tablet-hide">
+                  <Fill src="/weyra-wristbands.jpg" alt="Weyra Branded Wristbands" parallax={false} />
+                </div>
+                <LineMaskText as="p" className={`${PARA_CLS} md:max-w-[520px] lg:max-w-[360px]`}>
                   Familiar Ethiopian colors bring warmth and youth to the palette, keeping the visual language grounded and true to its subject.
                 </LineMaskText>
               </div>
-              
-              <div className="lg:col-start-3 lg:row-start-1 md:order-3 flex flex-col h-full max-md:order-4">
-                <Img
+
+              <div className="relative w-full aspect-[1205/1162] md:col-span-2 lg:aspect-auto lg:col-span-4 bg-[#e1efdc]">
+                <Fill
                   src={FRAME5_PHOTO_SRC}
                   alt="Weyra branded clothing"
-                  ratio="aspect-none"
                   parallax={false}
-                  className="bg-[#e1efdc] w-full lg:h-full object-cover" imgClassName="lg:object-top"
+                  className="bg-[#e1efdc]"
+                  imgClassName="lg:object-top"
                 />
               </div>
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 ${CS_FRAME_PT} lg:h-[100dvh] lg:pb-0 lg:flex lg:flex-col`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
-              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
-                <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
-                  One Identity<br className="max-md:hidden" />{" "}In Harmony
-                </h2>
-                <Img src="/weyra-badge.jpg" alt="Weyra Event Lanyard" ratio="aspect-[726/700]" className="max-md:h-auto lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
+          {/* 5. ONE IDENTITY IN HARMONY: bottom 20. Two equal cells */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[88px] lg:pt-0 lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+          >
+            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[47.5px]`}>
+              One Identity<br className="max-md:hidden" /> In Harmony
+            </h2>
+            <div
+              style={mobileGap}
+              className="grid grid-cols-1 md:grid-cols-2 gap-[var(--page-pad)] md:gap-[16px] lg:gap-x-[20px]"
+            >
+              <div className="relative w-full aspect-[726/700]">
+                <Fill src="/weyra-badge.jpg" alt="Weyra Event Lanyard" />
               </div>
-              <Img src="/weyra-tote.jpg" alt="Weyra Branded Tote Bag" ratio="aspect-[726/700]" className="lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
+              <div className="relative w-full aspect-[726/700]">
+                <Fill src="/weyra-tote.jpg" alt="Weyra Branded Tote Bag" />
+              </div>
             </div>
           </section>
+
+          {/* RUN: Mobile grouped gallery vs Desktop editorial spreads */}
+          {isMobile ? (
+            <MobileImageGroups items={WEYRA_RUN} padVar="--page-pad" />
+          ) : (
+            <>
+              {/* 6. OUTDOOR BANNERS INSET */}
+              <CenteredInset aspectClass="aspect-[1472/942]" ratio={1472 / 942}>
+                <Fill
+                  src="/weyra-banner.jpg"
+                  alt="Voices That Build Outdoor Banners"
+                  className="bg-black"
+                  imgClassName="max-md:object-[50%_50%]"
+                />
+              </CenteredInset>
+
+              {/* 7. MAGAZINE + PROFILE: two tall cells filling the viewport */}
+              <section
+                data-header-bg="light"
+                className="w-full pt-[88px] lg:pt-[72px] lg:pb-[20px] lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px] lg:gap-x-[20px]"
+              >
+                <div className="relative w-full aspect-[722/942] lg:aspect-auto lg:h-full">
+                  <Fill src="/weyra-magazine.jpg" alt="Empowering Youth For Peace Report" />
+                </div>
+                <div className="relative w-full aspect-[722/942] lg:aspect-auto lg:h-full">
+                  <Fill src="/weyra-profile.jpg" alt="Weyra Social Media Layout" />
+                </div>
+              </section>
+
+              {/* 8. MOBILE STORIES: full-viewport showcase */}
+              <section data-header-bg="light" className="w-full lg:h-[100dvh] lg:pt-[72px] lg:pb-[20px] flex flex-col">
+                <div
+                  data-reveal
+                  className="relative w-full aspect-[4/3] lg:aspect-auto lg:flex-1 lg:min-h-0 isolate overflow-hidden bg-[#d9f5c8]"
+                >
+                  <LazyImg
+                    src="/weyra-phones.jpg"
+                    alt="Weyra Mobile Stories"
+                    className="absolute inset-0 block w-full h-full object-cover will-change-transform"
+                  />
+                </div>
+              </section>
+
+              {/* 9. POSTER + BACKBOARD: two equal cells centred in the viewport */}
+              <section
+                data-header-bg="light"
+                className="w-full pt-[88px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] grid grid-cols-1 md:grid-cols-2 gap-[var(--page-pad)] md:gap-[16px] lg:gap-x-[20px] lg:items-center lg:content-center"
+              >
+                <div className="relative w-full aspect-[722/688]">
+                  <Fill src="/weyra-poster.jpg" alt="Youth holding Weyra Poster" />
+                </div>
+                <div className="relative w-full aspect-[722/688]">
+                  <Fill src="/weyra-board.jpg" alt="Branded Basketball Backboard" />
+                </div>
+              </section>
+
+              {/* 10. EVENT FLAGS: closing showcase, leaves room for the next-project peek */}
+              <section data-header-bg="dark" className="w-full pb-[var(--page-pad)] lg:pt-[72px] lg:pb-[17.4px]">
+                <Img
+                  src="/weyra-flags.jpg"
+                  alt="Weyra Outdoor Event Flags"
+                  ratio="aspect-[1472/962]"
+                  className="max-md:h-auto lg:h-[calc(100dvh-258px)]"
+                  imgClassName="max-md:object-[50%_50%]"
+                />
+              </section>
+            </>
+          )}
+
+          <NextProject current="weyra" />
         </div>
-
-        {isMobile && <MobileImageGroups items={WEYRA_RUN} padVar="--page-pad" />}
-
-        {!isMobile && (
-        <>
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
-          <Img
-            src="/weyra-banner.jpg"
-            alt="Voices That Build Outdoor Banners"
-            ratio="aspect-[1472/942]"
-            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
-          <Img src="/weyra-magazine.jpg" alt="Empowering Youth For Peace Report" ratio="aspect-[722/942]" />
-          <Img src="/weyra-profile.jpg" alt="Weyra Social Media Layout" ratio="aspect-[722/942]" />
-        </section>
-
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} md:landscape:h-[100dvh]`}>
-          <div data-reveal className="relative w-full max-md:aspect-square md:landscape:h-full isolate overflow-hidden bg-[#d9f5c8]">
-            <LazyImg
-              src="/weyra-phones.jpg"
-              alt="Weyra Mobile Stories"
-              className="block w-full h-auto max-md:absolute max-md:inset-0 max-md:h-full max-md:object-contain max-md:scale-[1.35] md:landscape:h-full md:landscape:object-cover will-change-transform"
-            />
-          </div>
-        </section>
-
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[74.1vh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
-          <Img src="/weyra-poster.jpg" alt="Youth holding Weyra Poster" ratio="aspect-[722/688]" />
-          <Img src="/weyra-board.jpg" alt="Branded Basketball Backboard" ratio="aspect-[722/688]" />
-        </section>
-
-        <section data-header-bg="dark" className="w-full">
-          <Img
-            src="/weyra-flags.jpg"
-            alt="Weyra Outdoor Event Flags"
-            ratio="aspect-[1472/962]"
-            className="max-md:h-auto lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-        </>
-        )}
-
-        <NextProject current="weyra" />
       </main>
     </div>
   )

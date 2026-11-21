@@ -154,6 +154,67 @@ function Roll({ children, text, className = "", hover = true }) {
 }
 
 /* ------------------------------------------------------------------
+   RollText: the same per-letter rolling link text used on the Home ticker titles.
+   Each letter rolls up and out while its twin rolls in from below, 18ms apart.
+   Hover is read from the closest <a> / <button> (mouse + keyboard focus), so the
+   whole link is the hover target. Put the font classes on className.
+------------------------------------------------------------------- */
+
+function RollText({ text, className = "" }) {
+    const wrapRef = useRef(null)
+    const [active, setActive] = useState(false)
+
+    useEffect(() => {
+        const host = wrapRef.current?.closest("a,button")
+        if (!host) return
+        const onEnter = (e) => {
+            if (e.pointerType === "mouse") setActive(true)
+        }
+        const onLeave = () => setActive(false)
+        const onFocus = () => {
+            if (host.matches(":focus-visible")) setActive(true)
+        }
+        host.addEventListener("pointerenter", onEnter)
+        host.addEventListener("pointerleave", onLeave)
+        host.addEventListener("focus", onFocus)
+        host.addEventListener("blur", onLeave)
+        return () => {
+            host.removeEventListener("pointerenter", onEnter)
+            host.removeEventListener("pointerleave", onLeave)
+            host.removeEventListener("focus", onFocus)
+            host.removeEventListener("blur", onLeave)
+        }
+    }, [])
+
+    return (
+        <span
+            ref={wrapRef}
+            aria-label={text}
+            className={`relative inline-flex overflow-hidden align-top whitespace-pre ${className}`}
+        >
+            {Array.from(text).map((ch, i) => {
+                const glyph = ch === " " ? "\u00A0" : ch
+                return (
+                    <span
+                        key={i}
+                        aria-hidden="true"
+                        className="relative inline-block"
+                        style={{
+                            transform: active ? "translateY(-100%)" : "translateY(0)",
+                            transition: "transform 550ms cubic-bezier(0.25, 0.8, 0.25, 1)",
+                            transitionDelay: `${i * 18}ms`,
+                        }}
+                    >
+                        <span className="block">{glyph}</span>
+                        <span className="absolute left-0 top-full block">{glyph}</span>
+                    </span>
+                )
+            })}
+        </span>
+    )
+}
+
+/* ------------------------------------------------------------------
    FitWidth: scales its text so it spans the full width of its box.
    Measures the text at 100px, then sets the font size that makes it
    exactly as wide as the box. Re-fits when the box resizes (the menu
@@ -728,14 +789,14 @@ export default function Header({ opacity = 1, scrollToTarget }) {
                                 onClick={(e) => handleNavClick(e, target)}
                                 className="block w-fit cursor-pointer pointer-events-auto"
                             >
-                                <Roll className={NAV_TEXT}>{desktop}</Roll>
+                                <RollText className={NAV_TEXT} text={desktop} />
                             </a>
                         ))}
                         <a
                             href={GET_IN_TOUCH.href}
                             className="block w-fit cursor-pointer pointer-events-auto"
                         >
-                            <Roll className={NAV_TEXT}>{GET_IN_TOUCH.label}</Roll>
+                            <RollText className={NAV_TEXT} text={GET_IN_TOUCH.label} />
                         </a>
                     </nav>
 

@@ -17,6 +17,27 @@ export const REVEAL = {
   maxDelay: 0.32,         // Cap delay for multi-item batches
   ease: "power2.out",     // Keeps movement visible throughout the duration instead of front-loading it
   rootMargin: "0px 0px -16% 0px", // Fires once the frame is clearly inside the viewport
+
+  // Clip-path wipe (images / video). Text blocks keep the slide-up above.
+  wipeFrom: "inset(0% 0% 100% 0%)", // fully hidden; the wipe reveals downward from the top edge
+  wipeTo: "inset(0% 0% 0% 0%)",
+  wipeDuration: 1.15,
+  wipeEase: "power3.inOut",
+}
+
+// <el data-reveal>            auto: wipe if it holds only media, slide-up if it holds text
+// <el data-reveal="wipe">     force the clip-path wipe
+// <el data-reveal="slide">    force the slide-up
+const canClip = () =>
+  typeof CSS !== "undefined" && !!CSS.supports?.("clip-path", "inset(0% 0% 0% 0%)")
+
+const usesWipe = (el) => {
+  if (!canClip()) return false
+  const mode = el.getAttribute("data-reveal")
+  if (mode === "wipe") return true
+  if (mode === "slide") return false
+  const hasMedia = el.matches("img, video") || !!el.querySelector("img, video")
+  return hasMedia && el.textContent.trim() === ""
 }
 
 export const prefersReducedMotion = () =>
@@ -32,7 +53,11 @@ export function useCaseStudyReveal(rootRef) {
     const ctx = gsap.context(() => {
       const items = gsap.utils.toArray("[data-reveal]")
 
-      gsap.set(items, { y: REVEAL.rise, opacity: 0, force3D: true })
+      const wipeItems = items.filter(usesWipe)
+      const slideItems = items.filter((el) => !wipeItems.includes(el))
+
+      gsap.set(slideItems, { y: REVEAL.rise, opacity: 0, force3D: true })
+      gsap.set(wipeItems, { clipPath: REVEAL.wipeFrom, y: 0, opacity: 1 })
 
       let pending = []
       let flushTimer = null
@@ -70,6 +95,22 @@ export function useCaseStudyReveal(rootRef) {
 
           const rawDelay = rowIdx * REVEAL.rowStagger + colIdx * REVEAL.colStagger
           const delay = Math.min(rawDelay, REVEAL.maxDelay)
+
+          if (wipeItems.includes(el)) {
+            gsap.fromTo(
+              el,
+              { clipPath: REVEAL.wipeFrom },
+              {
+                clipPath: REVEAL.wipeTo,
+                duration: REVEAL.wipeDuration,
+                ease: REVEAL.wipeEase,
+                delay,
+                overwrite: "auto",
+                clearProps: "clipPath", // leave no inline clip-path once revealed
+              }
+            )
+            return
+          }
 
           gsap.fromTo(
             el,

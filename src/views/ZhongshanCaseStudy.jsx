@@ -1,42 +1,45 @@
 // src/pages/ZhongshanCaseStudy.jsx
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { motion } from "framer-motion"
 import { useOutletContext } from "react-router-dom"
 import { ArrowDown } from "lucide-react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 
 import MaskRevealText from "../components/MaskRevealText"
-import LineMaskText from "../components/LineMaskText"
 import { usePageReady, usePageHeroReady, usePageTransition } from "../components/PageTransitionOverlay"
 import NextProject from "../components/NextProject"
-import MobileImageGroups, { useIsMobile } from "../components/MobileImageGroups"
-import { Img as BaseImg, SceneVideo, LazyImg, HERO_IMG_PROPS, Media } from "../components/CaseStudyMedia"
+import { useIsMobile } from "../components/MobileImageGroups"
+import { Img as BaseImg, Media, isVideo, HERO_IMG_PROPS } from "../components/CaseStudyMedia"
 import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
-import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM, CS_HERO_SCRIM_DIM } from "../lib/caseStudyStyles.JS"
+import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM } from "../lib/caseStudyStyles.js"
 
 gsap.registerPlugin(ScrollTrigger)
 
-const FRAME_PB = "pb-0"
+/*
+  EDITORIAL LAYOUT SYSTEM (12-col desktop grid, 20px gutters, 1680px ceiling)
+  Calibrated to the 1512 x 982 desktop spec (1472px inner width with 20px side padding).
+  Column spans used below: 1 col = 104.33px, so 3 cols = 353, 4 = 477, 5 = 602, 6 = 726, 8 = 975.
+*/
 
-const CS_FRAME_MIN_H = "lg:min-h-[max(64.95vw,min(100dvh,75vw))]"
-const CS_LG_FRAME = "lg:h-[100dvh] lg:pt-[calc(var(--header-h,64px)+var(--page-pad))] lg:pb-0"
-const CS_FRAME_PT = "pt-[96px] lg:pt-[144px]"
+const HERO_POS_MOBILE = "50% 30%"
+const HERO_POS_DESKTOP = "50% 50%"
 
-const CS_FULL_H = "max-md:min-h-[100svh] max-md:pt-[calc(var(--header-h,64px)+var(--page-pad))] max-md:pb-[var(--page-pad)] md:h-[100svh] md:pt-[calc(var(--header-h,64px)+var(--page-pad))] md:pb-[var(--page-pad)]"
+const HERO_TITLE = "Zhongshan"
+const HERO_YEAR = "Completed 2025"
+const HERO_TEXT =
+  "Turning the complexity of sourcing an entire building into a refined architectural brand that feels clear, tangible and trustworthy."
 
 const ASSETS = {
   hero: "/zhongshan-house.jpg",
   suppliers: "/zhongshan-logo-animation.webm",
   logoConstruction: "/zhongshan-logo-construction.jpg",
-  logoBrass: "/zhongshan-brass.jpg",
-  typeSpecimen: "/zhongshan-type.jpg",
+  book: "/zhongshan-book.jpg",
   font: "/zhongshan-font.jpg",
-  typeCard: "/zhongshan-sticker.jpg",
+  brass: "/zhongshan-brass.jpg",
   typeTablet: "/zhongshan-type-tablet.webm",
   color: "/zhongshan-color.webm",
   colorTexture: "/zhongshan-color-texture.jpg",
@@ -45,7 +48,6 @@ const ASSETS = {
   cardboard: "/zhongshan-cardboard.jpg",
   screen: "/zhongshan-screen.jpg",
   poster: "/zhongshan-poster.jpg",
-  signage: "/zhongshan-sign.jpg",
   folder: "/zhongshan-folder.jpg",
   boxes: "/zhongshan-boxes.jpg",
   cargo: "/zhongshan-cargo.jpg",
@@ -59,53 +61,118 @@ const ASSETS = {
   living: "/zhongshan-living.jpg",
 }
 
-const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
+const TYPE_CARD_LIVE_TEXT = false
 
-const HERO_TEXT =
-  "Zhongshan needed an identity that made sourcing from China feel like a confident investment."
+const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
 
 const MEDIA_PLACEHOLDER = "bg-[#ece7df]"
 
+// Shared editorial layout tokens
+const CONTAINER = "w-full max-w-[1680px] mx-auto"
+const HEADING_CLS = `${CS_HEADING} [text-wrap:balance] max-md:![font-size:var(--type-h2-size)] md:![font-size:var(--type-case-h2-size)] max-md:leading-none max-md:tracking-[-0.03em] lg:-mt-[0.12em]`
+const PARA_CLS = `${CS_PARA} [text-wrap:pretty] ![font-size:var(--type-case-body-size)] max-md:leading-[1.45] max-md:tracking-[-0.02em]`
+
+// Grid whose single row fills the section height on desktop (so images can use h-full instead of an aspect ratio)
+const FILL_GRID =
+  "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0"
+// Plain grid sized by its content
+const FLOW_GRID = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px]"
+
 const Img = (props) => <BaseImg placeholder={MEDIA_PLACEHOLDER} hideOnError {...props} />
 
-const Video = (props) => (
-  <SceneVideo
-    name="zhongshan"
-    placeholder={MEDIA_PLACEHOLDER}
-    videoClassName="absolute inset-y-0 -left-[3%] w-[106%] max-w-none h-full"
-    {...props}
-  />
+const Fill = ({ className = "", ...props }) => (
+  <Img className={`!absolute !inset-0 !w-full !h-full !aspect-auto ${className}`} {...props} />
 )
 
-const ZHONGSHAN_LETTER_SPACING_EM = -0.02
+// Reusable centered pause frame for standalone wide visuals.
+// `frame` = exact desktop size from the spec ({ w, h } at 1512 x 982, 1472px content width).
+function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, frame, children, className = "", mobileAspect = "" }) {
+  const lg = frame
+    ? {
+        "--inset-lg-w": `min(${((frame.w / 1472) * 100).toFixed(3)}%, calc(${((frame.h / 982) * 100).toFixed(3)}dvh * ${(frame.w / frame.h).toFixed(4)}))`,
+        "--inset-lg-ar": `${frame.w} / ${frame.h}`,
+      }
+    : null
+  return (
+    <section
+      data-header-bg="light"
+      className={`w-full py-[48px] max-md:py-[36px] lg:min-h-[100dvh] lg:py-[100px] flex flex-col lg:justify-center ${className}`}
+    >
+      <div
+        className={`relative w-full ${aspectClass} ${mobileAspect} max-md:!max-w-none lg:mx-auto ${
+          frame ? "lg:![max-width:var(--inset-lg-w)] lg:![aspect-ratio:var(--inset-lg-ar)]" : ""
+        }`}
+        style={{ maxWidth: `min(82%, calc(72dvh * ${ratio.toFixed(3)}))`, ...lg }}
+      >
+        {children}
+      </div>
+    </section>
+  )
+}
 
-const ZHONGSHAN_RUN_1 = [
-  { id: "screen", ratio: 1472 / 867, ratioClass: "aspect-[1472/867]", bg: "dark",
-    render: (p) => <Img src={ASSETS.screen} alt="Seamless Sourcing exhibition screen with a glass shipping container" ratio={p.ratio} className={`${p.className} bg-black`} imgClassName="max-md:object-[50%_50%]" /> },
-  { id: "poster", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
-    render: (p) => <Img src={ASSETS.poster} alt="Zhongshan poster in a timber-panelled lobby: A home is only as good as its details" ratio={p.ratio} className={p.className} /> },
-  { id: "signage", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
-    render: (p) => <Img src={ASSETS.signage} alt="Zhongshan teal logo signage on a dark panel against a blue sky" ratio={p.ratio} className={p.className} /> },
-  { id: "folder", ratio: 1472 / 867, ratioClass: "aspect-[1472/867]", bg: "dark",
-    render: (p) => <Img src={ASSETS.folder} alt="Zhongshan One Stop Sourcing brochure and 2026 Collection catalogue" ratio={p.ratio} className={`${p.className} bg-black`} imgClassName="max-md:object-[50%_50%]" /> },
-  { id: "boxes", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
-    render: (p) => <Img src={ASSETS.boxes} alt="Navy Zhongshan packaging boxes on a warehouse cart" ratio={p.ratio} className={p.className} /> },
-  { id: "cargo", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
-    render: (p) => <Img src={ASSETS.cargo} alt="Zhongshan branded shipping container on a truck" ratio={p.ratio} className={p.className} /> },
-]
+function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover" }) {
+  const boxRef = useRef(null)
+  const [started, setStarted] = useState(false)
 
-const ZHONGSHAN_RUN_2 = [
-  { id: "floorplan", ratio: 1476 / 867, ratioClass: "aspect-[1476/867]", bg: "light",
-    render: (p) => <Video src={ASSETS.floorplan} label="Isometric 3D floorplan of the apartment" ratio={p.ratio} className={`${p.className} bg-[#aeaaa9]`} /> },
-  { id: "doors", ratio: 1476 / 867, ratioClass: "aspect-[1476/867]", bg: "light",
-    render: (p) => <Img src={ASSETS.doors} alt="Three interior doors in grey, walnut and oak finishes" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
-  { id: "bathroom", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
-    render: (p) => <Img src={ASSETS.bathroom} alt="Floating timber and marble bathroom vanity with backlit mirrors and brass sconces" ratio={p.ratio} className={p.className} /> },
-  { id: "kitchen", ratio: 726 / 867, ratioClass: "aspect-[726/867]", bg: "light",
-    render: (p) => <Img src={ASSETS.kitchen} alt="Oak kitchen with stainless island, burr wood stool and amber pendant light" ratio={p.ratio} className={p.className} /> },
-  { id: "living", ratio: 1476 / 798, ratioClass: "aspect-[1476/798]", bg: "dark",
-    render: (p) => <Img src={ASSETS.living} alt="Furniture vignette with a curved sofa, lounge chairs and timber screens on a navy stage" ratio={p.ratio} className={p.className} imgClassName="max-md:object-[50%_50%]" /> },
-]
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setStarted(true)
+      return
+    }
+
+    let warmIo
+    if (!isVideo(src)) {
+      warmIo = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            const warm = new Image()
+            warm.decoding = "async"
+            warm.src = src
+            warmIo.disconnect()
+          }
+        },
+        { rootMargin: "100% 0px" }
+      )
+      warmIo.observe(el)
+    }
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStarted(true)
+          io.disconnect()
+        }
+      },
+      { threshold, rootMargin: "120px 0px" }
+    )
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      warmIo?.disconnect()
+    }
+  }, [src, threshold])
+
+  return (
+    <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${className}`}>
+      {started && (
+        <Media
+          src={src}
+          alt={alt}
+          lazy={false}
+          className={
+            fit === "contain"
+              ? "absolute inset-0 w-full h-full max-w-none"
+              : "absolute -inset-px w-[calc(100%+2px)] h-[calc(100%+2px)] max-w-none object-cover scale-[1.012]"
+          }
+          {...(fit === "contain"
+            ? { imgClassName: "w-full h-full object-contain", mediaProps: { style: { objectFit: "contain", objectPosition: "center" } } }
+            : {})}
+        />
+      )}
+    </div>
+  )
+}
 
 export default function ZhongshanCaseStudy() {
   const outletCtx = useOutletContext()
@@ -113,7 +180,6 @@ export default function ZhongshanCaseStudy() {
   const heroFade = outletCtx?.heroFade
 
   const isMobile = useIsMobile()
-  const mobileGap = isMobile ? { gap: "var(--page-pad)" } : undefined
   const ready = usePageReady()
   const heroReady = usePageHeroReady()
   const pageTransition = usePageTransition()
@@ -121,45 +187,6 @@ export default function ZhongshanCaseStudy() {
   const rootRef = useRef(null)
   const heroRef = useRef(null)
   const [heroLoaded, setHeroLoaded] = useState(false)
-
-  useLayoutEffect(() => {
-    const hero = heroRef.current
-    const title = hero?.querySelector("h1")
-    if (!hero || !title) return
-
-    const mq = window.matchMedia("(max-width: 1023px)")
-    let cancelled = false
-
-    const fit = () => {
-      if (cancelled) return
-      if (!mq.matches) {
-        title.style.removeProperty("font-size")
-        title.style.removeProperty("letter-spacing")
-        return
-      }
-      const cs = getComputedStyle(hero)
-      const avail = hero.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-      const ctx = document.createElement("canvas").getContext("2d")
-      ctx.font = '500 100px "Borscha"'
-      const w100 =
-        Array.from("ZHONGSHAN").reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) +
-        9 * ZHONGSHAN_LETTER_SPACING_EM * 100
-      if (!w100 || !avail) return
-      title.style.letterSpacing = `${ZHONGSHAN_LETTER_SPACING_EM}em`
-      title.style.fontSize = `${Math.floor((avail / w100) * 100 * 0.90)}px`
-    }
-
-    const load = document.fonts?.load
-      ? document.fonts.load('500 100px "Borscha"')
-      : Promise.resolve()
-    load.then(fit, fit)
-
-    window.addEventListener("resize", fit)
-    return () => {
-      cancelled = true
-      window.removeEventListener("resize", fit)
-    }
-  }, [])
 
   useEffect(() => {
     setHeaderLight(false)
@@ -173,28 +200,27 @@ export default function ZhongshanCaseStudy() {
     if (prefersReducedMotion()) return
     if (!pageTransition?.isSharedEntry?.()) gsap.set("[data-hero-img]", { scale: 1.25 })
     gsap.set("[data-hero-meta]", { opacity: 0 })
-  }, [])
+  }, [pageTransition])
 
   useEffect(() => {
     const img = heroRef.current?.querySelector("[data-hero-img]")
     let cancelled = false
-    
+
     const settled = () => {
-      if (cancelled) return
-      setHeroLoaded(true)
+      if (!cancelled) setHeroLoaded(true)
     }
-    
+
     const decoded = img?.decode ? img.decode() : Promise.resolve()
     decoded.then(settled, settled)
-    const fallback = setTimeout(() => { if (!cancelled) setHeroLoaded(true) }, 4000)
-    
+    const fallback = setTimeout(settled, 4000)
+
     return () => {
       cancelled = true
       clearTimeout(fallback)
     }
   }, [])
 
-  // Hero image scales down in sync with the overlay lifting (heroReady = mask wipe start)
+  // Hero image scales down in sync with the overlay lifting
   useEffect(() => {
     if (!heroReady || prefersReducedMotion()) return
     const ctx = gsap.context(() => {
@@ -203,348 +229,408 @@ export default function ZhongshanCaseStudy() {
     return () => ctx.revert()
   }, [heroReady])
 
-  // Meta row fades in after the text has begun (ready = overlay mostly cleared)
+  // Meta row fade + unified GSAP scroll-arrow cue
   useEffect(() => {
     if (!ready || prefersReducedMotion()) return
     const ctx = gsap.context(() => {
       gsap.to("[data-hero-meta]", { opacity: 1, duration: 0.9, delay: 0.6, ease: "power2.out" })
+      gsap
+        .timeline({ repeat: 2, repeatDelay: 0.8 })
+        .fromTo(
+          "[data-scroll-arrow]",
+          { y: -8, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.42, ease: "power2.out" }
+        )
+        .to("[data-scroll-arrow]", { y: 10, opacity: 0, duration: 0.78, ease: "power2.in" })
     }, heroRef)
     return () => ctx.revert()
   }, [ready])
 
+  // Refresh ScrollTrigger when page settles or mobile/desktop layout switches
   useEffect(() => {
     if (!ready) return
-    const t = gsap.delayedCall(1.3, () => ScrollTrigger.refresh())
+    const t = gsap.delayedCall(0.3, () => ScrollTrigger.refresh())
     return () => t.kill()
-  }, [ready])
+  }, [ready, isMobile])
 
   const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
   useIdlePreload(assetsToPreload, ready && heroLoaded)
   useCaseStudyReveal(rootRef)
 
   return (
-    <div ref={rootRef} className="w-full min-h-screen bg-[var(--bg-light)] text-[var(--text-light-primary)]">
+    <div
+      ref={rootRef}
+      data-page-transition=""
+      className="w-full min-h-screen overflow-x-clip bg-[var(--bg-light)] text-[var(--text-light-primary)]"
+    >
+      {/* HERO */}
       <section
         data-header-bg="dark"
         ref={heroRef}
-        className="sticky top-0 z-0 w-full h-[100lvh] bg-[var(--bg-surface-dark)] overflow-hidden flex flex-col justify-end px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] pb-[calc(40px_+_100lvh_-_100dvh)] md:pb-[calc(var(--cs-gap)_+_100lvh_-_100dvh)] lg:pb-[calc(64px_+_100lvh_-_100dvh)]"
+        style={{ "--hero-pos-m": HERO_POS_MOBILE, "--hero-pos-d": HERO_POS_DESKTOP }}
+        className="sticky top-0 z-0 w-full h-[100lvh] bg-[var(--bg-surface-dark)] overflow-hidden flex flex-col justify-end px-[var(--page-pad)] pb-[calc(max(40px,env(safe-area-inset-bottom))_+_100lvh_-_100dvh)] md:pb-[calc(var(--cs-gap)_+_100lvh_-_100dvh)] lg:pb-[calc(64px_+_100lvh_-_100dvh)]"
       >
-        <img
-          data-hero-img
-          {...HERO_IMG_PROPS}
-          {...{ [FETCH_PRIORITY_KEY]: "high" }}
+        <Media
           src={ASSETS.hero}
-          alt="Zhongshan villa with travertine cantilever roof and olive tree"
-          className="absolute inset-0 w-full h-full object-cover object-[35%_30%] md:object-center z-0 will-change-transform"
+          alt="Zhongshan brand identity"
+          mediaProps={{ "data-hero-img": "", ...HERO_IMG_PROPS, [FETCH_PRIORITY_KEY]: "high" }}
+          className="absolute inset-0 w-full h-full object-cover [object-position:var(--hero-pos-m)] md:[object-position:var(--hero-pos-d)] z-0 will-change-transform"
         />
-        <div className={CS_HERO_SCRIM_DIM} aria-hidden="true" />
+        <div className={CS_HERO_SCRIM} aria-hidden="true" />
 
-        <div
-          data-hero-meta
-          className="absolute inset-x-[var(--page-pad)] top-[22.3%] z-10 flex justify-between max-md:items-start md:relative md:inset-x-auto md:top-auto md:grid md:grid-cols-12 md:max-lg:gap-x-[12px] lg:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
-        >
-          <span className="md:col-span-6 inline-flex flex-col items-start gap-[4px]">
-            <span>Brand Identity</span>
-            <span>3D Visuals</span>
-          </span>
-          <span className="max-md:hidden md:col-start-7 md:col-span-3">Completed 2025</span>
-          <span className="inline-flex items-center gap-[0.4em] md:col-start-10 md:col-span-3 md:justify-self-end">
-            Scroll Down
-            <motion.span
-              className="inline-flex"
-              animate={{ y: [-8, 0, 10], opacity: [0, 1, 0] }}
-              transition={{
-                duration: 1.2,
-                times: [0, 0.35, 1],
-                ease: "easeInOut",
-                repeat: Infinity,
-                repeatDelay: 0.8,
-              }}
-            >
-              <ArrowDown className="w-[1.1em] h-[1.1em]" strokeWidth={2.2} aria-hidden="true" />
-            </motion.span>
-          </span>
-        </div>
-
-        <div className="relative z-10 flex flex-col lg:flex-row justify-between lg:items-end w-full text-white pt-0 md:pt-[100px] lg:pt-[180px]">
-          <div className="max-w-[min(540px,36vw)] max-lg:max-w-none md:max-lg:max-w-[60vw] max-lg:mb-[64px]">
-            <MaskRevealText
-              as="span"
-              active={ready}
-              delay={0.1}
-              stagger={0.06}
-              className="block text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold mb-[32px] [font-family:var(--font-display)]"
-            >
-              What I Did
-            </MaskRevealText>
-            <MaskRevealText
-              as="p"
-              active={ready}
-              mode="words"
-              delay={0.25}
-              stagger={0.05}
-              className={CS_HERO_PARA}
-            >
-              {HERO_TEXT}
-            </MaskRevealText>
+        <div className={`${CONTAINER} relative z-10`}>
+          <div
+            data-hero-meta
+            className="max-md:fixed max-md:inset-x-[var(--page-pad)] max-md:top-[max(22.3%,calc(env(safe-area-inset-top)+88px))] md:relative flex justify-between max-md:items-start md:grid md:grid-cols-12 md:max-lg:gap-x-[12px] lg:gap-x-[16px] text-white text-[16px] sm:max-md:portrait:text-[20px] md:text-[18px] uppercase font-semibold [font-family:var(--font-display)]"
+          >
+            <span className="md:col-span-6 inline-flex flex-col items-start gap-[4px]">
+              <span>Brand Identity</span>
+              <span>3D Visuals</span>
+            </span>
+            <span className="max-md:hidden md:col-start-7 md:col-span-3">{HERO_YEAR}</span>
+            <span className="inline-flex items-center gap-[0.4em] md:col-start-10 md:col-span-3 md:justify-self-end">
+              Scroll Down
+              <span data-scroll-arrow className="inline-flex">
+                <ArrowDown className="w-[1.1em] h-[1.1em]" strokeWidth={2.2} aria-hidden="true" />
+              </span>
+            </span>
           </div>
 
-          <MaskRevealText
-            as="h1"
-            mode="words"
-            active={ready}
-            delay={0}
-            className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] whitespace-nowrap"
-          >
-            Zhongshan
-          </MaskRevealText>
+          <div className="[container-type:inline-size] flex flex-col lg:flex-row justify-between lg:items-end w-full min-w-0 text-white pt-0 md:pt-[100px] lg:pt-[180px]">
+            <div className="max-w-[min(660px,46vw)] max-lg:max-w-none md:max-lg:max-w-[60vw] max-lg:mb-[48px]">
+              <MaskRevealText
+                as="p"
+                active={ready}
+                mode="words"
+                delay={0.25}
+                stagger={0.05}
+                className={`${CS_HERO_PARA} [text-wrap:pretty]`}
+              >
+                {HERO_TEXT}
+              </MaskRevealText>
+            </div>
+
+            <MaskRevealText
+              as="h1"
+              mode="words"
+              active={ready}
+              delay={0}
+              className="CaseH1 uppercase !leading-[1.1] -my-[0.125em] whitespace-nowrap w-full max-w-full !tracking-[-0.03em] !text-[14.6cqw] lg:!text-[116px]"
+            >
+              {HERO_TITLE}
+            </MaskRevealText>
+          </div>
         </div>
       </section>
 
-      <main style={mobileGap} className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] md:px-[var(--page-pad)] lg:px-[var(--page-pad)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
-        <div style={mobileGap} className="flex flex-col gap-[var(--page-pad)] md:gap-[16px] lg:gap-0">
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 ${CS_FRAME_PT} lg:pt-[11.9vw] pb-0 lg:pb-[16px] lg:flex lg:flex-col lg:!pt-[calc(144px+2.2vw)] lg:min-h-[min(64.95vw,100dvh)]`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-[16px] gap-y-[32px] md:gap-y-[80px] lg:items-start max-md:items-stretch mb-[32px] md:mb-[48px] lg:mb-[7vw] max-md:flex max-md:flex-col max-md:flex-1">
-              <h2 className={`${CS_HEADING} lg:col-span-7 lg:-mt-[0.12em] max-md:mb-auto max-md:pb-[32px]`}>
-                Beyond Finding<br className="max-md:hidden" />{" "}Suppliers
-              </h2>
-              <LineMaskText as="p" className={`${CS_PARA} max-md:w-full max-md:self-stretch md:max-w-[520px] lg:max-w-none lg:col-start-8 lg:col-span-5`}>
-                From cluttered freight catalogs to a refined architectural identity, supported by editorial print and photorealistic 3D interiors that made sourcing entire buildings feel more tangible and trustworthy.
-              </LineMaskText>
-            </div>
-            <Media
-              src={ASSETS.suppliers}
-              alt="Curved balconies and timber fins on a modern residential facade"
-              className="max-md:!aspect-auto max-md:h-[40svh] max-md:min-h-[320px] max-md:shrink-0 md:max-lg:!aspect-[3/2] lg:[flex:1_1_0px] lg:min-h-[26.5vw] lg:w-full w-full md:h-full object-cover"
-            />
-          </section>
-
+      <main className="relative z-10 w-full bg-[var(--bg-light)] px-[var(--page-pad)] max-md:overflow-x-clip">
+        <div className={`${CONTAINER} flex flex-col gap-[12px] md:gap-[16px] lg:gap-0`}>
+          {/* 1. SPLIT INTRO */}
           <section
             data-header-bg="light"
-            className="w-full flex flex-col pt-0 pb-0 max-md:h-auto portrait:max-xl:h-auto landscape:md:max-xl:h-[100dvh] xl:pt-0 xl:pb-[16px] xl:min-h-[max(64.95vw,min(100dvh,75vw))]"
+            className="w-full pt-[80px] max-md:pt-[117px] lg:pt-[calc(var(--header-h,64px)+20px)] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
           >
-            <div style={mobileGap} className="grid grid-cols-[minmax(0,845fr)_minmax(0,619fr)] grid-rows-1 max-md:grid-cols-1 max-md:grid-rows-[auto_auto] portrait:max-xl:grid-cols-1 portrait:max-xl:grid-rows-[auto_auto] gap-[var(--page-pad)] md:gap-[16px] portrait:max-xl:gap-[12px] flex-1 min-h-0">
-              <Img
-                src={ASSETS.logoConstruction}
-                alt="Letter Z plus modern building equals the Zhongshan mark, over a cargo ship"
-                ratio="aspect-auto"
-                parallax={false}
-                className="bg-[#0e5f78] self-start !aspect-auto [&>div]:!static [&>div]:!h-auto [&_img]:!static [&_img]:!h-auto [&_img]:!transform-none"
-              />
-              <div className="flex items-center justify-center">
-                <Img
-                  src={ASSETS.logoBrass}
-                  alt="Zhongshan logo embossed in brushed brass"
-                  ratio="aspect-[546/600]"
-                  className="!w-[56%] !aspect-[546/600]"
+            <div
+              className="grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0"
+            >
+              <div className="lg:col-start-1 lg:col-span-5 flex flex-col gap-[20px] lg:justify-between">
+                <h2 className={HEADING_CLS}>
+                  Beyond finding<br /> suppliers
+                </h2>
+                <p className={`${PARA_CLS}`}>
+                  Sourcing an entire building means navigating countless suppliers, materials and decisions. The challenge was to turn that complexity into a refined architectural brand that makes the process feel clearer, more tangible and trustworthy.
+                </p>
+              </div>
+
+              <div className="relative w-full aspect-[4/5] max-md:aspect-[4/5] max-md:mt-[16px] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-7 lg:col-span-6 overflow-hidden">
+                <Fill src={ASSETS.logoConstruction} alt="Zhongshan identity introduction" parallax={false} className="bg-[#1b1b1b]" />
+              </div>
+            </div>
+          </section>
+
+          {/* 2. LOGO INSET */}
+          <CenteredInset aspectClass="aspect-[1228/624]" mobileAspect="max-md:!aspect-[16/10]" ratio={1228 / 624} frame={{ w: 1228, h: 624 }}>
+            <Fill src={ASSETS.suppliers} alt="Zhongshan logo animation" />
+          </CenteredInset>
+
+          {/* 3. TECHNICAL BY NATURE */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[105px] max-md:!pt-[40px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+          >
+            <h2 className={`${HEADING_CLS} mb-[68px] max-md:mb-[28px] md:mb-[48px] lg:mb-[64px]`}>
+              Technical by<br className="md:hidden" /> nature Editorial<br className="md:hidden" /> by design
+            </h2>
+
+            <p className={`${PARA_CLS} md:hidden mb-[12px]`}>
+              Inter balances bold editorial headlines with crisp, legible numbers across technical spec tables.
+            </p>
+
+            <div className={`${FLOW_GRID} lg:items-start max-md:!grid-cols-[1.25fr_1fr]`}>
+              <div className="relative w-full aspect-[477/548] max-md:order-1 lg:col-start-1 lg:col-span-4 [container-type:inline-size] overflow-hidden text-white">
+                <Fill src={ASSETS.font} alt="Inter Variable type specimen" parallax={false} />
+                {TYPE_CARD_LIVE_TEXT && (
+                  <div className="absolute inset-0 flex flex-col justify-between p-[13cqw]">
+                    <span className="block text-[4.19cqw] font-bold leading-none tracking-[-0.01em]">TYPOGRAPHY</span>
+                    <div className="flex flex-col gap-[6.8cqw]">
+                      <div className="flex flex-col gap-[3.85cqw]">
+                        <span className="block text-[2.96cqw] font-medium leading-none tracking-[-0.01em]">PRIMARY FONT</span>
+                        <span className="block text-[4.73cqw] font-bold leading-none tracking-[-0.01em]">
+                          Inter<br />Variable
+                        </span>
+                      </div>
+                      <span
+                        className="block text-[30.2cqw] font-medium leading-none tracking-[-0.01em]"
+                        style={{ fontFamily: '"Inter Variable", "InterVariable", Inter, system-ui, sans-serif' }}
+                      >
+                        Aa
+                      </span>
+                    </div>
+                    <span className="block h-[4px] w-[35cqw] bg-white" aria-hidden="true" />
+                  </div>
+                )}
+              </div>
+
+              <div className="relative w-full aspect-[602/548] max-md:aspect-[4/3] max-md:col-span-2 max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-5 lg:col-span-5 overflow-hidden">
+                <Fill
+                  src={ASSETS.typeTablet}
+                  alt="Tablet showing Sourcing Simplified"
+                  parallax={false}
+                  imgClassName="object-cover"
+                />
+              </div>
+
+              <div className="flex flex-col gap-[16px] max-md:order-2 lg:col-start-10 lg:col-span-3 lg:gap-[32px]">
+                <div className="relative w-full aspect-square lg:aspect-[353/356] overflow-hidden">
+                  <Fill src={ASSETS.book} alt="Stack of teal Zhongshan product books" parallax={false} />
+                </div>
+                <p className={`${PARA_CLS} max-md:hidden`}>
+                  Inter balances bold editorial headlines with crisp, legible numbers across technical spec tables.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 4. CONTRAST WITH PURPOSE */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[105px] max-md:!pt-[64px] md:pt-[80px] lg:pt-[150px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+          >
+            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[54px]`}>
+              Contrast<br /> with Purpose
+            </h2>
+
+            <p className={`${PARA_CLS} md:hidden mb-[12px]`}>
+              A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
+            </p>
+
+            <div className={`${FLOW_GRID} lg:items-start`}>
+              <div
+                className="grid grid-cols-1 max-md:grid-cols-2 max-md:order-2 md:grid-cols-2 md:col-span-2 gap-[12px] md:gap-[16px] lg:gap-x-[19px] lg:col-start-1 lg:col-span-6 items-start"
+              >
+                <div className="flex flex-col gap-[24px] max-md:order-2 lg:gap-[32px]">
+                  <div className="relative w-full aspect-[348/491] max-md:aspect-[4/5] overflow-hidden">
+                    <Fill src={ASSETS.hardhat} alt="Worker in a branded Zhongshan hard hat" parallax={false} />
+                  </div>
+                  <p className={`${PARA_CLS} max-md:hidden`}>
+                    A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
+                  </p>
+                </div>
+                <div className="relative w-full aspect-[351/388] max-md:aspect-[4/5] max-md:order-1 overflow-hidden">
+                  <Fill src={ASSETS.colorTexture} alt="Material samples in grey, wood and teal" parallax={false} />
+                </div>
+              </div>
+
+              <div className="max-md:order-1 md:col-span-2 lg:col-start-7 lg:col-span-6 flex justify-center lg:justify-start">
+                <InViewGif
+                  fit="contain"
+                  src={ASSETS.color}
+                  alt="Zhongshan colour palette"
+                  className="bg-transparent w-full aspect-[725.3/700] max-md:w-full max-md:max-w-[408px] max-md:aspect-[408/393.77]"
                 />
               </div>
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col pb-0 ${CS_FULL_H}`}>
-            <div style={mobileGap} className="cs-f4-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:gap-y-0 md:max-lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:grid-rows-[auto_minmax(min-content,1fr)_minmax(0,32.08vw)] md:flex-1 md:min-h-0 max-md:flex max-md:flex-col max-md:flex-1">
-              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
-                <h2 className={`cs-f4-span ${CS_HEADING} md:col-span-2 lg:col-span-3 lg:row-start-1 md:-mt-[0.125em] max-md:mb-auto max-md:pb-[32px]`}>
-                  Technical By Nature<br className="max-md:hidden" />{" "}Editorial By Design
-                </h2>
+          {/* 5. PRECISION IN EVERY DETAIL */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[105px] max-md:!pt-[64px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+          >
+            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
+              Precision<br /> In Every Detail
+            </h2>
 
-                <LineMaskText as="p" className={`cs-f4-span ${CS_PARA} md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-2 lg:self-end md:max-w-[360px] lg:max-w-none md:[text-wrap:wrap] md:max-lg:mt-[10.85vw] lg:mt-0 md:mb-[24px] lg:mb-[64px] max-md:mb-[24px]`}>
-                  Inter balances bold editorial headlines with crisp, legible numbers across technical spec tables.
-                </LineMaskText>
+            <p className={`${PARA_CLS} md:hidden mb-[12px]`}>
+              A visual identity that balances the precision of architectural sourcing with the sophistication of editorial design.
+            </p>
 
-                <div className="lg:row-start-3 lg:col-start-1 md:h-full md:min-h-0 flex flex-col max-md:h-auto w-full">
-                  <Img
-                    src={ASSETS.font}
-                    alt="Zhongshan typography specimen"
-                    ratio="aspect-square"
+            <div className={`${FLOW_GRID} lg:items-start`}>
+              <div className="flex flex-col gap-[24px] max-md:order-2 lg:col-start-1 lg:col-span-4 lg:gap-[32px]">
+                <div className="relative w-full aspect-[477/385] max-md:aspect-[4/3] overflow-hidden">
+                  <Fill src={ASSETS.brass} alt="Navy hang tag with foil logo" parallax={false} className="max-md:hidden" />
+                  <Fill src={ASSETS.folder} alt="Zhongshan catalogues" parallax={false} className="md:hidden" />
+                </div>
+                <p className={`${PARA_CLS} max-md:hidden`}>
+                  A visual identity that balances the precision of architectural sourcing with the sophistication of editorial design.
+                </p>
+              </div>
+              <div className="relative w-full aspect-[4/3] max-md:aspect-[4/3] max-md:order-1 lg:aspect-[975/700] lg:col-start-5 lg:col-span-8 overflow-hidden">
+                <Fill src={ASSETS.flyer} alt="Brochure on stone material samples" />
+              </div>
+            </div>
+          </section>
+
+          {/* 6. WIDE INSET */}
+          <CenteredInset aspectClass="aspect-[1212/616]" mobileAspect="max-md:!aspect-[16/10]" ratio={1212 / 616} frame={{ w: 1212, h: 616 }}>
+            <Fill src={ASSETS.screen} alt="Display screen: Sourcing without the guesswork" />
+          </CenteredInset>
+
+          {/* 7. SPLIT */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[88px] max-md:pt-[12px] lg:pt-[100px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
+          >
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0">
+              <div className="md:hidden col-span-2 relative w-full aspect-[16/10] overflow-hidden">
+                <Fill src={ASSETS.flyer} alt="Brochure on stone material samples" />
+              </div>
+
+              <div className="relative w-full aspect-[3/4] max-md:aspect-[4/5] md:aspect-[4/5] lg:aspect-auto lg:h-full lg:min-h-0 lg:col-start-1 lg:col-span-5 overflow-hidden">
+                <Fill src={ASSETS.poster} alt="Poster: A home is only as good as its details" />
+              </div>
+
+              <div className="md:hidden relative w-full aspect-[4/5] overflow-hidden">
+                <Fill src={ASSETS.cargo} alt="Zhongshan cargo truck" />
+              </div>
+
+              <div className="max-md:hidden relative w-full aspect-[602/450] lg:self-start lg:col-start-8 lg:col-span-5 overflow-hidden">
+                <Fill src={ASSETS.cardboard} alt="Zhongshan catalogues" />
+              </div>
+            </div>
+          </section>
+
+          {/* 8. WIDE INSET */}
+          <CenteredInset aspectClass="aspect-[1212/706]" mobileAspect="max-md:!aspect-[16/10]" ratio={1212 / 706} frame={{ w: 1212, h: 706 }}>
+            <Fill src={ASSETS.cardboard} alt="Zhongshan catalogues" className="md:hidden" />
+            <Fill src={ASSETS.folder} alt="Person carrying a Zhongshan folder" className="max-md:hidden" />
+          </CenteredInset>
+
+          {/* 9. SPLIT */}
+          <section
+            data-header-bg="light"
+            className="w-full pt-[88px] max-md:pt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
+          >
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start">
+              <div className="md:hidden col-span-2 relative w-full aspect-[16/10] overflow-hidden">
+                <Fill src={ASSETS.construction} alt="Construction hoarding with interior renders" />
+              </div>
+
+              <div className="relative w-full aspect-[3/4] max-md:aspect-[4/5] md:aspect-[602/452] lg:self-end lg:col-start-1 lg:col-span-5 overflow-hidden">
+                <Fill src={ASSETS.boxes} alt="Branded boxes in a warehouse" />
+              </div>
+
+              <div className="md:hidden relative w-full aspect-[4/5] overflow-hidden">
+                <Fill src={ASSETS.brass} alt="Zhongshan embossed brand detail" />
+              </div>
+
+              <div className="max-md:hidden relative w-full aspect-[4/5] lg:aspect-[602/862] lg:col-start-8 lg:col-span-5 overflow-hidden">
+                <Fill src={ASSETS.cargo} alt="Zhongshan cargo truck" />
+              </div>
+            </div>
+          </section>
+
+          {/* 10. WIDE INSET (1212 x 616) — desktop/tablet */}
+          <CenteredInset
+            aspectClass="aspect-[1212/616]"
+            ratio={1212 / 616}
+            frame={{ w: 1212, h: 616 }}
+            className="max-md:hidden"
+          >
+            <Fill src={ASSETS.construction} alt="Construction hoarding with interior renders" />
+          </CenteredInset>
+
+          {/* 11. 3D RENDERS THAT FEEL REAL */}
+          <section
+            data-header-bg="light"
+            className="block w-full pt-[105px] max-md:!pt-[72px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
+          >
+            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
+              3D Renders<br /> That Feel Real
+            </h2>
+
+            <p className={`${PARA_CLS} md:hidden mb-[16px]`}>
+              A visual identity that balances the precision of architectural sourcing with the sophistication of editorial design.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0">
+              <div className="relative w-full aspect-[4/3] lg:aspect-auto lg:h-full lg:min-h-0 max-md:order-2 md:col-span-2 lg:col-start-1 lg:col-span-8 overflow-hidden">
+                <Fill src={ASSETS.wallPanel} alt="3D render of the building" />
+              </div>
+              <div className="w-full flex flex-col gap-[24px] max-md:order-1 md:col-span-2 lg:col-start-9 lg:col-span-4 lg:gap-[32px] lg:self-stretch">
+                <div className="relative w-full aspect-[4/3] lg:aspect-[477/404] overflow-hidden">
+                  <Fill
+                    src={ASSETS.tiles}
+                    alt="3D render detail"
                     parallax={false}
-                    fade
-                    className="w-full max-md:h-auto md:h-full" imgClassName="object-cover"
+                    imgClassName="w-full h-full object-cover scale-[1.05]"
                   />
                 </div>
-              </div>
-              <div className="lg:row-start-3 lg:col-start-2 md:h-full md:min-h-0 flex flex-col w-full">
-                <Img
-                  src={ASSETS.typeCard}
-                  alt="Zhongshan Sourcing Technology folded navy card"
-                  ratio="aspect-square"
-                  parallax={false}
-                  fade
-                  className="w-full h-full" imgClassName="object-cover"
-                />
-              </div>
-              <div className="lg:row-start-3 lg:col-start-3 md:h-full md:min-h-0 flex flex-col md:max-lg:hidden w-full">
-                <Media
-                  src={ASSETS.typeTablet}
-                  alt="Zhongshan product catalogue on a tablet over perforated metal"
-                  className="w-full max-md:h-auto md:h-full object-cover"
-                />
+                <p className={`${PARA_CLS} max-md:hidden`}>
+                  A visual identity that balances the precision of architectural sourcing with the sophistication of editorial design.
+                </p>
               </div>
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col lg:flex lg:flex-col pb-0 ${CS_FULL_H}`}>
-            <h2 className={`cs-f5-heading ${CS_HEADING} md:max-lg:mb-[64px] lg:mb-[72px] max-md:hidden`}>
-              Contrast With<br className="max-md:hidden" />{" "}Purpose
-            </h2>
-            <div style={mobileGap} className="cs-f5-grid grid grid-cols-1 md:grid-cols-[60%_minmax(0,1fr)] lg:grid-cols-[602fr_357fr_481fr] md:grid-rows-[minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[var(--page-pad)] lg:items-stretch md:flex-1 lg:flex-1 md:min-h-0 max-md:flex max-md:flex-col">
-              <div className="md:contents max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))]">
-                <h2 className={`${CS_HEADING} md:hidden mb-auto pb-[32px]`}>
-                  Contrast With Purpose
-                </h2>
-                <LineMaskText as="p" className={`${CS_PARA} md:hidden self-start mb-[24px]`}>
-                  A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
-                </LineMaskText>
-                <div className="lg:col-start-1 lg:row-start-1 md:order-2 flex flex-col h-full max-md:h-auto max-md:shrink-0">
-                  <div className="w-full md:h-full isolate overflow-hidden bg-transparent">
-                    <Media
-                      src={ASSETS.color}
-                      alt="Zhongshan colour palette"
-                      className="w-full max-md:h-auto max-md:aspect-[602/581] md:h-full object-cover object-left-top scale-[1.012]"
-                    />
-                  </div>
-                </div>
+          {/* 12. WIDE INSET (1212 x 647): Sourcing with ease isometric floorplan */}
+          <CenteredInset
+            aspectClass="aspect-[1212/647]"
+            ratio={1212 / 647}
+            frame={{ w: 1212, h: 647 }}
+            mobileAspect="max-md:!aspect-[16/10]"
+            className="max-md:!py-[36px]"
+          >
+            <Fill src={ASSETS.floorplan} alt="3D render, wide view" />
+          </CenteredInset>
+
+          {/* 13. FULL-WIDTH DOORS SHOWCASE */}
+          <section
+            data-header-bg="light"
+            className="block w-full pt-[88px] max-md:pt-[12px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+          >
+            <div className="relative w-full aspect-[4/3] lg:aspect-[1472/784] overflow-hidden">
+              <Fill src={ASSETS.doors} alt="Zhongshan full-width doors render" />
+            </div>
+          </section>
+
+          {/* 14. SPLIT: Kitchen & Bathroom 3D renders */}
+          <section
+            data-header-bg="light"
+            className="block w-full pt-0 max-md:pt-[12px] lg:pb-[20px] lg:flex lg:flex-col"
+          >
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start">
+              <div className="relative w-full aspect-[4/5] max-md:order-1 md:order-2 lg:aspect-[726/962] lg:col-start-1 lg:col-span-6 overflow-hidden">
+                <Fill src={ASSETS.kitchen} alt="Kitchen render" />
               </div>
 
-              <div className="cs-f5-wrap flex flex-col justify-between lg:flex-col-reverse lg:col-start-2 lg:row-start-1 md:order-1 h-full max-md:contents">
-                <LineMaskText as="p" className={`cs-f5-para ${CS_PARA} md:max-w-[520px] lg:max-w-[360px] mt-[12px] lg:mt-[var(--page-pad)] lg:mb-0 max-md:hidden`}>
-                  A restrained grey palette puts the materials first, while deep blue and turquoise bring contrast and character.
-                </LineMaskText>
-                <Img
-                  src={ASSETS.colorTexture}
-                  alt="Grey and blue fabric and timber material samples"
-                  ratio="aspect-[357/345]"
-                  className="bg-[#d9d4cb] w-full lg:!aspect-[357/345] lg:shrink-0 md:max-lg:hidden max-md:order-3"
-                />
-              </div>
-
-              <div className="lg:col-start-3 lg:row-start-1 md:order-3 flex flex-col h-full max-md:order-4">
-                <Img
-                  src={ASSETS.hardhat}
-                  alt="Worker in a teal Zhongshan Sourcing Technology hard hat"
-                  ratio="aspect-[4/5]"
-                  parallax={false}
-                  className="bg-[#0b3b4a] w-full lg:h-full object-cover max-md:!aspect-[4/5] lg:!aspect-auto" imgClassName="lg:object-top"
-                />
+              <div className="relative w-full aspect-[4/5] max-md:order-2 md:order-1 lg:aspect-[723/633] lg:col-start-7 lg:col-span-6 overflow-hidden">
+                <Fill src={ASSETS.bathroom} alt="Bathroom render" />
               </div>
             </div>
           </section>
 
-          <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[100svh] max-md:pb-0 max-md:pt-[96px] lg:h-[100dvh] lg:pt-[144px] lg:pb-0 lg:flex lg:flex-col`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
-              <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
-                <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
-                  Precision<br className="max-md:hidden" />{" "}In Every Detail
-                </h2>
-                <Img src={ASSETS.flyer} alt="Finishing Materials, Sourced from China flyer on stone samples" ratio="aspect-[726/700]" className="max-md:h-auto lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
-              </div>
-              <Img src={ASSETS.cardboard} alt="Courier in a teal uniform carrying a Zhongshan porcelain tile sample box" ratio="aspect-[726/700]" className="lg:h-[31.7vw] lg:self-end lg:min-h-0 lg:!aspect-auto" />
+          {/* 15. CLOSING SHOWCASE (1472 x 724, 54px gap above NextProject): living room */}
+          <section
+            data-header-bg="light"
+            className="block w-full pt-0 max-md:pt-[12px] pb-[var(--page-pad)] max-md:pb-[48px] md:pt-0 lg:pt-[100px] lg:pb-[20px] lg:min-h-[calc(100dvh-140px)] lg:flex lg:flex-col lg:justify-center"
+          >
+            <div className="relative w-full aspect-[1472/724] max-md:!aspect-[16/10] lg:mb-[54px] overflow-hidden">
+              <Fill src={ASSETS.living} alt="Zhongshan closing showcase" />
             </div>
           </section>
-        </div>
 
-        {isMobile && <MobileImageGroups items={ZHONGSHAN_RUN_1} padVar="--page-pad" />}
-
-        {!isMobile && (
-        <>
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
-          <Img
-            src={ASSETS.screen}
-            alt="Seamless Sourcing exhibition screen with a glass shipping container"
-            ratio="aspect-[1472/867]"
-            className="bg-black max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
-          <Img src={ASSETS.poster} alt="Zhongshan poster in a timber-panelled lobby: A home is only as good as its details" ratio="aspect-[726/867]" />
-          <Img src={ASSETS.signage} alt="Zhongshan teal logo signage on a dark panel against a blue sky" ratio="aspect-[726/867]" />
-        </section>
-
-        <section data-header-bg="dark" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
-          <Img
-            src={ASSETS.folder}
-            alt="Zhongshan One Stop Sourcing brochure and 2026 Collection catalogue"
-            ratio="aspect-[1472/867]"
-            className="bg-black max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
-          <Img src={ASSETS.boxes} alt="Navy Zhongshan packaging boxes on a warehouse cart" ratio="aspect-[726/867]" />
-          <Img src={ASSETS.cargo} alt="Zhongshan branded shipping container on a truck" ratio="aspect-[726/867]" />
-        </section>
-        </>
-        )}
-
-        <section data-header-bg="light" className={`sticky top-0 z-0 w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
-          <Img
-            src={ASSETS.construction}
-            alt="Zhongshan construction site hoarding: One Stop Shop For All Your Sourcing"
-            ratio="aspect-[1476/867]"
-            parallax={false}
-            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-
-        <div className="relative z-10 w-full bg-[var(--bg-light)] flex flex-col gap-[var(--page-pad)] md:gap-[16px]">
-        <section data-header-bg="light" className={`w-full max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--page-pad))] max-md:pb-0 max-md:pt-[96px] ${CS_LG_FRAME} lg:flex lg:flex-col`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)] gap-[var(--page-pad)] md:gap-[16px] lg:flex-1 lg:min-h-0 max-md:flex max-md:flex-col">
-            <div className="max-md:flex max-md:flex-col max-md:min-h-[calc(100svh-var(--header-h,64px)-2*var(--page-pad))] md:contents">
-              <h2 className={`${CS_HEADING} md:col-span-2 mb-[32px] md:mb-[48px] lg:mb-[72px] max-md:mb-auto max-md:pb-[32px]`}>
-                3D Renders<br className="max-md:hidden" />{" "}That Feel Real
-              </h2>
-              <Video
-                src={ASSETS.tiles}
-                label="Fan of timber floor tiles"
-                ratio="aspect-[726/867]"
-                className="max-md:h-auto bg-[#cfcfcf] lg:min-h-0 lg:h-full lg:!aspect-auto"
-              />
-            </div>
-            <Img
-              src={ASSETS.wallPanel}
-              alt="Timber and stone wall panels with an armchair on a dark stage"
-              ratio="aspect-[726/867]"
-              className="bg-[#111111] lg:min-h-0 lg:h-full lg:!aspect-auto"
-            />
-          </div>
-        </section>
-
-        {isMobile && <MobileImageGroups items={ZHONGSHAN_RUN_2} padVar="--page-pad" />}
-
-        {!isMobile && (
-        <>
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
-          <Video
-            src={ASSETS.floorplan}
-            label="Isometric 3D floorplan of the apartment"
-            ratio="aspect-[1476/867]"
-            className="bg-[#aeaaa9] max-md:h-auto lg:flex-1 lg:min-h-0"
-          />
-        </section>
-
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] flex flex-col`}>
-          <Img
-            src={ASSETS.doors}
-            alt="Three interior doors in grey, walnut and oak finishes"
-            ratio="aspect-[1476/867]"
-            className="max-md:h-auto lg:flex-1 lg:min-h-0" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-
-        <section data-header-bg="light" className={`w-full ${FRAME_PB} lg:h-[100dvh] grid grid-cols-1 md:grid-cols-2 lg:grid-rows-1 gap-[var(--page-pad)] md:gap-[16px]`}>
-          <Img src={ASSETS.bathroom} alt="Floating timber and marble bathroom vanity with backlit mirrors and brass sconces" ratio="aspect-[726/867]" />
-          <Img src={ASSETS.kitchen} alt="Oak kitchen with stainless island, burr wood stool and amber pendant light" ratio="aspect-[726/867]" />
-        </section>
-
-        <section data-header-bg="dark" className="w-full">
-          <Img
-            src={ASSETS.living}
-            alt="Furniture vignette with a curved sofa, lounge chairs and timber screens on a navy stage"
-            ratio="aspect-[1476/798]"
-            className="max-md:h-auto lg:h-[calc(100dvh-24px)]" imgClassName="max-md:object-[50%_50%]" />
-        </section>
-        </>
-        )}
-
-        <NextProject current="zhongshan" />
+          <NextProject current="zhongshan" />
         </div>
       </main>
     </div>

@@ -41,6 +41,27 @@ export const TICKER_MOTION = {
     flingGain: 1,             // 1 = release speed equals finger speed
     velocityWindow: 80,       // ms of finger history used to measure release velocity
     dragThreshold: 3,
+
+    // ── Wheel / trackpad scrolling ──────────────────────────────────────────────────────────
+    wheelVertical: false,     // true = a vertical wheel / two-finger scroll over the ticker also moves it
+    wheelGain: 1,             // px of ticker travel per px of wheel delta (raise for faster scrolling)
+    wheelSmoothing: 10,       // 1/s, how quickly a mouse-wheel notch glides out (lower = longer glide)
+
+    // ── 3D tilt (disabled) ──────────────────────────────────────────────────────────────────
+    tilt: {
+        enabled: false,
+        perspective: 1100,
+        refSpeed: 1600,
+        deadzone: 40,
+        left:  { rotateY: 12, rotateX: 9 },
+        right: { rotateY: 10, rotateX: 16 },
+        spring: { response: 0.5, damping: 0.72 },
+    },
+}
+
+// Phones: slides are narrower, so the same px/s reads faster. Merged over TICKER_MOTION on small screens.
+export const TICKER_MOTION_MOBILE = {
+    baseSpeed: 55,
 }
 
 export const ACCORDION = {
@@ -187,11 +208,20 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
     const targetSpeed = () => (userPaused || focusHeld ? 0 : hoverTarget)
 
+    // ---- 3D tilt state ----------------------------------------------------------------------
+    const tiltCfg = cfg.tilt
+    let tiltOn = !!tiltCfg?.enabled && !motionQuery?.matches
+    let lean = 0
+    let leanVel = 0
+    let leanTarget = 0
+    let tiltPrimed = false
+    const setRotX = slides.map((s) => gsap.quickSetter(s, "rotationX", "deg"))
+    const setRotY = slides.map((s) => gsap.quickSetter(s, "rotationY", "deg"))
+    const tiltBusy = () => tiltOn && (lean !== 0 || leanVel !== 0 || leanTarget !== 0)
+
     // Retarget the speed spring. Its current velocity is kept, so this never jerks.
     const aim = (to, s) => {
         if (!started) return
-        // A running plan is continued from its exact current state (position, speed, acceleration)
-        // and a new plan is built for the new target: no jump, and no per-frame JavaScript.
         if (plan) takeFromPlan()
         cruiseTarget = to
         spring = s
@@ -226,6 +256,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     }
 
     let visible = true
+    let curVel = 0 // px/s the track is moving right now (negative = left), for getState()
     let paintedX = NaN
     let pressed = false
     let dragging = false
@@ -233,6 +264,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     let lastPX = 0
     let wheelActive = false
     let lastWheelT = 0
+    let wheelRemain = 0 // px of mouse-wheel travel still to glide out (same sign as `pending`)
 
     // ---- velocity sampler: unwrapped position, one sample per frame while the finger drives ----
     const samples = []
@@ -263,6 +295,53 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         loopW = lefts[perCopy] || 0
     }
 
+    const stepLean = (dt, userV) => {
+        if (!tiltOn) return
+        const a = Math.abs(userV)
+        leanTarget = a < tiltCfg.deadzone ? 0 : Math.sign(userV) * Math.tanh((a - tiltCfg.deadzone) / tiltCfg.refSpeed)
+        const { response, damping } = tiltCfg.spring
+        const omega = (2 * Math.PI) / response
+        const steps = Math.max(1, Math.ceil(dt / (1 / 120)))
+        const h = dt / steps
+        for (let i = 0; i < steps; i++) {
+            const accel = omega * omega * (leanTarget - lean) - 2 * damping * omega * leanVel
+            leanVel += accel * h
+            lean += leanVel * h
+        }
+        if (leanTarget === 0 && Math.abs(lean) < 0.0005 && Math.abs(leanVel) < 0.005) {
+            lean = 0
+            leanVel = 0
+        }
+    }
+
+    const drawTilt = (all = false) => {
+        if (!tiltCfg) return
+        let rx = 0
+        let ry = 0
+        if (lean < 0) {
+            ry = lean * tiltCfg.left.rotateY
+            rx = lean * tiltCfg.left.rotateX
+        } else if (lean > 0) {
+            ry = lean * tiltCfg.right.rotateY
+            rx = lean * tiltCfg.right.rotateX
+        }
+        if (!tiltPrimed) {
+            if (!lean) return
+            gsap.set(slides, { transformPerspective: tiltCfg.perspective })
+            tiltPrimed = true
+        }
+        const lo = -vpW * 0.5
+        const hi = vpW * 1.5
+        for (let i = 0; i < slides.length; i++) {
+            if (!all) {
+                const l = lefts[i] + x
+                if (l > hi || l + widths[i] < lo) continue
+            }
+            setRotX[i](rx)
+            setRotY[i](ry)
+        }
+    }
+
     const wrap = () => {
         if (!loopW) return
         x = x % loopW
@@ -276,22 +355,10 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     }
 
     // ---- compositor motion plan -------------------------------------------------------------
-    // Whenever nothing is touching the ticker (no finger, no trackpad, no coasting flick) its
-    // whole motion is handed to the compositor as a *plan*: the speed spring's ramp (slowing
-    // down or picking up) is simulated once, up front, and sent as a keyframed Web Animation, with
-    // a steady-drift loop queued right behind it. After that no JavaScript runs per frame, so
-    // nothing else on the page can make the ticker stutter, and slowing down / picking up is as
-    // smooth as the spring itself (the first version steered playbackRate every frame, which
-    // makes the compositor re-sync its position each time and was visibly notchy).
-    //
-    // Both animations are anchored to the same timeline time, so a plan is an exact function of
-    // time. That is what makes every hand-off seamless: to retarget (hover, pause, resume) or to
-    // take the position back (finger, trackpad, focus) we just evaluate the plan at "now" and
-    // continue from that exact state, instead of reading a position off a moving animation.
     let plan = null
 
-    const SIM_H = 1 / 240        // s, spring integration step
-    const KEY_STEPS = 8          // one keyframe every 8 steps = 1/30 s (error < 0.05px)
+    const SIM_H = 1 / 240
+    const KEY_STEPS = 8
     const MAX_PLAN_S = 6
     const SETTLE_C = 1e-3
     const SETTLE_V = 2e-3
@@ -301,8 +368,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     }
     const fmt = (v) => `translate3d(${v.toFixed(3)}px, 0px, 0px)`
 
-    // Integrates the speed spring (same maths as stepCruise) and the position, from the state
-    // stored in `p`. Stops at `until` seconds or when settled. onKey gets (tau, x) every keyframe.
     const simulate = (p, until, onKey) => {
         const omega = (2 * Math.PI) / p.spring.response
         let px = p.x0
@@ -334,7 +399,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         return { x: px, c, v, tau, settled }
     }
 
-    // Exact state of the plan at timeline time tMs.
     const evalPlan = (pl, tMs) => {
         const tau = Math.max(0, (tMs - pl.t0) / 1000)
         if (tau >= pl.tEnd) {
@@ -347,15 +411,17 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
 
     const canGlide = () =>
         !plan &&
+        visible &&
         started &&
         baseSpeed > 0 &&
         loopW > 0 &&
         typeof track.animate === "function" &&
         !dragging && !wheelActive && !pressed &&
-        pending === 0 && flick === 0
+        pending === 0 && flick === 0 &&
+        !tiltBusy()
 
     const buildPlan = (t0) => {
-        plan?.anims.forEach((a) => a.cancel()) // safety: only one plan may ever own the track
+        plan?.anims.forEach((a) => a.cancel())
         wrap()
         const p = { t0, x0: x, c0: cruise, v0: cruiseVel, T: cruiseTarget, spring, base: baseSpeed }
         const keys = []
@@ -364,7 +430,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         p.xEnd = end.x
         const anims = []
 
-        // 1) the ramp (and, when the target is 0, the final hold: fill "forwards" never leaves a gap)
         const A = track.animate(
             keys.map(([tau, px], i) => ({
                 offset: i === keys.length - 1 ? 1 : tau / p.tEnd,
@@ -375,8 +440,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         A.startTime = t0
         anims.push(A)
 
-        // 2) steady drift, starting exactly where the ramp ends (the loop is seamless: x - loopW
-        //    looks identical to x because the content repeats every loopW)
         if (p.T > 0) {
             let xw = p.xEnd % loopW
             if (xw > 0) xw -= loopW
@@ -393,7 +456,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         plan = { ...p, anims }
     }
 
-    // Take the state back from the compositor: exact, and no painting yet (callers do that).
     const takeFromPlan = () => {
         if (!plan) return
         const st = evalPlan(plan, nowMs())
@@ -405,7 +467,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         wrap()
     }
 
-    // JavaScript owns the position again, painted this very task so nothing flashes.
     const toJS = () => {
         if (!plan) return
         takeFromPlan()
@@ -414,8 +475,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         startLoop()
     }
 
-    // ---- frame loop (JavaScript-driven motion only: finger, trackpad, flick) -----------------
-    // The display's own frame timestamp, not a smoothed clock.
+    // ---- frame loop -------------------------------------------------------------------------
     let rafId = 0
     let lastT = 0
     const loop = (ts) => {
@@ -431,8 +491,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         lastT = 0
     }
 
-    // The speed spring: critically damped, response/damping like SwiftUI. Semi-implicit Euler
-    // in small sub-steps, stable on any frame rate.
     const stepCruise = (dt) => {
         const omega = (2 * Math.PI) / spring.response
         const steps = Math.max(1, Math.ceil(dt / (1 / 120)))
@@ -442,7 +500,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             cruiseVel += accel * h
             cruise += cruiseVel * h
         }
-        if (cruise < 0) { cruise = 0; cruiseVel = 0 } // never drift backwards
+        if (cruise < 0) { cruise = 0; cruiseVel = 0 }
         if (cruiseTarget === 0 && cruise < 0.002) { cruise = 0; cruiseVel = 0 }
     }
 
@@ -451,45 +509,59 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             stopLoop()
             return
         }
-        if (!visible || !loopW) {
+        if (!visible) {
+            stopLoop()
+            return
+        }
+        if (!loopW) {
             lastT = 0
             return
         }
-        // Real elapsed time from the display's frame timestamp. A dropped frame therefore costs
-        // exactly the distance it should: the ticker keeps the true time, it never "slows down".
         const dt = lastT ? clamp((ts - lastT) / 1000, 0, MAX_FRAME_DT) : 1 / 60
         lastT = ts
 
-        if (wheelActive && performance.now() - lastWheelT > 120) {
+        if (wheelActive && performance.now() - lastWheelT > 120 && Math.abs(wheelRemain) < 0.5) {
             wheelActive = false
+            wheelRemain = 0
             pending = 0
-            release(0, false) // the OS already supplies trackpad momentum; no extra flick on top
+            release(0, false)
         }
 
+        let userV = 0
+
         if (dragging || wheelActive) {
-            // Direct manipulation: 1:1 with the finger, written once per frame.
+            if (wheelRemain) {
+                const take =
+                    Math.abs(wheelRemain) < 0.5 ? wheelRemain : wheelRemain * (1 - Math.exp(-cfg.wheelSmoothing * dt))
+                wheelRemain -= take
+                pending += take
+            }
+            userV = dt > 0 ? pending / dt : 0
+            curVel = userV
             x += pending
             travel += pending
             pending = 0
             pushSample()
         } else {
-            // 1) flick: exponential deceleration (caught faster while a finger is down)
             flick *= Math.exp(-(pressed ? cfg.catchRate : decayRate) * dt)
             if (Math.abs(flick) < 1) flick = 0
 
-            // 2) cruise speed spring
             stepCruise(dt)
 
             const vel = -baseSpeed * cruise + flick
             x += vel * dt
             travel += vel * dt
+            userV = flick
+            curVel = vel
         }
 
         wrap()
         paint()
 
-        // Nothing is touching it any more: hand the whole motion to the compositor, anchored to
-        // this frame's time (x above is exactly the position at ts).
+        const wasLeaning = lean !== 0
+        stepLean(dt, userV)
+        drawTilt(wasLeaning && lean === 0)
+
         if (canGlide()) {
             buildPlan(ts)
             stopLoop()
@@ -516,6 +588,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             toJS()
             pressed = true
             wheelActive = false
+            wheelRemain = 0
             pending = 0
             catchIt()
             lastPX = this.pointerX
@@ -524,13 +597,13 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             dragging = true
             suppressClick = true
             viewport.dataset.dragging = "true"
-            takeOver() // lastPX stays from the press, so the first few px are not lost
+            takeOver()
             samples.length = 0
             pushSample()
         },
         onDrag() {
             const px = this.pointerX
-            pending += px - lastPX // applied 1:1 in the next tick
+            pending += px - lastPX
             lastPX = px
         },
         onRelease() {
@@ -557,23 +630,26 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         if (!pressed && !dragging && !wheelActive) aimHover()
     }
 
-    // Trackpad: 1:1 position, the OS already provides momentum events.
     const onWheel = (e) => {
-        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || dragging) return
+        if (e.ctrlKey || dragging) return
+        const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY)
+        if (!horizontal && !cfg.wheelVertical) return
+        let d = horizontal ? e.deltaX : e.deltaY
+        if (!d) return
         e.preventDefault()
         toJS()
-        let dx = e.deltaX
-        if (e.deltaMode === 1) dx *= 16
-        else if (e.deltaMode === 2) dx *= vpW
+        if (e.deltaMode === 1) d *= 33
+        else if (e.deltaMode === 2) d *= vpW
+        const notched =
+            e.deltaMode !== 0 || (e.deltaX === 0 && !!e.wheelDeltaY && e.wheelDeltaY % 120 === 0)
         if (!wheelActive) { wheelActive = true; takeOver(); samples.length = 0; pushSample() }
         lastWheelT = performance.now()
-        pending -= dx
+        const move = -d * (cfg.wheelGain ?? 1)
+        if (notched) wheelRemain = clamp(wheelRemain + move, -vpW * 2, vpW * 2)
+        else pending += move
     }
 
     // ---- keyboard / assistive tech ---------------------------------------------------------
-    // Slides can take focus. The viewport is overflow:hidden, so the browser may "scroll" it to
-    // a focused slide; the ticker is moved with transforms, so undo that and bring the slide
-    // into view by moving the track instead.
     const ensureVisible = (el) => {
         const i = slides.indexOf(el)
         if (i < 0 || !loopW) return
@@ -587,7 +663,6 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     }
     const onFocusIn = (e) => {
         viewport.scrollLeft = 0
-        // Only keyboard focus holds the ticker; a mouse click must not move or stop anything.
         if (!e.target.matches?.(":focus-visible")) return
         toJS()
         focusHeld = true
@@ -605,10 +680,16 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
         if (viewport.scrollLeft) viewport.scrollLeft = 0
     }
 
-    // The reduced-motion preference is honoured live, not just at creation.
     const onMotionPref = () => {
         toJS()
         baseSpeed = motionQuery.matches ? 0 : cfg.baseSpeed
+        tiltOn = !!tiltCfg?.enabled && !motionQuery.matches
+        if (!tiltOn) {
+            lean = 0
+            leanVel = 0
+            leanTarget = 0
+            drawTilt(true)
+        }
         cruise = 0
         cruiseVel = 0
         aimHover()
@@ -623,13 +704,28 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     motionQuery?.addEventListener?.("change", onMotionPref)
 
     const ro = new ResizeObserver(() => {
-        toJS() // keyframes depend on the loop width: rebuild them after a resize
+        toJS()
         measure()
     })
     ro.observe(viewport)
     ro.observe(track)
 
-    const io = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting })
+    const io = new IntersectionObserver(([entry]) => {
+        const was = visible
+        visible = entry.isIntersecting
+        if (visible === was) return
+        if (!visible) {
+            // Offscreen: stop the infinite compositor animation and freeze at the current position
+            if (plan) {
+                takeFromPlan()
+                paintedX = NaN
+                paint()
+            }
+        } else {
+            lastT = 0
+            startLoop()
+        }
+    })
     io.observe(viewport)
 
     track.style.willChange = "transform"
@@ -637,8 +733,36 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
     paint()
     startLoop()
 
+    const snapshot = { x: 0, vel: 0, gliding: false, visible: true, vpW: 0, loopW: 0, lefts: [], widths: [] }
+
     return {
         consumeDrag: () => suppressClick,
+        // Read-only snapshot for effects layered on top of the ticker. No DOM reads: the position
+        // comes from the engine's own state, or from evaluating the compositor plan at the current time.
+        getState() {
+            let px = x
+            let v = curVel
+            let gliding = false
+            if (plan) {
+                const st = evalPlan(plan, nowMs())
+                px = st.x
+                v = -plan.base * st.c
+                gliding = true
+                if (loopW) {
+                    px %= loopW
+                    if (px > 0) px -= loopW
+                }
+            }
+            snapshot.x = px
+            snapshot.vel = v
+            snapshot.gliding = gliding
+            snapshot.visible = visible
+            snapshot.vpW = vpW
+            snapshot.loopW = loopW
+            snapshot.lefts = lefts
+            snapshot.widths = widths
+            return snapshot
+        },
         start() {
             if (started) return
             started = true
@@ -664,6 +788,7 @@ export function createTicker(viewport, track, cfg = TICKER_MOTION) {
             motionQuery?.removeEventListener?.("change", onMotionPref)
             track.style.willChange = ""
             gsap.set(track, { clearProps: "transform" })
+            if (tiltPrimed) gsap.set(slides, { clearProps: "rotationX,rotationY,transformPerspective" })
         },
     }
 }

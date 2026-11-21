@@ -14,12 +14,10 @@ import {
     useScroll,
     useSpring,
     useMotionValue,
-    useTransform,
     useInView,
 } from "framer-motion"
 import { useNavigate, useOutletContext } from "react-router-dom"
 import gsap from "gsap"
-import { ArrowRight } from "lucide-react"
 
 import { ViewportContext } from "../lib/viewport"
 import {
@@ -35,17 +33,18 @@ import {
     servicesDividerVariants,
     SERVICES_VIEWPORT,
     TICKER_MOTION,
+    TICKER_MOTION_MOBILE,
     createTicker,
 } from "../lib/motion"
 
 import { WORK_PROJECTS, LOOPING_IMAGES } from "../lib/projects"
 import { FETCH_PRIORITY_KEY, whenIdle } from "../lib/loadingHints"
 import { prefetchHero, heroSlugFor, warmAllHeroes } from "../lib/heroPrefetch.js"
+import { createTickerLens, TICKER_LENS, isMobileDevice } from "../lib/tickerLens.js"
 
 import MaskRevealText from "../components/MaskRevealText"
 import ServiceImageStage from "../components/ServiceImageStage"
 import ScrollFillGroup from "../components/ScrollFillGroup"
-import FlipbookCarousel from "../components/FlipbookCarousel.jsx"
 import { usePageReady, usePageTransition } from "../components/PageTransitionOverlay"
 
 const glueLastWords = (str) => {
@@ -57,8 +56,54 @@ const glueLastWords = (str) => {
 const flat = (str) => str.replace(/\n/g, " ")
 
 const TICKER_PRIORITY_COUNT = 4
-const TICKER_START_DELAY = 1200 
+const TICKER_START_DELAY = 1200
 const TICKER_CARD_RADIUS = "0px"
+const HOVER_INTENT_MS = 110 // pointer must rest this long on a slide before its hover animation plays
+
+const APPLE_EASE_CSS = "cubic-bezier(0.32, 0.72, 0, 1)"
+
+// Velocity-driven "barrel" scale on drag/flick. The whole slide (caption + card) scales together
+// around the card's centre, but the amount depends on where the slide sits in the viewport: cards at
+// the centre shrink the most and cards toward the left/right edges grow, so the row bulges outward
+// like a very wide barrel viewed from inside.
+const TICKER_ZOOM = {
+    minScale: 0.95,       // scale of the centre card at full flick speed
+    edgeGrow: 0.06,       // extra scale of cards at the viewport edges at full flick speed (1 + edgeGrow)
+    barrel: 1.6,          // curve exponent: higher keeps the middle flat and bends mostly near the edges
+    fullSpeed: 2000,      // px/s of drag/flick speed that reaches minScale
+    driftMargin: 1.25,    // ignores slow auto-drift so resting cards stay at 1.0
+    velSmoothing: 8,      // smooths measured velocity (lower = softer response)
+    spread: 0.06,         // extra gap per card at full stretch, as a share of its distance from the centre
+    tiltMax: 0,           // rotateY tilt in degrees at full flick speed (0 = off)
+    perspective: 1400,    // px, per-card 3D perspective for the tilt
+    settle: 0.7,          // seconds for stretch / tilt to ease toward target (higher = softer, lazier)
+    parallax: 0.04,       // subtle internal photo travel (0 = off)
+}
+
+// Touch screens (phones, tablets): thumb flicks are much faster than a mouse drag, so the effect
+// is a lighter version of the desktop one and only reaches full strength at higher speeds.
+const TICKER_ZOOM_TOUCH = {
+    minScale: 0.97,
+    edgeGrow: 0.035,
+    fullSpeed: 3000,
+    spread: 0.036,
+    tiltMax: 0,
+    parallax: 0.06,       // a little more photo travel on phones: it is the cheapest way to make photos read as glass
+}
+
+// Phone / touch ticker (the WebGL lens is off there). Two cheap, compositor-friendly stand-ins for it,
+// with no shading of their own (cards keep the same flat tint as on desktop):
+//  - cards dip very slightly in scale the further they sit from the centre
+//  - the dip deepens a touch while flicking, then eases back at rest
+const TICKER_MOBILE = {
+    restDip: 0.04,        // scale lost by a card one slide-width from the centre (0.04 = 4%). 0 = off
+    flickDip: 0.02,       // extra scale lost at full flick speed
+}
+
+// Image scale inside a card (matches the scale-[1.12] on the DOM image), used by the WebGL lens.
+const LENS_IMG_ZOOM = 1.12
+
+const TICKER_IMG_SIZES = "(max-width: 767px) 72vw, (max-width: 1023px) 42vw, 352px"
 
 const SERVICES_DATA = [
     {
@@ -217,7 +262,7 @@ const EXPERTISE_CURSOR = {
 }
 const EXPERTISE_SHIFT = 14
 const SITE_GREY = "#cccccc"
-const SITE_SECONDARY_GREY = "#999999"
+const SITE_SECONDARY_GREY = "#71717b"
 const SERVICE_INACTIVE_GREY = "#999999"
 
 const ExpertiseCursorImage = ({ x, y, hoveredIndex, ratios }) => {
@@ -290,11 +335,39 @@ const ExpertiseCursorImage = ({ x, y, hoveredIndex, ratios }) => {
     )
 }
 
+// Rolling link text: each letter rolls up and out while its twin rolls in from below.
+const RollingText = ({ text, active }) => (
+    <span aria-label={text} className="relative inline-flex overflow-hidden align-top whitespace-pre">
+        {Array.from(text).map((ch, i) => {
+            const glyph = ch === " " ? "\u00A0" : ch
+            return (
+                <span
+                    key={i}
+                    aria-hidden="true"
+                    className="relative inline-block"
+                    style={{
+                        transform: active ? "translateY(-100%)" : "translateY(0)",
+                        transition: "transform 550ms cubic-bezier(0.25, 0.8, 0.25, 1)",
+                        transitionDelay: `${i * 18}ms`,
+                    }}
+                >
+                    <span className="block">{glyph}</span>
+                    <span className="absolute left-0 top-full block">{glyph}</span>
+                </span>
+            )
+        })}
+    </span>
+)
+
 const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone }) => {
     const slideRef = useRef(null)
     const cardRef = useRef(null)
+    const captionRef = useRef(null)
     const [reveal, setReveal] = useState(null)
     const [hovered, setHovered] = useState(false)
+    const hoverTimer = useRef(0)
+
+    useEffect(() => () => clearTimeout(hoverTimer.current), [])
 
     useEffect(() => {
         if (!ready || reveal) return
@@ -318,32 +391,48 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
     }, [ready, reveal])
 
     useLayoutEffect(() => {
-        const el = cardRef.current
-        if (!reveal || reveal.instant || !el || typeof el.animate !== "function") return
+        const card = cardRef.current
+        const caption = captionRef.current
+        if (!reveal || reveal.instant || !card || typeof card.animate !== "function") return
         const delay = reveal.delay * 1000
         const dur = TICKER_REVEAL.duration * 1000
-        el.style.willChange = "transform, opacity"
-        const rise = el.animate(
-            [{ transform: `translateY(${TICKER_REVEAL.from})` }, { transform: "translateY(0%)" }],
-            { duration: dur, delay, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "both" }
-        )
-        const fade = el.animate([{ opacity: 0 }, { opacity: 1 }], {
-            duration: dur * 0.5,
-            delay,
-            easing: "ease-out",
-            fill: "both",
+
+        // The caption rises by the same distance as the card, so they appear together.
+        const from = String(TICKER_REVEAL.from)
+        const cardFrom = `translateY(${from})`
+        const captionFrom = from.trim().endsWith("%")
+            ? `translateY(${(card.offsetHeight * parseFloat(from)) / 100}px)`
+            : cardFrom
+
+        const targets = [{ el: card, from: cardFrom }]
+        if (caption) targets.push({ el: caption, from: captionFrom })
+
+        const anims = []
+        targets.forEach(({ el, from: f }) => {
+            el.style.willChange = "transform, opacity"
+            anims.push(
+                el.animate([{ transform: f }, { transform: "translateY(0%)" }], {
+                    duration: dur,
+                    delay,
+                    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+                    fill: "both",
+                }),
+                el.animate([{ opacity: 0 }, { opacity: 1 }], {
+                    duration: dur * 0.5,
+                    delay,
+                    easing: "ease-out",
+                    fill: "both",
+                })
+            )
         })
-        const settle = () => {
-            rise.cancel()
-            fade.cancel()
-            el.style.willChange = ""
+        const cleanup = () => {
+            anims.forEach((a) => a.cancel())
+            targets.forEach(({ el }) => {
+                el.style.willChange = ""
+            })
         }
-        Promise.all([rise.finished, fade.finished]).then(settle, () => {})
-        return () => {
-            rise.cancel()
-            fade.cancel()
-            el.style.willChange = ""
-        }
+        Promise.all(anims.map((a) => a.finished)).then(cleanup, () => {})
+        return cleanup
     }, [reveal])
 
     const getSubtitle = (name) => {
@@ -376,72 +465,76 @@ const TickerSlideBase = ({ src, project, ready, onClick, fetchPriority, isClone 
             onClick={onClick}
             onPointerEnter={(e) => {
                 if (project) prefetchHero(heroSlugFor(project.name))
-                if (e.pointerType === "mouse") setHovered(true)
+                if (e.pointerType !== "mouse") return
+                // Hover intent: the pointer has to rest on the slide briefly, and the ticker
+                // must not be mid-drag, otherwise cards sweeping past the cursor all fire at once.
+                const slide = e.currentTarget
+                const dragging = () => !!slide.closest('[data-dragging="true"]')
+                if (dragging()) return
+                clearTimeout(hoverTimer.current)
+                hoverTimer.current = setTimeout(() => {
+                    if (!dragging()) setHovered(true)
+                }, HOVER_INTENT_MS)
             }}
             onPointerDown={() => {
+                clearTimeout(hoverTimer.current)
+                setHovered(false)
                 if (project) prefetchHero(heroSlugFor(project.name))
             }}
-            onPointerLeave={() => setHovered(false)}
-            className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pr-[12px] cursor-pointer group outline-none [--ticker-card-w:calc(72vw-12px)] md:[--ticker-card-w:calc(42vw-12px)] lg:[--ticker-card-w:340px]"
+            onPointerLeave={() => {
+                clearTimeout(hoverTimer.current)
+                setHovered(false)
+            }}
+            className="relative flex-[0_0_72vw] md:flex-[0_0_42vw] lg:flex-[0_0_352px] min-w-0 pt-[clamp(16px,6svh,95px)] pr-[12px] cursor-pointer group outline-none [--ticker-card-w:calc(72vw-12px)] md:[--ticker-card-w:calc(42vw-12px)] lg:[--ticker-card-w:340px]"
             {...a11y}
         >
-            <div
-                ref={cardRef}
-                style={{
-                    height: TICKER_HEIGHT,
-                    borderRadius: TICKER_CARD_RADIUS,
-                    ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
-                }}
-                className="relative isolate w-full overflow-hidden bg-[var(--bg-surface-dark)]"
-            >
-                <div className="absolute inset-0 w-full h-full">
-                    <img
-                        src={src}
-                        alt={project ? project.name : "Portfolio Work"}
-                        draggable={false}
-                        decoding="async"
-                        loading="eager"
-                        {...(fetchPriority ? { [FETCH_PRIORITY_KEY]: fetchPriority } : null)}
-                        className="object-cover w-full h-full scale-[1.35] pointer-events-none select-none"
-                    />
-                </div>
-                <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-                <div className="absolute inset-0 rounded-[inherit] pointer-events-none ring-2 ring-inset ring-white opacity-0 group-focus-visible:opacity-100" />
-
-                {project && (
-                    <div className="absolute inset-x-0 bottom-0 pointer-events-none">
+            <div className="w-full">
+                <div
+                    style={{
+                        transform: hovered ? "translateY(-6px)" : "translateY(0)",
+                        transition: `transform 600ms ${APPLE_EASE_CSS}`,
+                    }}
+                >
+                    <div data-zoom-group className="relative ticker-zoom-group">
+                    {project && (
                         <div
-                            className="absolute inset-x-0 bottom-0 h-[120px] bg-gradient-to-t from-black/65 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
-                        />
-                        <div className="relative flex items-end justify-between p-[16px]">
-                            <div className="flex flex-col items-start opacity-0 translate-y-[14px] group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-1000 ease-[cubic-bezier(0.25,0.8,0.25,1)]">
-                                <span className="Caption !text-[14px] uppercase !font-medium text-white leading-[1.2]">
-                                    {project.name}
-                                </span>
-                                <span className="Caption !text-[14px] uppercase !font-medium text-white leading-[1.2] mt-[2px]">
-                                    {getSubtitle(project.name)}
-                                </span>
-                            </div>
-
-                            <span className="Caption !text-[14px] uppercase !font-medium leading-[1.2] opacity-0 translate-y-[14px] group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-1000 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex items-center gap-[6px] text-white">
-                                <span>VIEW PROJECT</span>
-                                {hovered ? (
-                                    <motion.span
-                                        animate={{ x: [0, 5, 0] }}
-                                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                                        className="flex items-center"
-                                    >
-                                        <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
-                                    </motion.span>
-                                ) : (
-                                    <span className="flex items-center">
-                                        <ArrowRight className="w-[1.1em] h-[1.1em]" strokeWidth={2.5} />
-                                    </span>
-                                )}
+                            ref={captionRef}
+                            style={reveal ? undefined : { opacity: 0 }}
+                            className="flex items-end justify-between gap-[16px] pb-[14px] pointer-events-none"
+                        >
+                            <span className="ticker-caption Caption !text-[12px] uppercase !font-medium !text-[var(--text-dark-muted)] leading-[1.2]">
+                                <RollingText text={project.name} active={hovered} />
                             </span>
                         </div>
+                    )}
+                    <div
+                        ref={cardRef}
+                        data-zoom-card
+                        style={{
+                            height: TICKER_HEIGHT,
+                            borderRadius: TICKER_CARD_RADIUS,
+                            ...(reveal ? null : { opacity: 0, transform: `translateY(${TICKER_REVEAL.from})` }),
+                        }}
+                        className="relative isolate w-full overflow-hidden bg-[var(--bg-surface-dark)]"
+                    >
+                        <div data-parallax className="absolute inset-0 w-full h-full">
+                            <img
+                                src={src}
+                                alt={project ? project.name : "Portfolio Work"}
+                                draggable={false}
+                                decoding="async"
+                                loading={isClone ? "lazy" : "eager"}
+                                sizes={TICKER_IMG_SIZES}
+                                {...(project?.srcSet ? { srcSet: project.srcSet } : null)}
+                                {...(fetchPriority ? { [FETCH_PRIORITY_KEY]: fetchPriority } : null)}
+                                className="object-cover w-full h-full scale-[1.12] pointer-events-none select-none"
+                            />
+                        </div>
+                        <div className="ticker-dim absolute inset-0 bg-black/20 pointer-events-none" />
+                        <div className="absolute inset-0 rounded-[inherit] pointer-events-none ring-2 ring-inset ring-white opacity-0 group-focus-visible:opacity-100" />
                     </div>
-                )}
+                    </div>
+                </div>
             </div>
         </div>
     )
@@ -457,7 +550,6 @@ const TickerSlide = memo(
         a.isClone === b.isClone
 )
 
-const APPLE_EASE_CSS = "cubic-bezier(0.32, 0.72, 0, 1)"
 const ACCORDION_OPEN = { duration: 0.6, fadeIn: 0.45, fadeInDelay: 0.12 }
 const ACCORDION_CLOSE = { duration: 0.5, fadeOut: 0.18 }
 
@@ -721,6 +813,24 @@ export default function Home() {
         window.scrollTo(0, 0)
     }, [])
 
+    const [fontsReady, setFontsReady] = useState(
+        () => typeof document === "undefined" || document.fonts?.status === "loaded"
+    )
+
+    useEffect(() => {
+        if (fontsReady) return
+        let active = true
+        const done = () => active && setFontsReady(true)
+        if (document.fonts?.ready) {
+            document.fonts.ready.then(done)
+        } else {
+            done()
+        }
+        return () => {
+            active = false
+        }
+    }, [fontsReady])
+
     const servicesHeadRef = useRef(null)
     const servicesListRef = useRef(null)
     const servicesHeadInView = useInView(servicesHeadRef, SERVICES_VIEWPORT)
@@ -748,7 +858,7 @@ export default function Home() {
         }
         const onAnchor = (e) => {
             if (e.detail !== "#services") return
-            if (servicesRevealedRef.current) return 
+            if (servicesRevealedRef.current) return
             setServicesHold(true)
             if (!listening) {
                 window.addEventListener("scroll", onScroll, { passive: true })
@@ -756,8 +866,8 @@ export default function Home() {
             }
             clearTimeout(settleTimer)
             clearTimeout(hardStop)
-            settleTimer = setTimeout(release, 700) 
-            hardStop = setTimeout(release, 3000) 
+            settleTimer = setTimeout(release, 700)
+            hardStop = setTimeout(release, 3000)
         }
         window.addEventListener("header-anchor", onAnchor)
         return () => {
@@ -794,8 +904,6 @@ export default function Home() {
             const ps = Array.from(list.querySelectorAll(".svc-panel"))
             if (!hs.length || hs.length !== ps.length || hs[0].offsetHeight <= 0) return
 
-            // Batch every layout read first, then write once, so the style write
-            // below can't invalidate layout between reads (forced reflow).
             const rowH = hs[0].getBoundingClientRect().height
             const top0 = parseFloat(getComputedStyle(hs[0]).top) || 0
             const sy = window.scrollY
@@ -812,7 +920,7 @@ export default function Home() {
                 panelTops: rects.map((r) => r.top + sy),
                 lastPanelBottom: rects[rects.length - 1].bottom + sy,
             }
-            lastStuck = -2 
+            lastStuck = -2
             lastPinned = null
             lastLeaving = null
         }
@@ -875,6 +983,129 @@ export default function Home() {
         }
     }, [vp.isDesktop, pageReady])
 
+    useLayoutEffect(() => {
+        const list = servicesListRef.current
+        if (!list || !vp.isDesktop) return
+
+        let raf = 0
+        const cells = () => Array.from(list.querySelectorAll(".svc-keywords-cell"))
+
+        const align = () => {
+            const work = document.querySelector("header nav a")
+            const cs = cells()
+            if (!work || !cs.length) return
+            const target = work.getBoundingClientRect().left
+            if (!target) return
+            const pads = cs.map((c) => Math.max(0, Math.round(target - c.getBoundingClientRect().left)))
+            cs.forEach((c, i) => {
+                c.style.paddingLeft = `${pads[i]}px`
+            })
+
+            const listLeft = list.getBoundingClientRect().left
+            let textRight = 0
+            list.querySelectorAll(".svc-keywords-cell .svc-keywords").forEach((p) => {
+                const range = document.createRange()
+                range.selectNodeContents(p)
+                Array.from(range.getClientRects()).forEach((r) => {
+                    if (r.width) textRight = Math.max(textRight, r.right)
+                })
+            })
+            if (textRight > listLeft) list.style.setProperty("--svc-line-w", `${Math.ceil(textRight - listLeft)}px`)
+        }
+        const schedule = () => {
+            cancelAnimationFrame(raf)
+            raf = requestAnimationFrame(align)
+        }
+
+        align()
+        const ro = new ResizeObserver(schedule)
+        ro.observe(list)
+        ro.observe(document.documentElement)
+        window.addEventListener("resize", schedule)
+        document.fonts?.ready?.then(schedule)
+
+        return () => {
+            cancelAnimationFrame(raf)
+            ro.disconnect()
+            window.removeEventListener("resize", schedule)
+            cells().forEach((c) => c.style.removeProperty("padding-left"))
+            list.style.removeProperty("--svc-line-w")
+        }
+    }, [vp.isDesktop, pageReady])
+
+    useLayoutEffect(() => {
+        const section = workSectionRef.current
+        if (!section || !vp.isDesktop) return
+        let raf = 0
+
+        const align = () => {
+            const about = document.querySelector("header nav a:nth-child(3)")
+            const main = section.querySelector("main")
+            if (!about || !main) return
+            const target = about.getBoundingClientRect().left
+            if (!target) return
+            const width = Math.round(main.getBoundingClientRect().right - target)
+            if (width > 200) section.style.setProperty("--hero-copy-w", `${width}px`)
+        }
+        const schedule = () => {
+            cancelAnimationFrame(raf)
+            raf = requestAnimationFrame(align)
+        }
+
+        align()
+        const ro = new ResizeObserver(schedule)
+        ro.observe(document.documentElement)
+        window.addEventListener("resize", schedule)
+        document.fonts?.ready?.then(schedule)
+
+        return () => {
+            cancelAnimationFrame(raf)
+            ro.disconnect()
+            window.removeEventListener("resize", schedule)
+            section.style.removeProperty("--hero-copy-w")
+        }
+    }, [vp.isDesktop, pageReady])
+
+    useLayoutEffect(() => {
+        if (!vp.isDesktop) return
+        let raf = 0
+        const blocks = () => Array.from(document.querySelectorAll("[data-exp-copy]"))
+
+        const align = () => {
+            const about = document.querySelector("header nav a:nth-child(3)")
+            const bs = blocks()
+            if (!about || !bs.length) return
+            const target = about.getBoundingClientRect().left
+            if (!target) return
+            const colW = window.matchMedia("(min-width: 1280px)").matches ? 380 : 300
+            const pads = bs.map((b) => {
+                const row = b.closest("li")
+                if (!row) return 0
+                return Math.max(0, Math.round(target - (row.getBoundingClientRect().right - colW)))
+            })
+            bs.forEach((b, i) => {
+                b.style.paddingLeft = `${pads[i]}px`
+            })
+        }
+        const schedule = () => {
+            cancelAnimationFrame(raf)
+            raf = requestAnimationFrame(align)
+        }
+
+        align()
+        const ro = new ResizeObserver(schedule)
+        ro.observe(document.documentElement)
+        window.addEventListener("resize", schedule)
+        document.fonts?.ready?.then(schedule)
+
+        return () => {
+            cancelAnimationFrame(raf)
+            ro.disconnect()
+            window.removeEventListener("resize", schedule)
+            blocks().forEach((b) => b.style.removeProperty("padding-left"))
+        }
+    }, [vp.isDesktop, pageReady])
+
     const [activeExpertise, setActiveExpertise] = useState(null)
     const expertiseRatios = useExpertiseRatios()
     const [hoveredExpertise, setHoveredExpertise] = useState(null)
@@ -893,17 +1124,14 @@ export default function Home() {
     const tickerViewportRef = useRef(null)
     const tickerRef = useRef(null)
     const tickerWrapRef = useRef(null)
+    const lensCanvasRef = useRef(null)
     const workSectionRef = useRef(null)
     const tickerEngine = useRef(null)
     const [tickerReady, setTickerReady] = useState(false)
-    const [tickerPaused, setTickerPaused] = useState(false)
-    const tickerPausedRef = useRef(false)
-    const toggleTickerPause = () => {
-        const next = !tickerPausedRef.current
-        tickerPausedRef.current = next
-        setTickerPaused(next)
-        tickerEngine.current?.setPaused(next)
-    }
+    // Decided once: phones and touch tablets skip the WebGL lens and get the lighter DOM treatment.
+    const [lensOn] = useState(
+        () => typeof window !== "undefined" && !(TICKER_LENS.disableOnMobile && isMobileDevice())
+    )
     const pageReadyRef = useRef(pageReady)
     pageReadyRef.current = pageReady
 
@@ -912,9 +1140,9 @@ export default function Home() {
 
         tickerEngine.current = createTicker(tickerViewportRef.current, tickerRef.current, {
             ...TICKER_MOTION,
+            ...(vp.isMobile ? TICKER_MOTION_MOBILE : null),
             startPaused: true,
         })
-        if (tickerPausedRef.current) tickerEngine.current.setPaused(true)
         if (pageReadyRef.current) tickerEngine.current.start()
         setTickerReady(true)
         return () => {
@@ -933,6 +1161,291 @@ export default function Home() {
         const wrap = tickerWrapRef.current
         if (wrap) wrap.style.transform = ""
     }, [vp.isMobile])
+
+    // Velocity-driven card scale / tilt / spread on drag and flick, plus a centre-slide emphasis on phones.
+    // Everything is computed from createTicker's own state (getState), so there are no per-frame DOM
+    // reads and the engine's compositor glide stays on the compositor. Scale and tilt are shared CSS
+    // variables on the track, and only slides near the viewport get a transform (data-near).
+    useEffect(() => {
+        if (!tickerReady) return
+        const engine = tickerEngine.current
+        const track = tickerRef.current
+        const viewport = tickerViewportRef.current
+        if (!engine || !track || !viewport) return
+
+        const reduce = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        const touch = vp.isMobile || !!window.matchMedia?.("(pointer: coarse)").matches
+        const emphasis = vp.isMobile || !lensOn
+        const fx = !reduce
+
+        // WebGL lens: draws the card images itself (bent + chromatic aberration at the edges).
+        // If WebGL is missing, the plain DOM cards stay as they are.
+        const pad = TICKER_LENS.pad
+        const wrap = tickerWrapRef.current
+        let restoreDom = () => {}
+        const lens = lensCanvasRef.current
+            ? createTickerLens(lensCanvasRef.current, () => restoreDom())
+            : null
+        if (!fx && !emphasis && !lens) return
+
+        const Z = touch ? { ...TICKER_ZOOM, ...TICKER_ZOOM_TOUCH } : TICKER_ZOOM
+        const baseSpeed = vp.isMobile ? TICKER_MOTION_MOBILE.baseSpeed : TICKER_MOTION.baseSpeed
+        const driftDeadband = baseSpeed * Z.driftMargin
+        const clamp = gsap.utils.clamp(-1, 1)
+        const clamp01 = gsap.utils.clamp(0, 1)
+
+        let cards = []
+        let lensCY = 0
+        let lensW = 0
+        let lensH = 0
+        const sizeLens = () => {
+            if (!lens || !wrap) return
+            lensW = wrap.clientWidth
+            lensH = wrap.clientHeight + pad * 2
+            if (lensW > 0) lens.resize(lensW, lensH, window.devicePixelRatio || 1)
+        }
+        restoreDom = () => {
+            cards.forEach((c) => c.slide.removeAttribute("data-gl"))
+        }
+        const measure = () => {
+            const slides = Array.from(track.children)
+            const padR = slides[0] ? parseFloat(getComputedStyle(slides[0]).paddingRight) || 0 : 0
+            cards = slides.map((slide) => {
+                const el = slide.querySelector("[data-zoom-group]")
+                const card = el?.querySelector("[data-zoom-card]")
+                const img = el?.querySelector("[data-parallax]")
+                if (el && card) {
+                    el.style.setProperty("--oy", `${card.offsetTop + card.offsetHeight / 2}px`)
+                    lensCY = el.offsetTop + card.offsetTop + card.offsetHeight / 2
+                }
+                return {
+                    slide,
+                    el,
+                    card,
+                    imgEl: img?.querySelector("img") || null,
+                    gl: false,
+                    img,
+                    padR,
+                    setImg: img ? gsap.quickSetter(img, "x", "px") : null,
+                    imgX: 0,
+                    dx: NaN,
+                    zs: NaN,
+                    near: null,
+                    act: -1,
+                }
+            })
+        }
+        measure()
+
+        sizeLens()
+        const mo = new MutationObserver(measure)
+        mo.observe(track, { childList: true })
+        const ro = new ResizeObserver(() => {
+            measure()
+            sizeLens()
+        })
+        ro.observe(viewport)
+        ro.observe(track)
+        if (wrap) ro.observe(wrap)
+        document.fonts?.ready?.then(measure)
+
+        const s = { amt: 0, rot: 0 }
+        const toAmt = gsap.quickTo(s, "amt", { duration: Z.settle, ease: "power3.out" })
+        const toRot = gsap.quickTo(s, "rot", { duration: Z.settle * 1.15, ease: "power3.out" })
+        const glCards = []
+        let lastTarget = 0
+        let vel = 0
+        let zooming = false
+        let lastTilt = ""
+        let lastAmt = -1
+
+        track.style.setProperty("--zoom-persp", `${Z.perspective}px`)
+        if (emphasis) track.setAttribute("data-emphasis", "true")
+
+        const onTick = (_time, deltaMs) => {
+            const st = engine.getState()
+            const n = cards.length
+            if (!st.visible || !st.vpW || !n || st.lefts.length !== n) return
+            const dt = Math.min(Math.max(deltaMs, 1) / 1000, 0.064)
+
+            // Velocity comes straight from the engine (drag, flick, wheel or cruise)
+            vel += (st.vel - vel) * (1 - Math.exp(-Z.velSmoothing * dt))
+            const mag = Math.max(0, Math.abs(vel) - driftDeadband)
+            const speedNorm = fx ? Math.min(1, mag / Z.fullSpeed) : 0
+
+            // Soft follow: quickTo eases the stretch and tilt toward their targets (no overshoot)
+            const changed = speedNorm === 0 ? lastTarget !== 0 : Math.abs(speedNorm - lastTarget) > 0.002
+            if (changed) {
+                lastTarget = speedNorm
+                toAmt(speedNorm)
+                toRot((vel < 0 ? -1 : 1) * speedNorm * Z.tiltMax)
+            }
+
+            const amt = clamp01(s.amt)
+            const rot = s.rot
+
+            // Flick amount for the CSS-only emphasis (scale dip deepens a touch while flicking)
+            if (emphasis) {
+                const a = Math.round(amt * 100) / 100
+                if (a !== lastAmt) {
+                    lastAmt = a
+                    track.style.setProperty("--amt", a.toFixed(2))
+                }
+            }
+            const active = fx && (speedNorm > 0 || amt > 0.0005 || Math.abs(rot) > 0.01)
+
+            if (active) {
+                if (!zooming) {
+                    zooming = true
+                    track.setAttribute("data-zooming", "true")
+                }
+                const t = `${rot.toFixed(3)}deg`
+                if (t !== lastTilt) {
+                    lastTilt = t
+                    track.style.setProperty("--tilt", t)
+                }
+            } else if (zooming) {
+                zooming = false
+                lastTilt = ""
+                track.removeAttribute("data-zooming")
+                track.style.removeProperty("--tilt")
+                for (let i = 0; i < n; i++) {
+                    const c = cards[i]
+                    if (c.el) {
+                        c.el.style.removeProperty("--dx")
+                        c.el.style.removeProperty("--zs")
+                    }
+                    c.dx = NaN
+                    c.zs = NaN
+                }
+            }
+
+            const vCenter = st.vpW * 0.5
+            const pitch = n > 1 ? st.lefts[1] - st.lefts[0] : st.widths[0] || 1
+
+            const wr = lens && wrap ? wrap.getBoundingClientRect() : null
+            glCards.length = 0
+
+            for (let i = 0; i < n; i++) {
+                const c = cards[i]
+                const w = st.widths[i] - c.padR
+                const left = st.lefts[i] + st.x
+
+                // Only slides within one slide-width of the viewport get a transform / 3D layer
+                const near = left + w > -pitch && left < st.vpW + pitch
+                if (near !== c.near) {
+                    c.near = near
+                    c.slide.setAttribute("data-near", near ? "true" : "false")
+                    if (!near && c.el) {
+                        c.el.style.removeProperty("--dx")
+                        c.el.style.removeProperty("--zs")
+                        c.dx = NaN
+                        c.zs = NaN
+                    }
+                }
+                if (!near) continue
+
+                const off = left + w * 0.5 - vCenter
+
+                if (active && c.el) {
+                    // Spread: cards drift away from the viewport centre, so every gap stretches
+                    const tx = off * Z.spread * amt
+                    if (Number.isNaN(c.dx) || Math.abs(tx - c.dx) > 0.05) {
+                        c.dx = tx
+                        c.el.style.setProperty("--dx", `${tx.toFixed(2)}px`)
+                    }
+
+                    // Barrel: smallest at the viewport centre, growing toward both edges
+                    const u = clamp01(Math.abs(off) / (st.vpW * 0.5))
+                    const centreScale = 1 - amt * (1 - Z.minScale)
+                    const edgeScale = 1 + amt * Z.edgeGrow
+                    const zs = centreScale + (edgeScale - centreScale) * Math.pow(u, Z.barrel)
+                    if (Number.isNaN(c.zs) || Math.abs(zs - c.zs) > 0.0004) {
+                        c.zs = zs
+                        c.el.style.setProperty("--zs", zs.toFixed(4))
+                    }
+                }
+
+                if (fx && c.setImg && Z.parallax) {
+                    const u = clamp(off / (st.vpW * 0.5))
+                    const lim = w * 0.06
+                    const px = Math.max(-lim, Math.min(lim, -u * Z.parallax * w))
+                    if (Math.abs(px - c.imgX) > 0.2) {
+                        c.imgX = px
+                        c.setImg(px)
+                    }
+                }
+
+                // Phones: the slide nearest the centre is fully lit, its neighbours are dimmed
+                if (emphasis) {
+                    const a = clamp01(1 - Math.abs(off) / (pitch * 1.2))
+                    const e = a * a * a * (a * (a * 6 - 15) + 10) // smootherstep: no visible knee at either end
+                    if (Math.abs(e - c.act) > 0.002) {
+                        c.act = e
+                        c.slide.style.setProperty("--act", e.toFixed(3))
+                    }
+                }
+
+                // Lens: hand this card's current on-screen rectangle (all transforms included) to WebGL
+                if (wr && c.card && c.imgEl) {
+                    const r = c.card.getBoundingClientRect()
+                    glCards.push({
+                        c,
+                        img: c.imgEl,
+                        x: r.left - wr.left,
+                        y: r.top - wr.top + pad,
+                        w: r.width,
+                        h: r.height,
+                        opacity: parseFloat(getComputedStyle(c.card).opacity),
+                        dim: 0.2,
+                        shift: c.imgX,
+                        zoom: LENS_IMG_ZOOM,
+                    })
+                }
+            }
+
+            if (lens && wr && lensW > 0) {
+                const drawn = lens.draw({
+                    width: lensW,
+                    height: lensH,
+                    centerY: pad + lensCY,
+                    strength: TICKER_LENS.rest + (1 - TICKER_LENS.rest) * amt,
+                    cards: glCards,
+                })
+                for (let k = 0; k < drawn.length; k++) {
+                    const c = glCards[drawn[k]].c
+                    if (!c.gl) {
+                        c.gl = true
+                        c.slide.setAttribute("data-gl", "true")
+                    }
+                }
+            }
+        }
+
+        gsap.ticker.add(onTick)
+
+        return () => {
+            gsap.ticker.remove(onTick)
+            gsap.killTweensOf(s)
+            mo.disconnect()
+            ro.disconnect()
+            restoreDom()
+            lens?.destroy()
+            track.removeAttribute("data-zooming")
+            track.removeAttribute("data-emphasis")
+            ;["--tilt", "--zoom-persp", "--amt"].forEach((v) => track.style.removeProperty(v))
+            cards.forEach(({ slide, el, img }) => {
+                slide.removeAttribute("data-near")
+                slide.style.removeProperty("--act")
+                if (el) {
+                    el.style.removeProperty("--dx")
+                    el.style.removeProperty("--zs")
+                    el.style.removeProperty("--oy")
+                }
+                if (img) gsap.set(img, { clearProps: "transform" })
+            })
+        }
+    }, [vp.isMobile, tickerReady])
 
     useEffect(() => {
         const unique = Array.from(new Set(LOOPING_IMAGES))
@@ -958,10 +1471,10 @@ export default function Home() {
 
     useEffect(() => {
         let frame = null
-        let rowOffsets = [] 
+        let rowOffsets = []
 
         const measure = () => {
-            rowOffsets = expertiseRefs.current.map(node => 
+            rowOffsets = expertiseRefs.current.map((node) =>
                 node ? node.getBoundingClientRect().top + window.scrollY : 0
             )
         }
@@ -971,14 +1484,14 @@ export default function Home() {
             if (!isDesktopRef.current) return
             const rows = expertiseRefs.current
             if (!rows.some(Boolean)) return
-            
+
             const mid = window.scrollY + (window.innerHeight || 800) * 0.5
             let idx = null
-            
+
             rowOffsets.forEach((top, i) => {
-                if (top <= mid) idx = i 
+                if (top <= mid) idx = i
             })
-            
+
             scrollIndexRef.current = idx
 
             let under = null
@@ -999,11 +1512,11 @@ export default function Home() {
         const onScroll = () => {
             if (frame === null) frame = requestAnimationFrame(update)
         }
-        
-        measure() 
+
+        measure()
         update()
         window.addEventListener("scroll", onScroll, { passive: true })
-        window.addEventListener("resize", measure) 
+        window.addEventListener("resize", measure)
         window.addEventListener("resize", onScroll)
         return () => {
             if (frame !== null) cancelAnimationFrame(frame)
@@ -1149,7 +1662,7 @@ export default function Home() {
                   : null
         if (!dest) return
 
-        prefetchHero(heroSlugFor(projectName)) 
+        prefetchHero(heroSlugFor(projectName))
 
         if (pageTransition?.triggerTransition) {
             pageTransition.triggerTransition(dest)
@@ -1170,7 +1683,7 @@ export default function Home() {
             >
                 <div className="flex flex-col flex-1 w-full px-[var(--page-pad)] max-md:pt-0 pt-[32px] lg:pt-[40px] pb-[24px] md:pb-[16px] m-0">
                     <div className="flex flex-col w-full mt-auto max-md:gap-[96px] gap-[48px] md:gap-[64px] m-0">
-                        <main className="flex flex-col items-start gap-[32px] w-full m-0 lg:flex-row lg:items-end lg:justify-between lg:gap-0">
+                        <main className="flex flex-col items-start gap-[32px] w-full m-0 md:-translate-y-[64px] lg:flex-row lg:items-end lg:justify-between lg:gap-0">
                             <MaskRevealText
                                 as="h1"
                                 mode="lines"
@@ -1190,28 +1703,28 @@ export default function Home() {
                                 active={pageReady}
                                 delay={0.3}
                                 stagger={0.06}
-                                className="svc-size Body rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] max-w-[440px] sm:max-md:portrait:max-w-[560px] sm:max-md:portrait:self-start lg:max-w-none m-0 p-0 text-left self-end"
+                                className="svc-size Body rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] !text-[var(--text-dark-muted)] max-w-[440px] sm:max-md:portrait:max-w-[560px] sm:max-md:portrait:self-start lg:max-w-none lg:w-[var(--hero-copy-w,300px)] lg:shrink-0 m-0 p-0 text-left self-end"
                             >
-                                {"I close the gap between how good your\nbusiness is and how it looks."}
+                                {"I close the gap between how good your\nbusiness is and how it looks. Through\nthoughtful branding, design, and visual\nstorytelling, I help businesses reflect\ntheir true value, build trust, and make\na lasting impression."}
                             </MaskRevealText>
                         </main>
 
-                        <div className="flex flex-col items-start gap-1 w-full m-0 -translate-y-[12px] md:translate-y-0 md:flex-row md:justify-between md:items-center md:gap-0">
+                        <div className="flex flex-col items-start gap-1 w-full m-0 -translate-y-[12px] md:-translate-y-[16px] md:flex-row md:justify-between md:items-center md:gap-0">
                             <MaskRevealText
                                 mode="words"
                                 active={pageReady}
                                 delay={0.4}
-                                className="Nav sm:max-md:portrait:!text-[22px] uppercase text-[var(--text-dark-secondary)]"
+                                className="Nav sm:max-md:portrait:!text-[22px] uppercase !text-[var(--text-dark-muted)]"
                             >
                                 Selected Work
                             </MaskRevealText>
 
-                            <div className="hidden md:block">
+                            <div className="hidden md:block lg:w-[var(--hero-copy-w,300px)] lg:shrink-0">
                                 <MaskRevealText
                                     mode="words"
                                     active={pageReady}
                                     delay={0.45}
-                                    className="Nav sm:max-md:portrait:!text-[22px] uppercase text-[var(--text-dark-secondary)] text-right"
+                                    className="Nav sm:max-md:portrait:!text-[22px] uppercase !text-[var(--text-dark-muted)] text-right lg:text-left"
                                 >
                                     Based in Addis Ababa, Ethiopia
                                 </MaskRevealText>
@@ -1220,25 +1733,19 @@ export default function Home() {
                     </div>
                 </div>
 
-                {vp.isMobile ? (
-                    <div className="w-full pb-[var(--page-pad-y)]">
-                        <FlipbookCarousel
-                            fullWidth
-                            projects={[...WORK_PROJECTS].sort((a, b) =>
-                                b.name.toLowerCase().includes("weyra") ? 1 : -1
-                            )}
-                            onSelect={handleProjectClick}
-                        />
-                    </div>
-                ) : (
-                    <div ref={tickerWrapRef} className="relative flex-shrink-0 w-full pb-[16px] m-0 overflow-hidden will-change-transform">
-                        <button
-                            type="button"
-                            onClick={toggleTickerPause}
-                            className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:right-[16px] focus-visible:top-[16px] focus-visible:z-10 focus-visible:rounded-full focus-visible:bg-white focus-visible:px-[14px] focus-visible:py-[8px] focus-visible:text-black Caption !text-[14px] uppercase !font-medium"
-                        >
-                            {tickerPaused ? "Play work gallery" : "Pause work gallery"}
-                        </button>
+                {(
+                    <div
+                        ref={tickerWrapRef}
+                        className="relative z-20 flex-shrink-0 w-full pb-[20px] max-md:pb-[var(--page-pad-y)] m-0 overflow-x-clip overflow-y-visible will-change-transform"
+                    >
+                        {lensOn && (
+                            <canvas
+                                ref={lensCanvasRef}
+                                aria-hidden="true"
+                                className="absolute left-0 z-[5] pointer-events-none"
+                                style={{ top: -TICKER_LENS.pad }}
+                            />
+                        )}
                         <div
                             ref={tickerViewportRef}
                             role="region"
@@ -1251,7 +1758,7 @@ export default function Home() {
                                 }
                             }}
                             style={{ touchAction: "pan-y" }}
-                            className="w-full overflow-hidden select-none cursor-grab data-[dragging=true]:cursor-grabbing data-[dragging=true]:[&>div]:pointer-events-none"
+                            className="w-full overflow-x-clip overflow-y-visible select-none overscroll-x-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] cursor-grab data-[dragging=true]:cursor-grabbing data-[dragging=true]:[&>div]:pointer-events-none"
                         >
                             <div ref={tickerRef} className="flex w-full">
                                 {Array.from({ length: TICKER_MOTION.copies }, () => LOOPING_IMAGES).flat().map((src, idx) => {
@@ -1261,7 +1768,7 @@ export default function Home() {
                                             key={idx}
                                             src={src}
                                             project={proj}
-                                            ready={tickerReady && pageReady}
+                                            ready={tickerReady && pageReady && fontsReady}
                                             isClone={idx >= LOOPING_IMAGES.length}
                                             fetchPriority={idx < TICKER_PRIORITY_COUNT ? "high" : undefined}
                                             onClick={() => proj && handleProjectClickRef.current?.(proj.name)}
@@ -1294,6 +1801,24 @@ export default function Home() {
                 [data-leaving="true"] .svc-sticky-head[data-pinned]::before {
                     opacity: 0 !important; transition: opacity 0.22s ease 0.14s;
                 }
+                .ticker-zoom-group { transform-origin: 50% var(--oy, 50%); }
+                [data-zooming="true"] [data-near="true"] .ticker-zoom-group {
+                    transform: perspective(var(--zoom-persp, 1400px)) translate3d(var(--dx, 0px), 0, 0) rotateY(var(--tilt, 0deg)) scale(var(--zs, 1));
+                    will-change: transform;
+                }
+                [data-gl="true"] [data-zoom-card] { background-color: transparent; }
+                [data-gl="true"] [data-parallax], [data-gl="true"] .ticker-dim { visibility: hidden; }
+                [data-emphasis="true"] [data-near="true"] .ticker-zoom-group {
+                    transform: scale(calc(1 - (${TICKER_MOBILE.restDip} + ${TICKER_MOBILE.flickDip} * var(--amt, 0)) * (1 - var(--act, 1))));
+                    will-change: transform;
+                }
+                [data-emphasis="true"][data-zooming="true"] [data-near="true"] .ticker-zoom-group {
+                    transform: perspective(var(--zoom-persp, 1400px)) translate3d(var(--dx, 0px), 0, 0) rotateY(var(--tilt, 0deg)) scale(calc(var(--zs, 1) * (1 - (${TICKER_MOBILE.restDip} + ${TICKER_MOBILE.flickDip} * var(--amt, 0)) * (1 - var(--act, 1)))));
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    [data-emphasis="true"] [data-near="true"] .ticker-zoom-group { transform: none; will-change: auto; }
+                }
+                [data-emphasis="true"] .ticker-caption { opacity: calc(0.3 + 0.7 * var(--act, 1)); }
                 .svc-par { position: absolute; left: 0; right: 0; top: -36px; bottom: -36px; will-change: transform; }
                 @supports (animation-timeline: view()) {
                     .svc-par-box {
@@ -1334,7 +1859,7 @@ export default function Home() {
                                 active={servicesHeadActive}
                                 stagger={0.02}
                                 delay={0.1}
-                                className="cap-align svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] w-full max-w-[500px] md:w-auto md:flex-none md:ml-auto md:self-end md:min-w-0 !text-[var(--text-dark-muted)] m-0"
+                                className="cap-align svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] w-full max-w-[500px] md:w-auto md:flex-none md:ml-auto md:self-end md:min-w-0 lg:w-[calc(50%-10px)] lg:max-w-none lg:ml-0 !text-[var(--text-dark-muted)] m-0"
                             >
                                 Good brands don't happen because everything looks nice. They happen when the strategy, identity and experience all point in the same direction. I work across four disciplines to make that happen.
                             </MaskRevealText>
@@ -1374,90 +1899,90 @@ export default function Home() {
                                                 className={vp.isDesktop ? "flex flex-col w-full m-0 relative" : "contents"}
                                             >
                                                 <HeadWrap {...headWrapProps}>
-                                                <motion.div
-                                                    variants={servicesDividerVariants}
-                                                    className="w-full h-[1px] bg-[var(--border-dark)] origin-left"
-                                                />
+                                                    <motion.div
+                                                        variants={servicesDividerVariants}
+                                                        className="w-full lg:w-[var(--svc-line-w,100%)] h-[1px] bg-[var(--border-dark)] origin-left"
+                                                    />
 
-                                                <motion.div
-                                                    role={vp.isDesktop ? "button" : undefined}
-                                                    tabIndex={vp.isDesktop ? 0 : -1}
-                                                    aria-expanded={vp.isDesktop ? isActive : undefined}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === "Enter" || e.key === " ") {
-                                                            e.preventDefault()
-                                                            handleRowPress(index)
+                                                    <motion.div
+                                                        role={vp.isDesktop ? "button" : undefined}
+                                                        tabIndex={vp.isDesktop ? 0 : -1}
+                                                        aria-expanded={vp.isDesktop ? isActive : undefined}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter" || e.key === " ") {
+                                                                e.preventDefault()
+                                                                handleRowPress(index)
+                                                            }
+                                                        }}
+                                                        onMouseEnter={vp.isDesktop ? () => selectService(index) : undefined}
+                                                        onPointerEnter={
+                                                            vp.isDesktop
+                                                                ? undefined
+                                                                : (e) => {
+                                                                      if (e.pointerType !== "touch") setHoveredRow(index)
+                                                                  }
                                                         }
-                                                    }}
-                                                    onMouseEnter={vp.isDesktop ? () => selectService(index) : undefined}
-                                                    onPointerEnter={
-                                                        vp.isDesktop
-                                                            ? undefined
-                                                            : (e) => {
-                                                                  if (e.pointerType !== "touch") setHoveredRow(index)
-                                                              }
-                                                    }
-                                                    onPointerLeave={vp.isDesktop ? undefined : () => setHoveredRow(null)}
-                                                    onClick={() => handleRowPress(index)}
-                                                    whileHover={{ y: -3 }}
-                                                    transition={{ duration: 0.25, ease: taylorEase }}
-                                                    className="svc-row cursor-pointer group w-full m-0 select-none"
-                                                >
-                                                    <motion.span
-                                                        animate={vp.isDesktop ? { color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 } : undefined}
-                                                        style={vp.isDesktop ? undefined : { color: SERVICE_INACTIVE_GREY }}
+                                                        onPointerLeave={vp.isDesktop ? undefined : () => setHoveredRow(null)}
+                                                        onClick={() => handleRowPress(index)}
+                                                        whileHover={{ y: -3 }}
                                                         transition={{ duration: 0.25, ease: taylorEase }}
-                                                        className="svc-num Caption font-semibold transition-colors select-none"
+                                                        className="svc-row cursor-pointer group w-full m-0 select-none"
                                                     >
-                                                        ({service.id})
-                                                    </motion.span>
-
-                                                    <div className="svc-title relative overflow-hidden">
                                                         <motion.span
                                                             animate={vp.isDesktop ? { color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 } : undefined}
                                                             style={vp.isDesktop ? undefined : { color: SERVICE_INACTIVE_GREY }}
                                                             transition={{ duration: 0.25, ease: taylorEase }}
-                                                            className="svc-title-text H2 block tracking-[-0.02em] group-hover:text-white uppercase"
+                                                            className="svc-num Caption font-semibold transition-colors select-none"
                                                         >
-                                                            {service.title}
+                                                            ({service.id})
                                                         </motion.span>
-                                                    </div>
 
-                                                    <div className="svc-keywords-cell min-w-0 overflow-hidden lg:pl-[48px] xl:pl-[72px]">
-                                                        {vp.isDesktop && (
-                                                        <motion.div
-                                                            animate={{
-                                                                color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY,
-                                                                opacity: isHighlighted ? 1 : 0.45,
-                                                                y: isHighlighted ? 0 : 4,
-                                                            }}
-                                                            transition={{ duration: 0.25, ease: taylorEase }}
-                                                            className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] whitespace-pre-line"
+                                                        <div className="svc-title relative overflow-hidden">
+                                                            <motion.span
+                                                                animate={vp.isDesktop ? { color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY, y: 0 } : undefined}
+                                                                style={vp.isDesktop ? undefined : { color: SERVICE_INACTIVE_GREY }}
+                                                                transition={{ duration: 0.25, ease: taylorEase }}
+                                                                className="svc-title-text H2 block tracking-[-0.02em] group-hover:text-white uppercase"
+                                                            >
+                                                                {service.title}
+                                                            </motion.span>
+                                                        </div>
+
+                                                        <div className="svc-keywords-cell min-w-0 overflow-hidden lg:pl-[48px] xl:pl-[72px]">
+                                                            {vp.isDesktop && (
+                                                                <motion.div
+                                                                    animate={{
+                                                                        color: isHighlighted ? "#ffffff" : SERVICE_INACTIVE_GREY,
+                                                                        opacity: isHighlighted ? 1 : 0.45,
+                                                                        y: isHighlighted ? 0 : 4,
+                                                                    }}
+                                                                    transition={{ duration: 0.25, ease: taylorEase }}
+                                                                    className="svc-keywords rwd-pretty !leading-[1.35] !tracking-[-0.005em] !text-[16px] whitespace-pre-line"
+                                                                >
+                                                                    {service.keywords}
+                                                                </motion.div>
+                                                            )}
+                                                        </div>
+
+                                                        <span
+                                                            aria-hidden="true"
+                                                            className={`svc-icon relative block w-[14px] h-[14px] shrink-0 transition-opacity duration-300 ${
+                                                                !vp.isDesktop ? "opacity-0" : isHighlighted ? "opacity-100" : "opacity-50"
+                                                            }`}
                                                         >
-                                                            {service.keywords}
-                                                        </motion.div>
-                                                        )}
-                                                    </div>
-
-                                                    <span
-                                                        aria-hidden="true"
-                                                        className={`svc-icon relative block w-[14px] h-[14px] shrink-0 transition-opacity duration-300 ${
-                                                            !vp.isDesktop ? "opacity-0" : isHighlighted ? "opacity-100" : "opacity-50"
-                                                        }`}
-                                                    >
-                                                        <span className="absolute left-0 top-[6.25px] w-full h-[1.5px] bg-white" />
-                                                        <motion.span
-                                                            animate={{ scaleY: isActive ? 0 : 1 }}
-                                                            transition={{ duration: 0.35, ease: taylorEase }}
-                                                            className="absolute top-0 left-[6.25px] h-full w-[1.5px] bg-white"
-                                                        />
-                                                    </span>
-                                                </motion.div>
+                                                            <span className="absolute left-0 top-[6.25px] w-full h-[1.5px] bg-white" />
+                                                            <motion.span
+                                                                animate={{ scaleY: isActive ? 0 : 1 }}
+                                                                transition={{ duration: 0.35, ease: taylorEase }}
+                                                                className="absolute top-0 left-[6.25px] h-full w-[1.5px] bg-white"
+                                                            />
+                                                        </span>
+                                                    </motion.div>
                                                 </HeadWrap>
 
                                                 {!vp.isDesktop && (
                                                     <div style={{ marginTop: `calc(${-(SERVICES_DATA.length - 1 - index)} * var(--svc-row-h, 84px))` }}>
-                                                    <AccordionPanel active={isActive}>
+                                                        <AccordionPanel active={isActive}>
                                                             <div className="svc-panel pb-[28px]">
                                                                 <ServiceAccordionImage
                                                                     src={service.image}
@@ -1486,7 +2011,7 @@ export default function Home() {
                                                                     </p>
                                                                 </div>
                                                             </div>
-                                                    </AccordionPanel>
+                                                        </AccordionPanel>
                                                     </div>
                                                 )}
                                             </motion.li>
@@ -1496,7 +2021,7 @@ export default function Home() {
                                     <motion.li
                                         aria-hidden="true"
                                         variants={servicesDividerVariants}
-                                        className="w-full h-[1px] bg-[var(--border-dark)] origin-left list-none"
+                                        className="w-full lg:w-[var(--svc-line-w,100%)] h-[1px] bg-[var(--border-dark)] origin-left list-none"
                                     />
                                 </motion.ul>
                             </div>
@@ -1575,8 +2100,8 @@ export default function Home() {
                                 />
                             </div>
 
-                            <div 
-                                id="expertise" 
+                            <div
+                                id="expertise"
                                 className="flex flex-col w-full mt-[48px] lg:mt-[clamp(72px,14svh,144px)]"
                                 onPointerMove={vp.isDesktop ? (e) => {
                                     pointerRef.current = { x: e.clientX, y: e.clientY }
@@ -1656,6 +2181,7 @@ export default function Home() {
                                                     </h3>
 
                                                     <div
+                                                        data-exp-copy
                                                         className="flex flex-col justify-between h-full pr-[120px] md:pr-0"
                                                         style={vp.isDesktop ? { paddingRight: EXPERTISE_SHIFT } : undefined}
                                                     >
