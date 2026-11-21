@@ -1,4 +1,4 @@
-// src/pages/ZhongshanCaseStudy.jsx
+// src/views/ZhongshanCaseStudy.jsx
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useOutletContext } from "react-router-dom"
@@ -15,7 +15,13 @@ import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
 
-import { CS_HEADING, CS_PARA, CS_HERO_PARA, CS_HERO_SCRIM } from "../lib/caseStudyStyles.js"
+import * as CaseStudyStyles from "../lib/caseStudyStyles.js"
+
+const CS_HEADING = CaseStudyStyles.CS_HEADING ?? "CaseH2 uppercase text-black"
+const CS_PARA = CaseStudyStyles.CS_PARA ?? "CaseBody text-black"
+const CS_HERO_PARA = CaseStudyStyles.CS_HERO_PARA ?? "CaseHero text-white"
+const CS_HERO_SCRIM =
+  CaseStudyStyles.CS_HERO_SCRIM ?? "pointer-events-none absolute inset-0 bg-black/35 z-[1]"
 
 gsap.registerPlugin(ScrollTrigger)
 
