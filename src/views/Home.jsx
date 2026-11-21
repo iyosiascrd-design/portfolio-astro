@@ -745,27 +745,46 @@ function buildLut() {
 
 function SunriseTransition({ children, anchorRef, onHeaderTone }) {
     const canvasRef = useRef(null)
+    const toneRef = useRef(onHeaderTone)
+    toneRef.current = onHeaderTone
     const { scrollY } = useScroll()
     const travel = useMotionValue(0)
 
     useEffect(() => {
-        const update = () => {
+        let anchorTop = 0
+        let vh = 0
+
+        // Layout reads happen here (resize / content size change), never per scroll tick.
+        // The canvas fills the 100lvh sticky box, so its height stays constant while mobile
+        // browser chrome collapses; window.innerHeight does not, which made progress jump.
+        const measure = () => {
             const el = anchorRef?.current
-            if (!el) return
-            const vh = window.innerHeight || 800
-            const rect = el.getBoundingClientRect()
-            const progress = (vh - rect.top) / (vh * 1.5)
+            vh = canvasRef.current?.clientHeight || window.innerHeight || 800
+            if (el) anchorTop = el.getBoundingClientRect().top + scrollY.get()
+        }
+
+        const update = () => {
+            if (!vh) return
+            const progress = (vh - (anchorTop - scrollY.get())) / (vh * 1.5)
             travel.set(Math.max(0, Math.min(1, progress)))
         }
 
-        update()
+        const remeasure = () => {
+            measure()
+            update()
+        }
+
+        remeasure()
         const unsubscribe = scrollY.on("change", update)
-        window.addEventListener("resize", update)
-        window.addEventListener("load", update)
+        const ro = new ResizeObserver(remeasure)
+        ro.observe(document.documentElement)
+        window.addEventListener("resize", remeasure)
+        window.addEventListener("load", remeasure)
         return () => {
             unsubscribe()
-            window.removeEventListener("resize", update)
-            window.removeEventListener("load", update)
+            ro.disconnect()
+            window.removeEventListener("resize", remeasure)
+            window.removeEventListener("load", remeasure)
         }
     }, [anchorRef, scrollY, travel])
 
@@ -776,18 +795,24 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         const lut = buildLut()
         const lutScale = (LUT_SIZE - 1) / V_MAX
         let lastLight = null
+        let viewH = 0
+        const measureView = () => {
+            viewH = canvas.clientHeight || window.innerHeight || 800
+        }
+        measureView()
 
         const syncHeaderTone = (shift) => {
-            if (typeof onHeaderTone !== "function") return
+            const notify = toneRef.current
+            if (typeof notify !== "function") return
             const headerCenter = window.innerWidth < 768 ? 36 : 47
-            const headerV = headerCenter / (window.innerHeight || 800)
+            const headerV = headerCenter / viewH
             const vv = headerV + shift
             const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
             const lum = (0.2126 * lut[k * 3] + 0.7152 * lut[k * 3 + 1] + 0.0722 * lut[k * 3 + 2]) / 255
             const light = lum > HEADER_TONE_THRESHOLD
             if (light !== lastLight) {
                 lastLight = light
-                onHeaderTone(light)
+                notify(light)
             }
         }
 
@@ -806,7 +831,7 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                 antialias: false,
                 depth: false,
                 stencil: false,
-                preserveDrawingBuffer: true,
+                preserveDrawingBuffer: false,
             })
         } catch {
             gl = null
@@ -885,7 +910,8 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                     const vh = window.innerHeight || 800
                     if (!force && lastWidth && Math.abs(vw - lastWidth) < 2 && W > 0 && H > 0) return
                     lastWidth = vw
-                    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+                    const maxDpr = window.matchMedia?.("(pointer: coarse)").matches ? 1.5 : 2
+                    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr)
                     W = Math.max(2, Math.round(vw * dpr))
                     H = Math.max(2, Math.round(vh * dpr))
                     canvas.width = W
@@ -907,16 +933,11 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                 resize(true)
                 draw(travel.get())
 
-                let raf = 0
-                const schedule = () => {
-                    if (raf) return
-                    raf = requestAnimationFrame(() => {
-                        raf = 0
-                        draw(travel.get())
-                    })
-                }
-                const unsubscribe = travel.on("change", schedule)
+                // travel only changes inside framer's per-frame scroll callback (or on resize),
+                // so draw immediately instead of queueing another rAF (that cost one frame of lag)
+                const unsubscribe = travel.on("change", (v) => draw(v))
                 const onResize = () => {
+                    measureView()
                     resize(false)
                     draw(travel.get())
                 }
@@ -924,7 +945,6 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
 
                 return () => {
                     unsubscribe()
-                    if (raf) cancelAnimationFrame(raf)
                     window.removeEventListener("resize", onResize)
                     gl.deleteTexture(lutTex)
                     gl.deleteBuffer(buf)
@@ -1007,16 +1027,9 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
         resize(true)
         draw(travel.get())
 
-        let raf = 0
-        const schedule = () => {
-            if (raf) return
-            raf = requestAnimationFrame(() => {
-                raf = 0
-                draw(travel.get())
-            })
-        }
-        const unsubscribe = travel.on("change", schedule)
+        const unsubscribe = travel.on("change", (v) => draw(v))
         const onResize = () => {
+            measureView()
             resize(false)
             draw(travel.get())
         }
@@ -1024,10 +1037,9 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
 
         return () => {
             unsubscribe()
-            if (raf) cancelAnimationFrame(raf)
             window.removeEventListener("resize", onResize)
         }
-    }, [travel, onHeaderTone])
+    }, [travel])
 
     return (
         <div className="relative w-full">
