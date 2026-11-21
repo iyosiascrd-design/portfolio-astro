@@ -1,6 +1,6 @@
 // src/views/ZhongshanCaseStudy.jsx
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useOutletContext } from "react-router-dom"
 import { ArrowDown } from "lucide-react"
 import gsap from "gsap"
@@ -14,6 +14,7 @@ import { Img as BaseImg, Media, isVideo, HERO_IMG_PROPS } from "../components/Ca
 import { FETCH_PRIORITY_KEY } from "../lib/loadingHints"
 import { useIdlePreload } from "../lib/mediaPreload"
 import { useCaseStudyReveal, prefersReducedMotion } from "../lib/useCaseStudyReveal"
+import { useQueuedVideoIndices, useVideoShouldLoad } from "../lib/useCaseStudyVideoLoad"
 
 import * as CaseStudyStyles from "../lib/caseStudyStyles.js"
 
@@ -69,7 +70,12 @@ const ASSETS = {
 
 const TYPE_CARD_LIVE_TEXT = false
 
-const PRELOAD_SRCS = Object.entries(ASSETS).filter(([k]) => k !== "hero").map(([, v]) => v)
+const ALL_ASSET_SRCS = Object.entries(ASSETS)
+  .filter(([k]) => k !== "hero")
+  .map(([, v]) => v)
+
+const IMAGE_PRELOAD_SRCS = ALL_ASSET_SRCS.filter((src) => !isVideo(src))
+const VIDEO_SRCS = ALL_ASSET_SRCS.filter((src) => isVideo(src))
 
 const MEDIA_PLACEHOLDER = "bg-[#ece7df]"
 
@@ -89,6 +95,44 @@ const Img = (props) => <BaseImg placeholder={MEDIA_PLACEHOLDER} hideOnError {...
 const Fill = ({ className = "", ...props }) => (
   <Img className={`!absolute !inset-0 !w-full !h-full !aspect-auto ${className}`} {...props} />
 )
+
+function NearViewportVideoSlot({
+  src,
+  alt,
+  videoSrcs,
+  releasedCount,
+  enabled,
+  rootMargin = "500px 0px",
+  className = "",
+  mediaClassName = "",
+  mediaProps = undefined,
+  parallax = true,
+}) {
+  const slotRef = useRef(null)
+  const shouldLoad = useVideoShouldLoad({
+    ref: slotRef,
+    src,
+    videoSrcs,
+    releasedCount,
+    enabled,
+    rootMargin,
+  })
+
+  return (
+    <div ref={slotRef} className={`relative w-full h-full ${className}`}>
+      {shouldLoad && (
+        <Media
+          src={src}
+          alt={alt}
+          lazy={false}
+          parallax={parallax}
+          mediaProps={mediaProps}
+          className={`!absolute !inset-0 !w-full !h-full !aspect-auto ${mediaClassName}`}
+        />
+      )}
+    </div>
+  )
+}
 
 // Reusable centered pause frame for standalone wide visuals.
 // `frame` = exact desktop size from the spec ({ w, h } at 1512 x 982, 1472px content width).
@@ -116,34 +160,28 @@ function CenteredInset({ aspectClass = "aspect-[16/9]", ratio = 16 / 9, frame, c
   )
 }
 
-// Videos in page order.
-const VIDEO_SRCS = Object.values(ASSETS).filter((src) => isVideo(src))
-const VIDEO_RELEASE_GAP_MS = 700
-
-// Once the hero has settled, videos are released one at a time in page order. A released
-// video mounts as a real <video> element and starts loading straight away, which is what
-// every browser (iOS Safari included) honours. The old hidden-element warmup did not.
-// Returns how many videos have been released so far.
-function useReleasedVideos(enabled) {
-  const [released, setReleased] = useState(0)
-  useEffect(() => {
-    if (!enabled || typeof navigator === "undefined" || navigator.connection?.saveData) return
-    let n = 0
-    let timer
-    const tick = () => {
-      n += 1
-      setReleased(n)
-      if (n < VIDEO_SRCS.length) timer = setTimeout(tick, VIDEO_RELEASE_GAP_MS)
-    }
-    timer = setTimeout(tick, 250)
-    return () => clearTimeout(timer)
-  }, [enabled])
-  return released
-}
-
-function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover", eager = false }) {
+function InViewGif({
+  src,
+  alt,
+  videoSrcs,
+  releasedCount,
+  videoGateEnabled,
+  className = "",
+  threshold = 0.15,
+  fit = "cover",
+  eager = false,
+}) {
   const boxRef = useRef(null)
   const [started, setStarted] = useState(false)
+
+  const nearVideoLoad = useVideoShouldLoad({
+    ref: boxRef,
+    src,
+    videoSrcs,
+    releasedCount,
+    enabled: isVideo(src) && videoGateEnabled,
+    rootMargin: "500px 0px",
+  })
 
   useEffect(() => {
     const el = boxRef.current
@@ -175,7 +213,7 @@ function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover", 
           io.disconnect()
         }
       },
-      { threshold, rootMargin: isVideo(src) ? "150% 0px" : "120px 0px" }
+      { threshold, rootMargin: isVideo(src) ? "250px 0px" : "120px 0px" }
     )
     io.observe(el)
     return () => {
@@ -184,9 +222,11 @@ function InViewGif({ src, alt, className = "", threshold = 0.15, fit = "cover", 
     }
   }, [src, threshold])
 
+  const canRender = isVideo(src) ? Boolean(eager || nearVideoLoad || started) : Boolean(started || eager)
+
   return (
     <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${className}`}>
-      {(started || eager) && (
+      {canRender && (
         <Media
           src={src}
           alt={alt}
@@ -284,12 +324,28 @@ export default function ZhongshanCaseStudy() {
     return () => t.kill()
   }, [ready, isMobile])
 
-  const assetsToPreload = isMobile ? PRELOAD_SRCS.slice(0, 2) : PRELOAD_SRCS
-  useIdlePreload(assetsToPreload, ready && heroLoaded)
+  const videoGateEnabled = Boolean(ready && heroLoaded)
+  const imagesToPreload = useMemo(
+    () => (isMobile ? IMAGE_PRELOAD_SRCS.slice(0, 2) : IMAGE_PRELOAD_SRCS),
+    [isMobile]
+  )
+
+  useIdlePreload(imagesToPreload, videoGateEnabled)
   useCaseStudyReveal(rootRef)
-  const releasedVideos = useReleasedVideos(ready && heroLoaded)
-  const eagerVideo = (src) => releasedVideos > VIDEO_SRCS.indexOf(src)
-  const eagerLoad = (src) => (eagerVideo(src) ? { lazy: false } : null)
+  const releasedCount = useQueuedVideoIndices(VIDEO_SRCS, videoGateEnabled)
+
+  const renderVideoFill = (src, alt, { parallax = true, mediaClassName = "", rootMargin = "500px 0px" } = {}) => (
+    <NearViewportVideoSlot
+      src={src}
+      alt={alt}
+      videoSrcs={VIDEO_SRCS}
+      releasedCount={releasedCount}
+      enabled={videoGateEnabled}
+      rootMargin={rootMargin}
+      parallax={parallax}
+      mediaClassName={mediaClassName}
+    />
+  )
 
   return (
     <div
@@ -383,8 +439,14 @@ export default function ZhongshanCaseStudy() {
           </section>
 
           {/* 2. LOGO INSET */}
-          <CenteredInset aspectClass="aspect-[1228/624]" mobileAspect="max-md:!aspect-[16/10]" ratio={1228 / 624} frame={{ w: 1228, h: 624 }} className="max-md:!py-0 max-md:mt-[12px]">
-            <Fill src={ASSETS.suppliers} alt="Zhongshan logo animation" {...eagerLoad(ASSETS.suppliers)} />
+          <CenteredInset
+            aspectClass="aspect-[1228/624]"
+            mobileAspect="max-md:!aspect-[16/10]"
+            ratio={1228 / 624}
+            frame={{ w: 1228, h: 624 }}
+            className="max-md:!py-0 max-md:mt-[12px]"
+          >
+            {renderVideoFill(ASSETS.suppliers, "Zhongshan logo animation", { rootMargin: "650px 0px" })}
           </CenteredInset>
 
           {/* 3. TECHNICAL BY NATURE */}
@@ -426,13 +488,10 @@ export default function ZhongshanCaseStudy() {
               </div>
 
               <div className="relative w-full aspect-[602/548] max-md:aspect-[4/3] max-md:col-span-2 max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-5 lg:col-span-5 overflow-hidden">
-                <Fill
-                  src={ASSETS.typeTablet}
-                  alt="Tablet showing Sourcing Simplified"
-                  {...eagerLoad(ASSETS.typeTablet)}
-                  parallax={false}
-                  imgClassName="object-cover"
-                />
+                {renderVideoFill(ASSETS.typeTablet, "Tablet showing Sourcing Simplified", {
+                  parallax: false,
+                  mediaClassName: "object-cover",
+                })}
               </div>
 
               <div className="flex flex-col gap-[16px] max-md:order-2 lg:col-start-10 lg:col-span-3 lg:gap-[32px]">
@@ -481,7 +540,9 @@ export default function ZhongshanCaseStudy() {
                   fit="contain"
                   src={ASSETS.color}
                   alt="Zhongshan colour palette"
-                  eager={eagerVideo(ASSETS.color)}
+                  videoSrcs={VIDEO_SRCS}
+                  releasedCount={releasedCount}
+                  videoGateEnabled={videoGateEnabled}
                   className="bg-transparent w-full aspect-[725.3/700] max-md:w-full max-md:max-w-[408px] max-md:aspect-[408/393.77]"
                 />
               </div>
@@ -601,13 +662,10 @@ export default function ZhongshanCaseStudy() {
               </div>
               <div className="w-full flex flex-col gap-[24px] max-md:order-1 md:col-span-2 lg:col-start-9 lg:col-span-4 lg:gap-[32px] lg:self-stretch">
                 <div className="relative w-full aspect-[4/3] max-md:aspect-[816/642] lg:aspect-[477/404] overflow-hidden">
-                  <Fill
-                    src={ASSETS.tiles}
-                    alt="3D render detail"
-                    {...eagerLoad(ASSETS.tiles)}
-                    parallax={false}
-                    imgClassName="w-full h-full object-cover scale-[1.05]"
-                  />
+                  {renderVideoFill(ASSETS.tiles, "3D render detail", {
+                    parallax: false,
+                    mediaClassName: "w-full h-full object-cover scale-[1.05]",
+                  })}
                 </div>
                 <p className={`${PARA_CLS} max-md:hidden`}>
                   A visual identity that balances the precision of architectural sourcing with the sophistication of editorial design.
@@ -624,7 +682,7 @@ export default function ZhongshanCaseStudy() {
             mobileAspect="max-md:!aspect-[816/480]"
             className="max-md:!py-0 max-md:mt-[12px]"
           >
-            <Fill src={ASSETS.floorplan} alt="3D render, wide view" {...eagerLoad(ASSETS.floorplan)} />
+            {renderVideoFill(ASSETS.floorplan, "3D render, wide view")}
           </CenteredInset>
 
           {/* 13. FULL-WIDTH DOORS SHOWCASE */}
