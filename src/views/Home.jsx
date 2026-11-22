@@ -35,7 +35,6 @@ import {
 } from "../lib/motion"
 
 import { WORK_PROJECTS, LOOPING_IMAGES } from "../lib/projects"
-import { createTickerGL } from "../lib/tickerGL"
 import { FETCH_PRIORITY_KEY, whenIdle } from "../lib/loadingHints"
 import { prefetchHero, heroSlugFor, warmAllHeroes } from "../lib/heroPrefetch.js"
 
@@ -696,8 +695,10 @@ const SUNRISE_CSS = `
 }
 .sunrise-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .sunrise-dark, .sunrise-light { position: absolute; left: 0; width: 100%; height: 100lvh; }
-.sunrise-dark { bottom: 100%; background: rgb(5, 5, 5); }
-.sunrise-light { top: 100%; background: #fff; }
+/* The blocks overlap the canvas by 2px so there is no shared edge: when the layer sits on a
+   fractional pixel, two touching edges each blend with the dark stage and leave a hairline. */
+.sunrise-dark { bottom: calc(100% - 2px); background: rgb(5, 5, 5); }
+.sunrise-light { top: calc(100% - 2px); background: #fff; }
 @keyframes sunrise-shift {
   from { transform: translate3d(0, var(--sr-from), 0); }
   to { transform: translate3d(0, var(--sr-to), 0); }
@@ -751,7 +752,10 @@ void main() {
 
   float r1 = hash12(gl_FragCoord.xy);
   float r2 = hash12(gl_FragCoord.xy + vec2(17.3, 41.9));
-  float dither = (r1 + r2 - 1.0) * (3.2 / 255.0);
+  // No dither on the flat dark/white ends: the plain blocks above and below the canvas
+  // have no grain, so grain at the seam shows up as a hairline.
+  float edge = smoothstep(0.02, 0.06, vv) * (1.0 - smoothstep(0.93, 0.975, vv));
+  float dither = (r1 + r2 - 1.0) * (3.2 / 255.0) * edge;
 
   gl_FragColor = vec4(clamp(col + dither, 0.0, 1.0), 1.0);
 }
@@ -1110,7 +1114,16 @@ function SunriseTransition({ children, anchorRef, onHeaderTone }) {
                           const vv = vb - depth * arc[x]
                           const k = vv <= 0 ? 0 : vv >= V_MAX ? LUT_SIZE - 1 : (vv * lutScale) | 0
                           const j = k * 3
-                          const n = noise[i & 4095]
+                          const nv = vv / V_MAX
+                          const ef =
+                              nv <= 0.02 || nv >= 0.975
+                                  ? 0
+                                  : nv < 0.06
+                                    ? (nv - 0.02) / 0.04
+                                    : nv > 0.93
+                                      ? (0.975 - nv) / 0.045
+                                      : 1
+                          const n = noise[i & 4095] * ef
                           const o = i * 4
                           data[o] = lut[j] + n
                           data[o + 1] = lut[j + 1] + n
@@ -1268,6 +1281,7 @@ export default function Home() {
 
   const servicesHeadRef = useRef(null)
   const servicesImgBoxRef = useRef(null)
+  const servicesCapRef = useRef(null)
   const servicesListRef = useRef(null)
   const servicesHeadInView = useInView(servicesHeadRef, SERVICES_VIEWPORT)
   const servicesListInView = useInView(servicesListRef, SERVICES_VIEWPORT)
@@ -1503,6 +1517,24 @@ export default function Home() {
           const right = Math.max(0, Math.round(headRect.right - target - w - boxW - (box ? gap : 0)))
           p.style.marginRight = `${right}px`
 
+          // Caption block: top lines up with the Digital Design description ("Websites, landing pages…").
+          const cap = servicesCapRef.current
+          const row2 = servicesListRef.current?.children?.[1]
+          if (cap && row2 && cap.parentElement) {
+              const kw = row2.querySelector(".svc-keywords")
+              let targetTop = row2.getBoundingClientRect().top
+              if (kw) {
+                  // ignore the small hover/fade offset that the description animates with
+                  let ty = 0
+                  try {
+                      ty = new DOMMatrix(getComputedStyle(kw).transform).m42 || 0
+                  } catch (e) {}
+                  targetTop = kw.getBoundingClientRect().top - ty
+              }
+              const dy = targetTop - cap.parentElement.getBoundingClientRect().top
+              if (dy >= 0) cap.style.marginTop = `${Math.round(dy)}px`
+          }
+
           const title = head.querySelector("h2")
           if (box && title) {
               // Match the title's real glyphs: cap-top to baseline of "SERVICES".
@@ -1578,8 +1610,9 @@ export default function Home() {
           servicesImgBoxRef.current?.style.removeProperty("height")
           servicesImgBoxRef.current?.style.removeProperty("margin-top")
           servicesImgBoxRef.current?.style.removeProperty("margin-bottom")
+          servicesCapRef.current?.style.removeProperty("margin-top")
       }
-  }, [vp.isDesktop, pageReady, servicesHeadActive])
+  }, [vp.isDesktop, pageReady, servicesHeadActive, servicesListActive])
 
   useLayoutEffect(() => {
       const section = workSectionRef.current
@@ -1914,26 +1947,6 @@ export default function Home() {
               if (img) gsap.set(img, { clearProps: "transform" })
           })
       }
-  }, [vp.isMobile, tickerReady])
-
-  // Glass-edge WebGL layer: draws the card images and bends the left/right
-  // screen edges like curved glass. Falls back to the plain DOM ticker if
-  // WebGL is unavailable. Must stay after the zoom effect above so its frame
-  // callback runs after the zoom styles are applied.
-  useEffect(() => {
-      if (!tickerReady) return
-      const engine = tickerEngine.current
-      const track = tickerRef.current
-      const wrap = tickerWrapRef.current
-      if (!engine || !track || !wrap) return
-      const reduce = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-      const glass = createTickerGL({
-          wrap,
-          track,
-          engine,
-          config: reduce ? { speedBoost: 0 } : undefined,
-      })
-      return () => glass?.destroy()
   }, [vp.isMobile, tickerReady])
 
   useEffect(() => {
@@ -2308,9 +2321,6 @@ export default function Home() {
                   opacity: 0 !important; transition: opacity 0.22s ease 0.14s;
               }
               .ticker-zoom-group { transform-origin: 50% var(--oy, 50%); }
-              [data-gl-slide="ready"] [data-zoom-card] { background: transparent; }
-              [data-gl-slide="ready"] [data-zoom-card] [data-parallax],
-              [data-gl-slide="ready"] [data-zoom-card] .ticker-dim { visibility: hidden; }
               [data-near="true"] .ticker-zoom-group { transform: translateZ(0); will-change: transform; }
               [data-zooming="true"] [data-near="true"] .ticker-zoom-group {
                   transform: perspective(var(--zoom-persp, 1400px)) translate3d(var(--dx, 0px), 0, 0) rotateY(var(--tilt, 0deg)) scale(var(--zs, 1));
@@ -2392,7 +2402,7 @@ export default function Home() {
 
                           <div
                               ref={servicesImgBoxRef}
-                              className="hidden lg:block relative w-[332px] shrink-0 self-start bg-[var(--bg-surface-dark)] isolate overflow-hidden border border-[var(--border-dark-subtle)] m-0"
+                              className="hidden lg:block relative w-[332px] shrink-0 self-start bg-[var(--bg-surface-dark)] isolate overflow-hidden m-0"
                           >
                               <ServiceImageStage
                                   images={SERVICE_IMAGES}
@@ -2566,7 +2576,7 @@ export default function Home() {
 
                           <div className="hidden lg:flex w-[332px] flex-shrink-0 flex-col justify-start m-0">
 
-                              <div className="relative min-h-[120px] mt-[74px] m-0 overflow-hidden flex flex-col justify-start">
+                              <div ref={servicesCapRef} className="relative min-h-[120px] mt-[74px] m-0 overflow-hidden flex flex-col justify-start">
                                   <AnimatePresence mode="wait">
                                       <motion.div
                                           key={activeIndex}

@@ -1,18 +1,21 @@
 // src/lib/tickerGL.js
 //
-// WebGL "glass edge" layer for the Home work ticker.
+// WebGL progressive-blur layer for the Home work ticker.
 //
 // The DOM ticker (createTicker engine, drag, click, captions, a11y, reveal,
 // hover lift, zoom) stays exactly as it is. This module:
 //   1. draws every on-screen card image into an offscreen scene texture, using
 //      each card's live on-screen rect (so reveal / hover / zoom / parallax all
 //      carry over),
-//   2. runs a lens pass over the whole scene so the left and right screen
-//      edges behave like a thick curved glass bezel: content is refracted
-//      toward the edge along a squircle profile, lightly frosted, given a
-//      touch of vibrancy and a directional specular rim. The lens reacts to
-//      the ticker's motion: it opens up, smears horizontally and favours the
-//      edge that content is entering through.
+//   2. runs an Apple-style progressive blur over the whole scene. The scene is
+//      downsampled into a pyramid (5 levels, 13-tap filter, each half the size of
+//      the last). The blur radius per pixel is zero in the middle of the screen and
+//      ramps up along a smootherstep curve toward the left and right edges; the
+//      shader picks a fractional pyramid level for that radius and blends the two
+//      nearest levels, so the blur is large, smooth and noise free. Toward the
+//      edge, content also fades into the page background with a touch of extra
+//      saturation (the "scroll edge" look). Ticker speed opens the blur up,
+//      stretches it sideways and favours the edge content is entering through.
 //
 // A slide's DOM image is only hidden (via data-gl-slide="ready") once its
 // texture has been drawn, so anything that fails (no WebGL, tainted image,
@@ -23,20 +26,15 @@
 import gsap from "gsap"
 
 export const GLASS = {
-    zonePx: 110, // width of each glass edge in CSS px: nothing happens inside it
-    strengthPx: 52, // how far the very edge pulls from inside it (px)
-    chroma: 0.04, // colour fringe: a whisper, only visible on hard edges
-    frost: 3, // resting frost at the rim, in CSS px (0 = clear glass)
-    vBend: 0.06, // almost no vertical curve, card tops and bottoms stay straight
-    rim: 0.5, // specular line at the very edge (lit from the upper left)
-    tint: 0, // no edge darkening
-    sat: 0.22, // extra saturation under the glass (liquid-glass vibrancy)
-    lift: 0.05, // slight brightening under the glass
-    motionBlur: 12, // horizontal smear at the rim at full speed, in CSS px
+    zonePx: 220, // width of each blurred edge in CSS px: the centre stays perfectly sharp
+    blurPx: 30, // blur radius at the very edge, in CSS px
+    curve: 1.0, // ramp exponent (higher = blur starts later and ramps harder)
+    fade: 0.5, // how far content dissolves into the page background at the edge (0..1)
+    sat: 0.12, // extra saturation at the edge
+    motionBlur: 16, // extra horizontal stretch at the edge at full ticker speed, in CSS px
     asym: 0.25, // how much stronger the entering edge gets while flicking (0 = symmetric)
-    rest: 1, // share of the effect present when the ticker is only drifting
-    speedBoost: 0.5, // extra opening of the lens while the ticker is flicked
-    curve: 2.5, // edge falloff exponent (higher = fades in later)
+    rest: 1, // share of the blur present when the ticker is only drifting
+    speedBoost: 0.4, // extra blur while the ticker is flicked
     fullSpeed: 2000, // px/s at which speedBoost is fully applied
     imgZoom: 1.12, // matches the DOM image's scale-[1.12]
     dim: 0.8, // matches the DOM bg-black/20 overlay
@@ -44,21 +42,18 @@ export const GLASS = {
     maxDpr: 2,
 }
 
-// Narrow screens (< MOBILE_MAX px wide): even slimmer and quieter at rest,
-// opening up a little when you flick.
+// Narrow screens (< MOBILE_MAX px wide): narrower band, lighter blur.
 const MOBILE_MAX = 768
 export const GLASS_MOBILE = {
-    zonePx: 56,
-    strengthPx: 28,
-    chroma: 0.03,
-    frost: 2,
-    rim: 0.35,
-    sat: 0.15,
-    motionBlur: 6,
-    rest: 0.6,
-    speedBoost: 1.0,
-    curve: 3,
+    zonePx: 96,
+    blurPx: 16,
+    fade: 0.4,
+    motionBlur: 8,
+    rest: 0.85,
+    speedBoost: 0.6,
 }
+
+const LEVELS = 5 // pyramid depth: level i is 2^i times smaller than the scene
 
 const PRECISION = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -102,99 +97,121 @@ void main() {
 }
 `
 
+// 13-tap downsample (Jimenez, "Next Generation Post Processing"): soft, alias free
+const DOWN_FRAG = `${PRECISION}
+uniform sampler2D u_src;
+uniform vec2 u_texel; // one source texel in uv
+varying vec2 v_uv;
+vec4 T(vec2 o) { return texture2D(u_src, v_uv + o * u_texel); }
+void main() {
+  vec4 a = T(vec2(-2.0, -2.0)); vec4 b = T(vec2(0.0, -2.0)); vec4 c = T(vec2(2.0, -2.0));
+  vec4 d = T(vec2(-2.0, 0.0));  vec4 e = T(vec2(0.0, 0.0));  vec4 f = T(vec2(2.0, 0.0));
+  vec4 g = T(vec2(-2.0, 2.0));  vec4 h = T(vec2(0.0, 2.0));  vec4 i = T(vec2(2.0, 2.0));
+  vec4 j = T(vec2(-1.0, -1.0)); vec4 k = T(vec2(1.0, -1.0));
+  vec4 l = T(vec2(-1.0, 1.0));  vec4 m = T(vec2(1.0, 1.0));
+  gl_FragColor = e * 0.125
+    + (a + c + g + i) * 0.03125
+    + (b + d + f + h) * 0.0625
+    + (j + k + l + m) * 0.125;
+}
+`
+
 const POST_FRAG = `${PRECISION}
-uniform sampler2D u_scene;
-uniform float u_zone;   // glass width as a fraction of the screen width
-uniform float u_k;      // refraction reach at the rim (fraction of the screen width)
-uniform float u_ca;     // dispersion
-uniform float u_vb;     // vertical magnification at the rim
-uniform float u_rim;
-uniform float u_tint;
-uniform float u_curve;
+uniform sampler2D u_l0; // the sharp scene
+uniform sampler2D u_l1; // pyramid levels, each half the size of the previous
+uniform sampler2D u_l2;
+uniform sampler2D u_l3;
+uniform sampler2D u_l4;
+uniform sampler2D u_l5;
+uniform vec2 u_inv;     // 1 / scene size in device px
+uniform float u_zone;   // blur band width as a fraction of the screen width
+uniform float u_blur;   // blur radius at the very edge (device px)
+uniform float u_curve;  // ramp exponent
 uniform float u_px;     // one CSS pixel as a fraction of the screen width
-uniform float u_py;     // one CSS pixel as a fraction of the screen height
-uniform float u_frost;  // resting frost radius at the rim (CSS px)
-uniform float u_mb;     // extra horizontal smear at the rim, from ticker speed (CSS px)
-uniform float u_sat;    // extra saturation under the glass
-uniform float u_lift;   // extra brightness under the glass
+uniform float u_mb;     // extra horizontal stretch at the edge (CSS px)
+uniform float u_sat;    // extra saturation at the edge
+uniform float u_fade;   // dissolve into the background at the edge
 uniform vec2 u_gain;    // per-edge strength: (left, right)
 varying vec2 v_uv;
+
+float ign(vec2 p) {
+  return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+}
+
+// reflect samples that would fall past the screen edge
+vec2 fold(vec2 p) {
+  p.x = abs(p.x);
+  p.x = 1.0 - abs(1.0 - p.x);
+  return p;
+}
+
+vec4 fetchL(int l, vec2 uv) {
+  uv = fold(uv);
+  if (l <= 1) {
+    if (l == 0) return texture2D(u_l0, uv);
+    return texture2D(u_l1, uv);
+  }
+  if (l == 2) return texture2D(u_l2, uv);
+  if (l == 3) return texture2D(u_l3, uv);
+  if (l == 4) return texture2D(u_l4, uv);
+  return texture2D(u_l5, uv);
+}
+
+// one pyramid level, softened with four bilinear taps (so the texel grid of the
+// small level never shows) and, while the ticker moves, three taps sideways
+vec4 blurL(int l, vec2 uv, float mbUv) {
+  if (l == 0) return texture2D(u_l0, uv);
+  vec2 o = u_inv * exp2(float(l)) * 0.7;
+  vec4 s = vec4(0.0);
+  for (int k = -1; k <= 1; k++) {
+    vec2 c = uv + vec2(float(k) * mbUv, 0.0);
+    float w = (k == 0) ? 0.5 : 0.25;
+    s += (fetchL(l, c + vec2(o.x, o.y)) + fetchL(l, c + vec2(-o.x, o.y))
+        + fetchL(l, c + vec2(o.x, -o.y)) + fetchL(l, c + vec2(-o.x, -o.y))) * (0.25 * w);
+  }
+  return s;
+}
 
 void main() {
   vec2 uv = v_uv;
 
-  // 0 at the screen edge, 1 where the glass ends. Inside that, the pane is flat
-  // and the page is untouched.
   float e = min(uv.x, 1.0 - uv.x);
   float x = clamp(e / u_zone, 0.0, 1.0);
-  float isLeft = uv.x < 0.5 ? 1.0 : 0.0;
-  float dir = isLeft > 0.5 ? 1.0 : -1.0;
-  float g = isLeft > 0.5 ? u_gain.x : u_gain.y;
+  float g = uv.x < 0.5 ? u_gain.x : u_gain.y;
 
-  // Bezel profile: a squircle (the continuous-corner curve Apple uses for its
-  // shapes) rather than a circle. Its slope starts out cubic, so the glass eases
-  // in with no visible start line, and it steepens sharply only at the rim.
-  // Refraction follows the surface slope, so the bend hugs the edge.
-  float q = 1.0 - x;
-  float q2 = q * q;
-  float d0 = max(1.0 - q2 * q2, 0.15);
-  float slope = q2 * q / pow(d0, 0.75);
-  float bend = pow(clamp(slope / 4.0, 0.0, 1.0), u_curve / 3.0);
+  // 0 in the flat interior, 1 at the screen edge; smootherstep so the blur
+  // eases in with no visible start line
+  float t = 1.0 - x;
+  float p = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+  p = pow(p, u_curve);
 
-  float off = dir * u_k * bend * g;
-  float yv = 0.5 + (uv.y - 0.5) * (1.0 - u_vb * bend);
+  float rd = u_blur * p * g;
+  // blur radius -> fractional pyramid level (level 1 is about 2.5 px of blur)
+  float f = rd < 2.5 ? rd / 2.5 : 1.0 + log2(rd / 2.5);
+  f = clamp(f, 0.0, 5.0);
 
-  // dispersion: each channel refracts slightly differently
-  vec2 pr = vec2(uv.x + off * (1.0 + u_ca), yv);
-  vec2 pg = vec2(uv.x + off, yv);
-  vec2 pb = vec2(uv.x + off * (1.0 - u_ca), yv);
-
-  vec4 sr;
-  vec4 sg;
-  vec4 sb;
-  // frost + motion smear: both grow with the bezel's steepness, so the rim is
-  // satin at rest and streaks sideways when the ticker moves, while the flat
-  // interior stays perfectly sharp (and takes the cheap path)
-  float fr = u_frost * bend;
-  float mb = u_mb * bend * g;
-  if (fr + mb > 0.05) {
-    vec2 rad = vec2((fr + mb) * u_px, fr * u_py);
-    vec4 ar = vec4(0.0);
-    vec4 ag = vec4(0.0);
-    vec4 ab = vec4(0.0);
-    for (int i = 0; i < 10; i++) {
-      float fi = float(i);
-      float a = fi * 2.39996323;
-      float r = sqrt((fi + 0.5) / 10.0);
-      vec2 d = vec2(cos(a), sin(a)) * r * rad;
-      ar += texture2D(u_scene, pr + d);
-      ag += texture2D(u_scene, pg + d);
-      ab += texture2D(u_scene, pb + d);
-    }
-    sr = ar / 10.0;
-    sg = ag / 10.0;
-    sb = ab / 10.0;
-  } else {
-    sr = texture2D(u_scene, pr);
-    sg = texture2D(u_scene, pg);
-    sb = texture2D(u_scene, pb);
+  if (f < 0.003) {
+    gl_FragColor = texture2D(u_l0, uv);
+    return;
   }
-  vec4 col = vec4(sr.r, sg.g, sb.b, (sr.a + sg.a + sb.a) / 3.0);
 
-  // vibrancy: glass makes what is behind it a little richer and brighter
+  float mbUv = u_mb * p * g * u_px * 0.6;
+  int lo = int(floor(f));
+  int hi = lo + 1;
+  if (hi > 5) hi = 5;
+  float tf = f - float(lo);
+  vec4 col = blurL(lo, uv, mbUv);
+  if (hi != lo) col = mix(col, blurL(hi, uv, mbUv), tf);
+
+  // a touch more colour under the blur, like Apple's backdrop material
   float luma = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722));
-  col.rgb = max(mix(vec3(luma), col.rgb, 1.0 + u_sat * bend), vec3(0.0));
-  col.rgb *= 1.0 + u_lift * bend;
-  col.rgb *= 1.0 - u_tint * bend;
+  col.rgb = max(mix(vec3(luma), col.rgb, 1.0 + u_sat * p), vec3(0.0));
 
-  // light catching the bezel. The light sits to the upper left: the left rim
-  // glints near the top, the right rim near the bottom, so the two edges are not
-  // mirror images (that asymmetry is what makes it read as a real object).
-  float line = 1.0 - smoothstep(0.0, 2.0 * u_px, e);
-  float lightY = isLeft > 0.5 ? uv.y : 1.0 - uv.y;
-  float sheen = 0.3 + 0.7 * smoothstep(0.0, 1.0, lightY);
-  float spec = (line * 0.9 + bend * bend * 0.45) * u_rim * sheen * g;
-  col.rgb += vec3(spec) * col.a;
+  // dissolve into the page background toward the edge (premultiplied)
+  col *= 1.0 - u_fade * pow(p, 1.6) * min(g, 1.0);
+
+  // dither: soft gradients in dark images would otherwise band in 8 bit
+  col.rgb = clamp(col.rgb + (ign(gl_FragCoord.xy) - 0.5) * (1.0 / 255.0) * col.a, 0.0, 1.0);
 
   gl_FragColor = col;
 }
@@ -274,24 +291,21 @@ export function createTickerGL({ wrap, track, engine, config }) {
     const isGL2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext
 
     let cardProg
+    let downProg
     let postProg
     try {
         cardProg = program(gl, CARD_VERT, CARD_FRAG, ["u_rect", "u_res", "u_tex", "u_uv", "u_alpha", "u_dim"])
+        downProg = program(gl, POST_VERT, DOWN_FRAG, ["u_src", "u_texel"])
         postProg = program(gl, POST_VERT, POST_FRAG, [
-            "u_scene",
+            "u_l0", "u_l1", "u_l2", "u_l3", "u_l4", "u_l5",
+            "u_inv",
             "u_zone",
-            "u_k",
-            "u_ca",
-            "u_vb",
-            "u_rim",
-            "u_tint",
+            "u_blur",
             "u_curve",
             "u_px",
-            "u_py",
-            "u_frost",
             "u_mb",
             "u_sat",
-            "u_lift",
+            "u_fade",
             "u_gain",
         ])
     } catch (err) {
@@ -314,6 +328,17 @@ export function createTickerGL({ wrap, track, engine, config }) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    // blur pyramid: levels[i] is the scene shrunk 2^i times (index 0 unused, the scene is level 0)
+    const levels = []
+    const freeLevels = () => {
+        levels.forEach((l) => {
+            if (!l) return
+            gl.deleteTexture(l.tex)
+            gl.deleteFramebuffer(l.fbo)
+        })
+        levels.length = 0
+    }
 
     let cssW = 0
     let cssH = 0
@@ -340,6 +365,23 @@ export function createTickerGL({ wrap, track, engine, config }) {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, nw, nh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0)
+
+        freeLevels()
+        for (let i = 1; i <= LEVELS; i++) {
+            const lw = Math.max(1, Math.ceil(nw / 2 ** i))
+            const lh = Math.max(1, Math.ceil(nh / 2 ** i))
+            const tex = gl.createTexture()
+            gl.bindTexture(gl.TEXTURE_2D, tex)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, lw, lh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+            const lf = gl.createFramebuffer()
+            gl.bindFramebuffer(gl.FRAMEBUFFER, lf)
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+            levels[i] = { tex, fbo: lf, w: lw, h: lh }
+        }
         gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     }
 
@@ -481,13 +523,6 @@ export function createTickerGL({ wrap, track, engine, config }) {
             }
         }
 
-        // lens pass
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-        gl.viewport(0, 0, pxW, pxH)
-        gl.disable(gl.BLEND)
-        gl.clearColor(0, 0, 0, 0)
-        gl.clear(gl.COLOR_BUFFER_BIT)
-
         const speedTarget = Math.min(1, Math.abs(st.vel || 0) / c.fullSpeed)
         const dt = Math.min(Math.max(deltaMs, 1), 64) / 1000
         const rate = speedTarget > boost ? 9 : 3 // opens quickly, settles slowly
@@ -495,28 +530,66 @@ export function createTickerGL({ wrap, track, engine, config }) {
         const dirTarget = Math.max(-1, Math.min(1, (st.vel || 0) / c.fullSpeed))
         dirSm += (dirTarget - dirSm) * (1 - Math.exp(-6 * dt))
 
+        // blur pyramid, only over the edge bands (the middle of the screen stays sharp)
+        const dpr = pxW / cssW
+        const band = Math.ceil(c.zonePx * dpr + 128)
+        gl.disable(gl.BLEND)
+        gl.useProgram(downProg.p)
+        gl.uniform1i(downProg.loc.u_src, 0)
+        gl.activeTexture(gl.TEXTURE0)
+        gl.enable(gl.SCISSOR_TEST)
+        let srcTex = sceneTex
+        let sw = pxW
+        let sh = pxH
+        for (let i = 1; i <= LEVELS; i++) {
+            const L = levels[i]
+            gl.bindFramebuffer(gl.FRAMEBUFFER, L.fbo)
+            gl.viewport(0, 0, L.w, L.h)
+            gl.bindTexture(gl.TEXTURE_2D, srcTex)
+            gl.uniform2f(downProg.loc.u_texel, 1 / sw, 1 / sh)
+            const b = Math.min(L.w, Math.ceil(band / 2 ** i) + 2)
+            if (2 * b >= L.w) {
+                gl.scissor(0, 0, L.w, L.h)
+                gl.drawArrays(gl.TRIANGLES, 0, 6)
+            } else {
+                gl.scissor(0, 0, b, L.h)
+                gl.drawArrays(gl.TRIANGLES, 0, 6)
+                gl.scissor(L.w - b, 0, b, L.h)
+                gl.drawArrays(gl.TRIANGLES, 0, 6)
+            }
+            srcTex = L.tex
+            sw = L.w
+            sh = L.h
+        }
+        gl.disable(gl.SCISSOR_TEST)
+
+        // composite pass: progressive blur from the pyramid
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+        gl.viewport(0, 0, pxW, pxH)
+        gl.clearColor(0, 0, 0, 0)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+
         gl.useProgram(postProg.p)
         gl.activeTexture(gl.TEXTURE0)
         gl.bindTexture(gl.TEXTURE_2D, sceneTex)
-        gl.uniform1i(postProg.loc.u_scene, 0)
-        const amt = c.rest + c.speedBoost * boost // 0..~2: how much glass is showing now
-        const shown = Math.min(1, amt)
+        for (let i = 1; i <= LEVELS; i++) {
+            gl.activeTexture(gl.TEXTURE0 + i)
+            gl.bindTexture(gl.TEXTURE_2D, levels[i].tex)
+        }
+        for (let i = 0; i <= LEVELS; i++) gl.uniform1i(postProg.loc["u_l" + i], i)
+        const amt = c.rest + c.speedBoost * boost // how much blur is showing now
+        gl.uniform2f(postProg.loc.u_inv, 1 / pxW, 1 / pxH)
         gl.uniform1f(postProg.loc.u_zone, Math.min(0.5, c.zonePx / cssW))
-        gl.uniform1f(postProg.loc.u_k, (c.strengthPx / cssW) * amt)
-        gl.uniform1f(postProg.loc.u_ca, c.chroma)
-        gl.uniform1f(postProg.loc.u_vb, c.vBend * shown)
-        gl.uniform1f(postProg.loc.u_rim, c.rim * shown)
-        gl.uniform1f(postProg.loc.u_tint, c.tint * shown)
+        gl.uniform1f(postProg.loc.u_blur, c.blurPx * amt * dpr)
         gl.uniform1f(postProg.loc.u_curve, c.curve)
         gl.uniform1f(postProg.loc.u_px, 1 / cssW)
-        gl.uniform1f(postProg.loc.u_py, 1 / cssH)
-        gl.uniform1f(postProg.loc.u_frost, c.frost * shown)
         gl.uniform1f(postProg.loc.u_mb, reduceMotion ? 0 : c.motionBlur * boost)
-        gl.uniform1f(postProg.loc.u_sat, c.sat * shown)
-        gl.uniform1f(postProg.loc.u_lift, c.lift * shown)
+        gl.uniform1f(postProg.loc.u_sat, c.sat)
+        gl.uniform1f(postProg.loc.u_fade, c.fade)
         const side = reduceMotion ? 0 : c.asym * dirSm
         gl.uniform2f(postProg.loc.u_gain, 1 + side, 1 - side)
         gl.drawArrays(gl.TRIANGLES, 0, 6)
+        gl.activeTexture(gl.TEXTURE0)
 
         if (!ready && drawn) {
             ready = true
@@ -557,10 +630,12 @@ export function createTickerGL({ wrap, track, engine, config }) {
             Array.from(track.children).forEach((s) => s.removeAttribute("data-gl-slide"))
             textures.forEach(({ tex }) => gl.deleteTexture(tex))
             textures.clear()
+            freeLevels()
             gl.deleteTexture(sceneTex)
             gl.deleteFramebuffer(fbo)
             gl.deleteBuffer(quad)
             gl.deleteProgram(cardProg.p)
+            gl.deleteProgram(downProg.p)
             gl.deleteProgram(postProg.p)
             gl.getExtension("WEBGL_lose_context")?.loseContext()
             canvas.remove()
