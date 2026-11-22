@@ -14,7 +14,7 @@ export const SERVICE_IMAGE_REVEAL = {
     pushScale: 1.06,
 }
 
-const makeLayer = (src) => {
+const makeLayer = (src, objectPosition = "50% 50%") => {
     const el = document.createElement("div")
     el.style.cssText = "position:absolute;inset:0;overflow:hidden;will-change:clip-path"
     const img = document.createElement("img")
@@ -24,6 +24,7 @@ const makeLayer = (src) => {
     img.setAttribute("aria-hidden", "true")
     img.style.cssText =
         "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;will-change:transform;user-select:none;pointer-events:none"
+    img.style.objectPosition = objectPosition
     el.appendChild(img)
     return { el, img, tl: null }
 }
@@ -33,7 +34,11 @@ const makeLayer = (src) => {
  * Every change stacks a NEW layer on top and wipes it in. Older layers are only removed once
  * a newer layer fully covers them, so rapid changes never cut an animation off or pop.
  */
-export default function ServiceImageStage({ images, index, label }) {
+export default function ServiceImageStage({ images, index, label, objectPosition = "50% 50%" }) {
+    // objectPosition: one CSS value for every image, or an array with one value per image
+    const posFor = (i) => (Array.isArray(objectPosition) ? objectPosition[i] : objectPosition) || "50% 50%"
+    const posForRef = useRef(posFor)
+    posForRef.current = posFor
     const stageRef = useRef(null)
     const layersRef = useRef([])
     const currentRef = useRef(index)
@@ -49,7 +54,7 @@ export default function ServiceImageStage({ images, index, label }) {
             i.src = src
         })
         currentRef.current = indexRef.current
-        const base = makeLayer(images[currentRef.current])
+        const base = makeLayer(images[currentRef.current], posForRef.current(currentRef.current))
         stage.appendChild(base.el)
         layersRef.current = [base]
 
@@ -73,7 +78,7 @@ export default function ServiceImageStage({ images, index, label }) {
         const R = SERVICE_IMAGE_REVEAL
         const list = layersRef.current
         const prev = list[list.length - 1]
-        const layer = makeLayer(images[index])
+        const layer = makeLayer(images[index], posForRef.current(index))
         stage.appendChild(layer.el)
         list.push(layer)
 

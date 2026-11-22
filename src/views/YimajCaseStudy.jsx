@@ -633,7 +633,7 @@ export default function YimajCaseStudy() {
 
           {/* 9. SPLIT (Frame 409_2):
               Mobile: full-width envelope -> folder below
-              Desktop: keytag (cols 1-5, 602 x 452) | folder (cols 8-12, 602 x 862) */}
+              Desktop: keytag (cols 1-5, 602 x 452, top-aligned) | folder (cols 8-12, 602 x 862) */}
           <section
             data-header-bg="light"
             className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col"
@@ -644,7 +644,7 @@ export default function YimajCaseStudy() {
                 <Fill src={ASSETS.envelope} alt="Yimaj Heights envelope on marble" className="bg-[#e8e1d8]" />
               </div>
 
-              <div className="max-md:hidden relative w-full aspect-[602/452] lg:self-end lg:col-start-1 lg:col-span-5">
+              <div className="max-md:hidden relative w-full aspect-[602/452] lg:self-start lg:col-start-1 lg:col-span-5">
                 <Fill src={ASSETS.keytag} alt="Yimaj Heights leather key tag" />
               </div>
 
@@ -725,22 +725,24 @@ export default function YimajCaseStudy() {
 
           {/* 13. FULL-WIDTH IMAGE:
               Mobile: living room render
-              Desktop/Tablet: living room render (1472 x 784), 20px above next split */}
+              Tablet: full-width living room render
+              Desktop: centered inset (1224 x 795, 144px side margins in the 1512 spec), 144px above next split */}
           <section
             data-header-bg="light"
-            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
+            className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[72px] lg:pb-[144px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
             <div className="md:hidden relative w-full aspect-[354/297]">
               <Fill src={ASSETS.living} alt="Yimaj Heights living room render" />
             </div>
-            <div className="max-md:hidden relative w-full aspect-[4/3] lg:aspect-[1472/784]">
+            <div className="max-md:hidden relative w-full aspect-[4/3] lg:mx-auto lg:w-[83.152%] lg:aspect-[1224/795]">
               <Fill src={ASSETS.living} alt="Yimaj Heights living room render" />
             </div>
           </section>
 
           {/* 14. SPLIT:
               Mobile: full-width kitchen -> centered inset bedroom (~52% width, matching Zhongshan)
-              Desktop/Tablet: kitchen (cols 1-6, 962px tall) | bedroom (cols 7-12, 723 x 633), 20px below living */}
+              Desktop/Tablet: bedroom (cols 1-6, 724 x 526) | kitchen (cols 8-12, 593 x 884, flush right), tops aligned.
+              DOM order matters on desktop: the lower column start must come first so both land in one row. */}
           <section
             data-header-bg="light"
             className="w-full pt-0 max-md:mt-[12px] lg:pb-[20px] lg:flex lg:flex-col"
@@ -751,12 +753,12 @@ export default function YimajCaseStudy() {
                 <Fill src={ASSETS.kitchen} alt="Yimaj Heights kitchen and dining render" />
               </div>
 
-              <div className="max-md:hidden relative w-full aspect-[4/5] lg:aspect-[726/962] lg:col-start-1 lg:col-span-6">
-                <Fill src={ASSETS.kitchen} alt="Yimaj Heights kitchen and dining render" />
+              <div className="relative w-full aspect-[723/633] max-md:aspect-[354/288] lg:aspect-[724/526] lg:col-start-1 lg:col-span-6">
+                <Fill src={ASSETS.bedroom} alt="Yimaj Heights bedroom render" />
               </div>
 
-              <div className="relative w-full aspect-[723/633] max-md:aspect-[354/288] lg:col-start-7 lg:col-span-6">
-                <Fill src={ASSETS.bedroom} alt="Yimaj Heights bedroom render" />
+              <div className="max-md:hidden relative w-full aspect-[4/5] lg:aspect-[593/884] lg:col-start-8 lg:col-span-5 lg:justify-self-end lg:w-[98.505%]">
+                <Fill src={ASSETS.kitchen} alt="Yimaj Heights kitchen and dining render" />
               </div>
             </div>
           </section>
@@ -772,13 +774,14 @@ export default function YimajCaseStudy() {
             <Fill src={ASSETS.floorplan} alt="Yimaj Heights isometric apartment floor plan" />
           </CenteredInset>
 
-          {/* 15. CLOSING SHOWCASE (1472 x 724, 54px gap above NextProject): pool */}
+          {/* 15. CLOSING SHOWCASE (1472 x 743, 54px gap above NextProject): pool.
+              parallax is off so the render shows uncropped, exactly as framed. */}
           <section
             data-header-bg="light"
             className="max-md:hidden w-full pt-0 pb-[var(--page-pad)] max-md:pb-[56px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[calc(100dvh-140px)] lg:flex lg:flex-col lg:justify-center"
           >
-            <div className="relative w-full aspect-[1472/724] max-md:aspect-[670/468] lg:mb-[54px]">
-              <Fill src={ASSETS.pool} alt="Yimaj Heights indoor swimming pool" />
+            <div className="relative w-full aspect-[1472/743] max-md:aspect-[670/468] lg:mb-[54px]">
+              <Fill src={ASSETS.pool} alt="Yimaj Heights indoor swimming pool" parallax={false} />
             </div>
           </section>
 
