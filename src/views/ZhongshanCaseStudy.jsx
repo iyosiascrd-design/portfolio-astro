@@ -119,7 +119,7 @@ function NearViewportVideoSlot({
   })
 
   return (
-    <div ref={slotRef} className={`relative w-full h-full ${className}`}>
+    <div data-reveal="wipe" ref={slotRef} className={`relative isolate overflow-hidden w-full h-full ${className}`}>
       {shouldLoad && (
         <Media
           src={src}
@@ -225,7 +225,7 @@ function InViewGif({
   const canRender = isVideo(src) ? Boolean(eager || nearVideoLoad || started) : Boolean(started || eager)
 
   return (
-    <div data-reveal ref={boxRef} className={`relative isolate w-full overflow-hidden ${className}`}>
+    <div data-reveal="wipe" ref={boxRef} className={`relative isolate w-full overflow-hidden ${className}`}>
       {canRender && (
         <Media
           src={src}
@@ -423,7 +423,7 @@ export default function ZhongshanCaseStudy() {
             <div
               className="grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:flex-1 lg:min-h-0"
             >
-              <div className="lg:col-start-1 lg:col-span-5 flex flex-col gap-[20px] lg:justify-between">
+              <div className="lg:col-start-1 lg:col-span-5 flex flex-col gap-[72px] lg:gap-[20px] lg:justify-between">
                 <h2 className={HEADING_CLS}>
                   Beyond finding<br /> suppliers
                 </h2>
@@ -441,12 +441,12 @@ export default function ZhongshanCaseStudy() {
           {/* 2. LOGO INSET */}
           <CenteredInset
             aspectClass="aspect-[1228/624]"
-            mobileAspect="max-md:!aspect-[16/10]"
+            mobileAspect="max-md:!aspect-[1228/624]"
             ratio={1228 / 624}
             frame={{ w: 1228, h: 624 }}
             className="max-md:!py-0 max-md:mt-[12px]"
           >
-            {renderVideoFill(ASSETS.suppliers, "Zhongshan logo animation", { rootMargin: "650px 0px" })}
+            {renderVideoFill(ASSETS.suppliers, "Zhongshan logo animation", { rootMargin: "650px 0px", mediaClassName: "!object-cover" })}
           </CenteredInset>
 
           {/* 3. TECHNICAL BY NATURE */}
@@ -454,7 +454,7 @@ export default function ZhongshanCaseStudy() {
             data-header-bg="light"
             className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
-            <h2 className={`${HEADING_CLS} mb-[68px] max-md:mb-[28px] md:mb-[48px] lg:mb-[64px]`}>
+            <h2 className={`${HEADING_CLS} mb-[72px] md:mb-[48px] lg:mb-[64px]`}>
               Technical by<br className="md:hidden" /> nature Editorial<br className="md:hidden" /> by design
             </h2>
 
@@ -510,7 +510,7 @@ export default function ZhongshanCaseStudy() {
             data-header-bg="light"
             className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[150px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
-            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[54px]`}>
+            <h2 className={`${HEADING_CLS} mb-[72px] md:mb-[48px] lg:mb-[54px]`}>
               Contrast<br /> with Purpose
             </h2>
 
@@ -554,7 +554,7 @@ export default function ZhongshanCaseStudy() {
             data-header-bg="light"
             className="w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
           >
-            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
+            <h2 className={`${HEADING_CLS} mb-[72px] md:mb-[48px] lg:mb-[64px]`}>
               Precision<br /> In Every Detail
             </h2>
 
@@ -648,7 +648,7 @@ export default function ZhongshanCaseStudy() {
             data-header-bg="light"
             className="block w-full pt-[105px] max-md:!pt-0 max-md:mt-[144px] md:pt-[80px] lg:pt-[72px] lg:pb-[20px] lg:h-[100dvh] lg:min-h-[640px] lg:flex lg:flex-col"
           >
-            <h2 className={`${HEADING_CLS} mb-[32px] md:mb-[48px] lg:mb-[64px]`}>
+            <h2 className={`${HEADING_CLS} mb-[72px] md:mb-[48px] lg:mb-[64px]`}>
               3D Renders<br /> That Feel Real
             </h2>
 
