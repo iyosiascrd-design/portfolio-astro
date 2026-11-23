@@ -25,9 +25,6 @@ import React, {
     taylorEase,
     TICKER_HEIGHT,
     TICKER_REVEAL,
-    servicesListContainerVariants,
-    servicesRowVariants,
-    servicesDividerVariants,
     SERVICES_VIEWPORT,
     TICKER_MOTION,
     TICKER_MOTION_MOBILE,
@@ -45,63 +42,72 @@ import React, {
   
   const SMOOTH_SLIDE_EASE = [0.22, 1, 0.36, 1]
   
-  const expertiseListVariants = {
+  // Staggered slide-up list reveal (osmo.supply style): each row rises into place one after
+  // another, its divider draws in, and the row's text follows a beat behind.
+  const LIST_REVEAL_EASE = [0.16, 1, 0.3, 1]
+  
+  const listContainerVariants = {
     hidden: {},
     show: {
         transition: {
-            staggerChildren: 0.16,
-            delayChildren: 0.12,
+            staggerChildren: 0.22,
+            delayChildren: 0.2,
         },
     },
   }
   
-  const expertiseRowVariants = {
-    hidden: { opacity: 0, y: 28 },
+  const listRowVariants = {
+    hidden: { opacity: 0, y: 90 },
     show: {
         opacity: 1,
         y: 0,
         transition: {
-            duration: 0.95,
-            ease: SMOOTH_SLIDE_EASE,
-            staggerChildren: 0.1,
-            delayChildren: 0.08,
+            duration: 1.8,
+            ease: LIST_REVEAL_EASE,
+            staggerChildren: 0.14,
+            delayChildren: 0.2,
         },
     },
   }
   
-  const expertiseDividerVariants = {
+  const listDividerVariants = {
     hidden: { scaleX: 0, opacity: 0.4 },
     show: {
         scaleX: 1,
         opacity: 1,
         transition: {
-            duration: 0.9,
-            ease: SMOOTH_SLIDE_EASE,
+            duration: 1.8,
+            ease: LIST_REVEAL_EASE,
         },
     },
   }
   
-  const expertiseTextContainerVariants = {
+  const listTextContainerVariants = {
     hidden: {},
     show: {
         transition: {
-            staggerChildren: 0.1,
-            delayChildren: 0.06,
+            staggerChildren: 0.14,
+            delayChildren: 0.1,
         },
     },
   }
   
-  const expertiseTextItemVariants = {
-    hidden: { opacity: 0, y: 22 },
+  const listTextItemVariants = {
+    hidden: { opacity: 0, y: 48 },
     show: {
         opacity: 1,
         y: 0,
         transition: {
-            duration: 0.85,
-            ease: SMOOTH_SLIDE_EASE,
+            duration: 1.5,
+            ease: LIST_REVEAL_EASE,
         },
     },
   }
+  
+  // Services shares the same motion language.
+  const servicesListContainerVariants = listContainerVariants
+  const servicesRowVariants = listRowVariants
+  const servicesDividerVariants = listDividerVariants
   
   const glueLastWords = (str) => {
     const i = str.lastIndexOf(" ")
@@ -1301,7 +1307,7 @@ import React, {
     const servicesCapRef = useRef(null)
     const servicesListRef = useRef(null)
     const servicesHeadInView = useInView(servicesHeadRef, SERVICES_VIEWPORT)
-    const servicesListInView = useInView(servicesListRef, SERVICES_VIEWPORT)
+    const servicesListInView = useInView(servicesListRef, { ...SERVICES_VIEWPORT, amount: 0.4 })
     const [servicesHold, setServicesHold] = useState(false)
     const servicesRevealedRef = useRef(false)
     const servicesHeadActive = pageReady && servicesHeadInView && !servicesHold
@@ -2465,10 +2471,11 @@ import React, {
                                     {SERVICES_DATA.map((service, index) => {
                                         const isActive = vp.isDesktop ? activeIndex === index : true
                                         const isHighlighted = vp.isDesktop ? isActive : hoveredRow === index
-                                        const HeadWrap = "div"
+                                        const HeadWrap = vp.isDesktop ? "div" : motion.div
                                         const headWrapProps = vp.isDesktop
                                             ? { className: "contents" }
                                             : {
+                                                  variants: servicesRowVariants,
                                                   className: "svc-sticky-head sticky z-10",
                                                   "data-stuck": index === 0 ? "true" : "false",
                                                   "data-pinned": index === 0 ? "false" : undefined,
@@ -2652,15 +2659,25 @@ import React, {
                     <div className="w-full flex flex-col gap-[40px] md:gap-[48px] items-start lg:flex-row lg:items-stretch lg:gap-[64px] xl:gap-[138px]">
                         <div className="flex-shrink-0 lg:self-stretch">
                             <div className="w-[160px] h-[211px] md:w-[217px] md:h-[286px] lg:sticky lg:top-[120px]">
-                                <div className="relative w-full h-full bg-[var(--bg-surface-light)] isolate overflow-hidden">
-                                    <img
+                                <motion.div
+                                    initial={{ clipPath: "inset(0% 0% 100% 0%)" }}
+                                    whileInView={{ clipPath: "inset(0% 0% 0% 0%)" }}
+                                    viewport={{ once: true, amount: 0.3 }}
+                                    transition={{ duration: 1.2, ease: SMOOTH_SLIDE_EASE }}
+                                    className="relative w-full h-full bg-[var(--bg-surface-light)] isolate overflow-hidden"
+                                >
+                                    <motion.img
                                         src="/portrait.webp"
                                         alt="Iyosias Portrait"
                                         loading="lazy"
                                         decoding="async"
-                                        className="object-cover w-full h-full grayscale"
+                                        initial={{ scale: 1.25 }}
+                                        whileInView={{ scale: 1 }}
+                                        viewport={{ once: true, amount: 0.3 }}
+                                        transition={{ duration: 1.6, ease: SMOOTH_SLIDE_EASE }}
+                                        className="object-cover w-full h-full grayscale will-change-transform"
                                     />
-                                </div>
+                                </motion.div>
                             </div>
                         </div>
   
@@ -2714,10 +2731,10 @@ import React, {
                                 )}
   
                                 <motion.ul
-                                    variants={expertiseListVariants}
+                                    variants={listContainerVariants}
                                     initial="hidden"
                                     whileInView="show"
-                                    viewport={{ once: true, amount: 0.2 }}
+                                    viewport={{ once: true, amount: 0.1, margin: "0px 0px -25% 0px" }}
                                     onMouseLeave={() => {
                                         hoverRef.current = null
                                         setHoveredExpertise(null)
@@ -2735,7 +2752,7 @@ import React, {
                                                 ref={(el) => {
                                                     expertiseRefs.current[index] = el
                                                 }}
-                                                variants={expertiseRowVariants}
+                                                variants={listRowVariants}
                                                 onMouseMove={
                                                     vp.isDesktop
                                                         ? (e) => {
@@ -2753,7 +2770,7 @@ import React, {
                                                 className="flex flex-col w-full m-0"
                                             >
                                                 <motion.div
-                                                    variants={expertiseDividerVariants}
+                                                    variants={listDividerVariants}
                                                     style={{ backgroundColor: SITE_GREY }}
                                                     className="w-full h-[1px] origin-left"
                                                 />
@@ -2773,7 +2790,7 @@ import React, {
                                                 >
                                                     <motion.h3
                                                         data-exp-text
-                                                        variants={expertiseTextItemVariants}
+                                                        variants={listTextItemVariants}
                                                         animate={vp.isDesktop ? { opacity: isDimmed ? 0.42 : 1 } : undefined}
                                                         style={{ color: "#000000" }}
                                                         transition={{ duration: 0.55, ease: SMOOTH_SLIDE_EASE }}
@@ -2784,13 +2801,13 @@ import React, {
   
                                                     <motion.div
                                                         data-exp-copy
-                                                        variants={expertiseTextContainerVariants}
+                                                        variants={listTextContainerVariants}
                                                         className="flex flex-col justify-between h-full pr-[120px] md:pr-0"
                                                         style={vp.isDesktop ? { paddingRight: EXPERTISE_SHIFT } : undefined}
                                                     >
                                                         <motion.p
                                                             data-exp-text
-                                                            variants={expertiseTextItemVariants}
+                                                            variants={listTextItemVariants}
                                                             animate={vp.isDesktop ? { opacity: isDimmed ? 0.42 : 1 } : undefined}
                                                             style={{ color: "#000000" }}
                                                             transition={{ duration: 0.55, ease: SMOOTH_SLIDE_EASE }}
@@ -2801,7 +2818,7 @@ import React, {
   
                                                         <motion.ul
                                                             data-exp-tools
-                                                            variants={expertiseTextItemVariants}
+                                                            variants={listTextItemVariants}
                                                             animate={vp.isDesktop ? { opacity: isDimmed ? 0.38 : 0.9 } : undefined}
                                                             style={{ color: SITE_SECONDARY_GREY }}
                                                             transition={{ duration: 0.55, ease: SMOOTH_SLIDE_EASE }}
@@ -2847,7 +2864,7 @@ import React, {
   
                                     <motion.li
                                         aria-hidden="true"
-                                        variants={expertiseDividerVariants}
+                                        variants={listDividerVariants}
                                         style={{ backgroundColor: SITE_GREY }}
                                         className="w-full h-[1px] origin-left list-none"
                                     />
