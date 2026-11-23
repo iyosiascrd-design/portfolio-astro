@@ -726,7 +726,7 @@ export default function YimajCaseStudy() {
           {/* 13. FULL-WIDTH IMAGE:
               Mobile: living room render
               Tablet: full-width living room render
-              Desktop: centered inset (1224 x 795, 144px side margins in the 1512 spec), 144px above next split */}
+              Desktop: full content width (1472 x 706 in the 1512 spec), 144px above next split */}
           <section
             data-header-bg="light"
             className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[72px] lg:pb-[144px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-end"
@@ -734,7 +734,7 @@ export default function YimajCaseStudy() {
             <div className="md:hidden relative w-full aspect-[354/297]">
               <Fill src={ASSETS.living} alt="Yimaj Heights living room render" />
             </div>
-            <div className="max-md:hidden relative w-full aspect-[4/3] lg:mx-auto lg:w-[83.152%] lg:aspect-[1224/795]">
+            <div className="max-md:hidden relative w-full aspect-[4/3] lg:aspect-[1472/706]">
               <Fill src={ASSETS.living} alt="Yimaj Heights living room render" />
             </div>
           </section>

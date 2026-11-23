@@ -25,6 +25,14 @@ export const REVEAL = {
   wipeEase: "power3.inOut",
 }
 
+// Parallax: media height as % of its frame, and how far it slides (yPercent of its own height each way).
+// travel must stay under (heightPct - 100) / 2 / (heightPct / 100) or an edge will show.
+export const PARALLAX = {
+  desktop: { heightPct: 115, travel: 6 },
+  mobile: { heightPct: 112, travel: 4.5 },
+  scrub: 0, // 0 = locked to scroll like Osmo; raise (e.g. 0.6) for a softer lag
+}
+
 // <el data-reveal>            auto: wipe if it holds only media, slide-up if it holds text
 // <el data-reveal="wipe">     force the clip-path wipe
 // <el data-reveal="slide">    force the slide-up
@@ -50,6 +58,7 @@ export function useCaseStudyReveal(rootRef) {
 
     let revealIO = null
     let dead = false
+    const oversized = []
     const ctx = gsap.context(() => {
       const items = gsap.utils.toArray("[data-reveal]")
 
@@ -153,26 +162,38 @@ export function useCaseStudyReveal(rootRef) {
 
       items.forEach((el) => revealIO.observe(el))
 
+      // Osmo-style parallax: the media is made taller than its frame and slid with yPercent
+      // (no zoom). The spare height is what stops an empty edge from showing.
       const desktop = window.matchMedia("(min-width: 1024px)").matches
-      const par = desktop
-        ? { from: { scale: 1.08, yPercent: -3 }, to: { scale: 1.06, yPercent: 3 } }
-        : { from: { scale: 1.06, yPercent: -2 }, to: { scale: 1.04, yPercent: 2 } }
+      const par = desktop ? PARALLAX.desktop : PARALLAX.mobile
 
       gsap.utils.toArray("[data-parallax]").forEach((img) => {
-        gsap.fromTo(
-          img,
-          par.from,
-          {
-            ...par.to,
-            ease: "none",
-            scrollTrigger: {
-              trigger: img.closest("[data-reveal]") || img.parentElement,
-              start: "top bottom",
-              end: "bottom top",
-              scrub: 0.6,
-            },
-          }
-        )
+        const parent = img.parentElement
+        const clipped =
+          parent && /hidden|clip/.test(getComputedStyle(parent).overflow) &&
+          getComputedStyle(img).position === "absolute"
+
+        if (clipped) {
+          // oversize and centre the media inside its clipped frame; !important beats the h-full classes
+          img.style.setProperty("height", `${par.heightPct}%`, "important")
+          img.style.setProperty("top", `${-(par.heightPct - 100) / 2}%`, "important")
+          img.style.setProperty("bottom", "auto", "important")
+          oversized.push(img)
+        }
+
+        const from = clipped ? { yPercent: -par.travel, scale: 1 } : { scale: 1.06, yPercent: -2 }
+        const to = clipped ? { yPercent: par.travel, scale: 1 } : { scale: 1.04, yPercent: 2 }
+
+        gsap.fromTo(img, from, {
+          ...to,
+          ease: "none",
+          scrollTrigger: {
+            trigger: img.closest("[data-reveal]") || img.parentElement,
+            start: "top bottom",
+            end: "bottom top",
+            scrub: PARALLAX.scrub,
+          },
+        })
       })
     }, rootRef)
 
@@ -184,6 +205,11 @@ export function useCaseStudyReveal(rootRef) {
       dead = true
       revealIO?.disconnect()
       ctx.revert()
+      oversized.forEach((el) => {
+        el.style.removeProperty("height")
+        el.style.removeProperty("top")
+        el.style.removeProperty("bottom")
+      })
     }
   }, [rootRef])
 }
