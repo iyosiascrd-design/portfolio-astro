@@ -126,6 +126,23 @@ import React, {
     return target + (change + temp) * decay
   }
   
+  // Layout measurements must ignore transient transforms (reveal animations, row hover nudges).
+  // getBoundingClientRect() includes them, so a measurement taken mid-animation puts the result in
+  // the wrong place and the layout visibly "settles" later. These helpers strip translateY.
+  function translateYOf(el, stop) {
+    let y = 0
+    for (let n = el; n && n !== stop && n.nodeType === 1; n = n.parentElement) {
+      const t = getComputedStyle(n).transform
+      if (t && t !== "none") {
+        try {
+          y += new DOMMatrix(t).m42 || 0
+        } catch (e) {}
+      }
+    }
+    return y
+  }
+  const stableTop = (el, stop) => el.getBoundingClientRect().top - translateYOf(el, stop)
+  
   const APPLE_EASE_CSS = "cubic-bezier(0.32, 0.72, 0, 1)"
   
   const TICKER_ZOOM = {
@@ -1535,24 +1552,19 @@ import React, {
             const boxW = box ? box.offsetWidth : 0
             const gap = parseFloat(getComputedStyle(head).columnGap) || 0
             const headRect = head.getBoundingClientRect()
+            const headTop = stableTop(head, head.parentElement)
             const right = Math.max(0, Math.round(headRect.right - target - w - boxW - (box ? gap : 0)))
             p.style.marginRight = `${right}px`
   
             // Caption block: top lines up with the Digital Design description ("Websites, landing pages…").
             const cap = servicesCapRef.current
             const row2 = servicesListRef.current?.children?.[1]
+            const stop = head.parentElement
             if (cap && row2 && cap.parentElement) {
                 const kw = row2.querySelector(".svc-keywords")
-                let targetTop = row2.getBoundingClientRect().top
-                if (kw) {
-                    // ignore the small hover/fade offset that the description animates with
-                    let ty = 0
-                    try {
-                        ty = new DOMMatrix(getComputedStyle(kw).transform).m42 || 0
-                    } catch (e) {}
-                    targetTop = kw.getBoundingClientRect().top - ty
-                }
-                const dy = targetTop - cap.parentElement.getBoundingClientRect().top
+                // transform-free tops: the row reveal, hover nudge and description fade must not move the target
+                const targetTop = stableTop(kw || row2, stop)
+                const dy = targetTop - stableTop(cap.parentElement, stop)
                 if (dy >= 0) cap.style.marginTop = `${Math.round(dy)}px`
             }
   
@@ -1568,6 +1580,7 @@ import React, {
                     const m = ctx.measureText("H")
                     const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT)
                     let rect = null
+                    let rectShift = 0
                     while (walker.nextNode()) {
                         if (!walker.currentNode.textContent.trim()) continue
                         const r = document.createRange()
@@ -1575,26 +1588,28 @@ import React, {
                         const rr = Array.from(r.getClientRects()).find((x) => x.width > 0 && x.height > 0)
                         if (rr) {
                             rect = rr
+                            // words slide in through a mask; measure where they rest, not where they are now
+                            rectShift = translateYOf(walker.currentNode.parentElement, head.parentElement)
                             break
                         }
                     }
                     if (rect && m.actualBoundingBoxAscent > 0) {
-                        const baseline = rect.top + m.fontBoundingBoxAscent
+                        const baseline = rect.top - rectShift + m.fontBoundingBoxAscent
                         height = m.actualBoundingBoxAscent
-                        top = baseline - height - headRect.top
+                        top = baseline - height - headTop
                     }
                 } catch (e) {}
                 if (top === null) {
                     const tr = title.getBoundingClientRect()
                     height = tr.height
-                    top = tr.top - headRect.top
+                    top = stableTop(title, head.parentElement) - headTop
                 }
                 // Top edge = cap-top of "SERVICES"; bottom edge = the top divider line of the services list.
                 const list = servicesListRef.current
-                const absTop = headRect.top + Math.max(0, top)
+                const absTop = headTop + Math.max(0, top)
                 let h = height
                 if (list) {
-                    const reach = list.getBoundingClientRect().top - absTop
+                    const reach = stableTop(list, head.parentElement) - absTop
                     if (reach > 0) h = reach
                 }
                 // trim the image a little shorter than the full cap-top to divider span
@@ -1637,7 +1652,7 @@ import React, {
             servicesImgBoxRef.current?.style.removeProperty("width")
             servicesCapRef.current?.parentElement?.style.removeProperty("width")
         }
-    }, [vp.isDesktop, pageReady, servicesHeadActive, servicesListActive])
+    }, [vp.isDesktop, pageReady, fontsReady, servicesHeadActive, servicesListActive])
   
     useLayoutEffect(() => {
         const section = workSectionRef.current
@@ -2427,6 +2442,7 @@ import React, {
   
                             <div
                                 ref={servicesImgBoxRef}
+                                style={{ opacity: fontsReady && pageReady ? 1 : 0, transition: `opacity 0.5s ${APPLE_EASE_CSS}` }}
                                 className="hidden lg:block relative w-[332px] shrink-0 self-start bg-[var(--bg-surface-dark)] isolate overflow-hidden m-0"
                             >
                                 <ServiceImageStage
@@ -2599,7 +2615,10 @@ import React, {
                                 </motion.ul>
                             </div>
   
-                            <div className="hidden lg:flex w-[332px] flex-shrink-0 flex-col justify-start m-0">
+                            <div
+                                className="hidden lg:flex w-[332px] flex-shrink-0 flex-col justify-start m-0"
+                                style={{ opacity: fontsReady && pageReady ? 1 : 0, transition: `opacity 0.5s ${APPLE_EASE_CSS}` }}
+                            >
   
                                 <div ref={servicesCapRef} className="relative min-h-[120px] mt-[74px] m-0 overflow-hidden flex flex-col justify-start">
                                     <AnimatePresence mode="wait">
