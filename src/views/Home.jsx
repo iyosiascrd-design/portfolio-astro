@@ -25,6 +25,9 @@ import React, {
     taylorEase,
     TICKER_HEIGHT,
     TICKER_REVEAL,
+    servicesListContainerVariants,
+    servicesRowVariants,
+    servicesDividerVariants,
     SERVICES_VIEWPORT,
     TICKER_MOTION,
     TICKER_MOTION_MOBILE,
@@ -103,11 +106,6 @@ import React, {
         },
     },
   }
-  
-  // Services shares the same motion language.
-  const servicesListContainerVariants = listContainerVariants
-  const servicesRowVariants = listRowVariants
-  const servicesDividerVariants = listDividerVariants
   
   const glueLastWords = (str) => {
     const i = str.lastIndexOf(" ")
@@ -1307,7 +1305,7 @@ import React, {
     const servicesCapRef = useRef(null)
     const servicesListRef = useRef(null)
     const servicesHeadInView = useInView(servicesHeadRef, SERVICES_VIEWPORT)
-    const servicesListInView = useInView(servicesListRef, { ...SERVICES_VIEWPORT, amount: 0.4 })
+    const servicesListInView = useInView(servicesListRef, vp.isDesktop ? { ...SERVICES_VIEWPORT, amount: 0.4 } : SERVICES_VIEWPORT)
     const [servicesHold, setServicesHold] = useState(false)
     const servicesRevealedRef = useRef(false)
     const servicesHeadActive = pageReady && servicesHeadInView && !servicesHold
@@ -2463,7 +2461,7 @@ import React, {
                             <div className="svc-list flex-1 min-w-0 flex flex-col w-full lg:pr-[32px] m-0">
                                 <motion.ul
                                     ref={servicesListRef}
-                                    variants={servicesListContainerVariants}
+                                    variants={vp.isDesktop ? listContainerVariants : servicesListContainerVariants}
                                     initial="hidden"
                                     animate={servicesListActive ? "show" : "hidden"}
                                     className="flex flex-col m-0 p-0 list-none w-full"
@@ -2471,11 +2469,10 @@ import React, {
                                     {SERVICES_DATA.map((service, index) => {
                                         const isActive = vp.isDesktop ? activeIndex === index : true
                                         const isHighlighted = vp.isDesktop ? isActive : hoveredRow === index
-                                        const HeadWrap = vp.isDesktop ? "div" : motion.div
+                                        const HeadWrap = "div"
                                         const headWrapProps = vp.isDesktop
                                             ? { className: "contents" }
                                             : {
-                                                  variants: servicesRowVariants,
                                                   className: "svc-sticky-head sticky z-10",
                                                   "data-stuck": index === 0 ? "true" : "false",
                                                   "data-pinned": index === 0 ? "false" : undefined,
@@ -2490,12 +2487,12 @@ import React, {
                                         return (
                                             <motion.li
                                                 key={service.id}
-                                                variants={servicesRowVariants}
+                                                variants={vp.isDesktop ? listRowVariants : servicesRowVariants}
                                                 className={vp.isDesktop ? "flex flex-col w-full m-0 relative" : "contents"}
                                             >
                                                 <HeadWrap {...headWrapProps}>
                                                     <motion.div
-                                                        variants={servicesDividerVariants}
+                                                        variants={vp.isDesktop ? listDividerVariants : servicesDividerVariants}
                                                         className="w-full lg:w-[var(--svc-line-w,100%)] h-[1px] bg-[var(--border-dark)] origin-left"
                                                     />
   
@@ -2615,7 +2612,7 @@ import React, {
   
                                     <motion.li
                                         aria-hidden="true"
-                                        variants={servicesDividerVariants}
+                                        variants={vp.isDesktop ? listDividerVariants : servicesDividerVariants}
                                         className="w-full lg:w-[var(--svc-line-w,100%)] h-[1px] bg-[var(--border-dark)] origin-left list-none"
                                     />
                                 </motion.ul>
