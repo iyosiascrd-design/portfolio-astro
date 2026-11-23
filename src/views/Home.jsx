@@ -153,6 +153,16 @@ import React, {
     flickDip: 0.02,
   }
   
+  // Edge fade for the ticker. A plain two-stop gradient has a visible "edge" where the ramp starts
+  // (Mach banding), so the alpha follows a smoothstep curve across several stops instead.
+  // It mixes from --bg-dark, so it always matches the section exactly.
+  const TICKER_FADE_STEPS = 14
+  const TICKER_FADE_STOPS = Array.from({ length: TICKER_FADE_STEPS + 1 }, (_, i) => {
+    const t = i / TICKER_FADE_STEPS
+    const alpha = 1 - t * t * (3 - 2 * t)
+    return `color-mix(in srgb, var(--bg-dark, #050505) ${(alpha * 100).toFixed(2)}%, transparent) ${(t * 100).toFixed(2)}%`
+  }).join(", ")
+
   const TICKER_IMG_SIZES = "(max-width: 767px) 72vw, (max-width: 1023px) 42vw, 352px"
   
   const SERVICES_DATA = [
@@ -2321,6 +2331,16 @@ import React, {
                                 })}
                             </div>
                         </div>
+                        <div
+                            aria-hidden="true"
+                            data-ready={tickerReady && pageReady ? "true" : "false"}
+                            className="ticker-fade ticker-fade-l"
+                        />
+                        <div
+                            aria-hidden="true"
+                            data-ready={tickerReady && pageReady ? "true" : "false"}
+                            className="ticker-fade ticker-fade-r"
+                        />
                     </div>
                 )}
             </section>
@@ -2345,6 +2365,17 @@ import React, {
                 [data-leaving="true"] .svc-sticky-head[data-pinned]::before {
                     opacity: 0 !important; transition: opacity 0.22s ease 0.14s;
                 }
+                .ticker-fade {
+                    position: absolute; top: 0; bottom: 0; z-index: 2; pointer-events: none;
+                    width: clamp(28px, 12vw, 72px);
+                    opacity: 0;
+                    transition: opacity 1.4s ${APPLE_EASE_CSS} 0.5s;
+                }
+                .ticker-fade[data-ready="true"] { opacity: 1; }
+                .ticker-fade-l { left: 0; background: linear-gradient(to right, ${TICKER_FADE_STOPS}); }
+                .ticker-fade-r { right: 0; background: linear-gradient(to left, ${TICKER_FADE_STOPS}); }
+                @media (min-width: 768px) { .ticker-fade { width: clamp(96px, 14vw, 280px); } }
+                @media (prefers-reduced-motion: reduce) { .ticker-fade { transition: none; } }
                 .ticker-zoom-group { transform-origin: 50% var(--oy, 50%); }
                 [data-near="true"] .ticker-zoom-group { transform: translateZ(0); will-change: transform; }
                 [data-zooming="true"] [data-near="true"] .ticker-zoom-group {
