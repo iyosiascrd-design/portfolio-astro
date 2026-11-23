@@ -2,16 +2,14 @@
 import React, { useEffect, useRef } from "react"
 import gsap from "gsap"
 
+// Same clip-path wipe as the case study images (useCaseStudyReveal REVEAL): hidden, then revealed
+// downward from the top edge. No scale or drift on the image itself.
 export const SERVICE_IMAGE_REVEAL = {
-    clipDuration: 1.25, // mask wipe
-    imageDuration: 1.9, // inner image settles (scale + drift)
-    pushDuration: 1.25, // outgoing image drifts back (depth)
-    ease: "expo.out",
-    pushEase: "power3.inOut",
-    startScale: 1.35,
-    startYPercent: 6,
-    pushYPercent: -8,
-    pushScale: 1.06,
+    wipeFrom: "inset(0% 0% 100% 0%)",
+    wipeTo: "inset(0% 0% 0% 0%)",
+    clipDuration: 1.15,
+    ease: "power3.inOut",
+    rootMargin: "0px 0px -16% 0px", // first reveal fires once the frame is clearly inside the viewport
 }
 
 const makeLayer = (src, objectPosition = "50% 50%") => {
@@ -58,7 +56,36 @@ export default function ServiceImageStage({ images, index, label, objectPosition
         stage.appendChild(base.el)
         layersRef.current = [base]
 
+        let io = null
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        const canClip = typeof CSS !== "undefined" && !!CSS.supports?.("clip-path", "inset(0% 0% 0% 0%)")
+        if (!reduce && canClip && typeof IntersectionObserver !== "undefined") {
+            const R = SERVICE_IMAGE_REVEAL
+            gsap.set(base.el, { clipPath: R.wipeFrom })
+            io = new IntersectionObserver(
+                (entries) => {
+                    if (!entries.some((e) => e.isIntersecting)) return
+                    io.disconnect()
+                    io = null
+                    base.tl = gsap.fromTo(
+                        base.el,
+                        { clipPath: R.wipeFrom },
+                        {
+                            clipPath: R.wipeTo,
+                            duration: R.clipDuration,
+                            ease: R.ease,
+                            overwrite: "auto",
+                            clearProps: "clipPath",
+                        }
+                    )
+                },
+                { rootMargin: R.rootMargin, threshold: 0 }
+            )
+            io.observe(stage)
+        }
+
         return () => {
+            io?.disconnect()
             layersRef.current.forEach((l) => {
                 l.tl?.kill()
                 gsap.killTweensOf([l.el, l.img])
@@ -77,7 +104,6 @@ export default function ServiceImageStage({ images, index, label, objectPosition
 
         const R = SERVICE_IMAGE_REVEAL
         const list = layersRef.current
-        const prev = list[list.length - 1]
         const layer = makeLayer(images[index], posForRef.current(index))
         stage.appendChild(layer.el)
         list.push(layer)
@@ -98,30 +124,17 @@ export default function ServiceImageStage({ images, index, label, objectPosition
             return
         }
 
-        gsap.set(layer.el, { clipPath: "inset(100% 0% 0% 0%)" })
-        gsap.set(layer.img, { scale: R.startScale, yPercent: R.startYPercent, force3D: true })
-
-        const tl = gsap.timeline()
-        layer.tl = tl
-        tl.to(
-            layer.el,
-            { clipPath: "inset(0% 0% 0% 0%)", duration: R.clipDuration, ease: R.ease, onComplete: dropBelow },
-            0
-        ).to(layer.img, { scale: 1, yPercent: 0, duration: R.imageDuration, ease: R.ease }, 0)
-
-        if (prev) {
-            tl.to(
-                prev.img,
-                {
-                    yPercent: R.pushYPercent,
-                    scale: R.pushScale,
-                    duration: R.pushDuration,
-                    ease: R.pushEase,
-                    overwrite: "auto",
-                },
-                0
-            )
-        }
+        // new layer wipes in over the old one, top to bottom (same as the case study reveal)
+        gsap.set(layer.el, { clipPath: R.wipeFrom })
+        layer.tl = gsap.to(layer.el, {
+            clipPath: R.wipeTo,
+            duration: R.clipDuration,
+            ease: R.ease,
+            onComplete: () => {
+                gsap.set(layer.el, { clearProps: "clipPath" })
+                dropBelow()
+            },
+        })
     }, [index, images])
 
     return <div ref={stageRef} role="img" aria-label={label} className="absolute inset-0" />

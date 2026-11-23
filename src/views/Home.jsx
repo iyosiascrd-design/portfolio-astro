@@ -2442,8 +2442,7 @@ import React, {
   
                             <div
                                 ref={servicesImgBoxRef}
-                                style={{ opacity: fontsReady && pageReady ? 1 : 0, transition: `opacity 0.5s ${APPLE_EASE_CSS}` }}
-                                className="hidden lg:block relative w-[332px] shrink-0 self-start bg-[var(--bg-surface-dark)] isolate overflow-hidden m-0"
+                                className="hidden lg:block relative w-[332px] shrink-0 self-start isolate overflow-hidden m-0"
                             >
                                 <ServiceImageStage
                                     images={SERVICE_IMAGES}
