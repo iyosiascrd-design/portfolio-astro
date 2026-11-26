@@ -329,7 +329,7 @@ export default function YimajCaseStudy() {
   useCaseStudyReveal(rootRef)
   const releasedCount = useQueuedVideoIndices(VIDEO_SRCS, videoGateEnabled)
 
-  const renderVideoFill = (src, alt, { parallax = true, mediaClassName = "", rootMargin = "500px 0px" } = {}) => (
+  const renderVideoFill = (src, alt, { parallax = true, mediaClassName = "", rootMargin = "500px 0px", mediaProps = undefined } = {}) => (
     <NearViewportVideoSlot
       src={src}
       alt={alt}
@@ -339,6 +339,7 @@ export default function YimajCaseStudy() {
       rootMargin={rootMargin}
       parallax={parallax}
       mediaClassName={mediaClassName}
+      mediaProps={mediaProps}
     />
   )
 
@@ -437,12 +438,17 @@ export default function YimajCaseStudy() {
           {/* 2. LOGO ANIMATION INSET (1228 x 624) */}
           <CenteredInset
             aspectClass="aspect-[1228/624]"
-            mobileAspect="max-md:!aspect-[816/502]"
+            mobileAspect="max-md:!aspect-[653/258]"
             ratio={1228 / 624}
             frame={{ w: 1228, h: 624 }}
             className="max-md:!py-0 max-md:mt-[12px]"
           >
-            {renderVideoFill(ASSETS.logoAnimation, "Yimaj Heights logo animation", { rootMargin: "650px 0px" })}
+            {renderVideoFill(ASSETS.logoAnimation, "Yimaj Heights logo animation", {
+              rootMargin: "650px 0px",
+              // No parallax shift and no cropping on mobile: show the whole video frame
+              parallax: !isMobile,
+              mediaProps: isMobile ? { style: { objectFit: "contain", objectPosition: "center" } } : undefined,
+            })}
           </CenteredInset>
 
           {/* 3. PRECISION SOFTENED BY WARMTH:

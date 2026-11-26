@@ -446,7 +446,7 @@ export default function ZhongshanCaseStudy() {
             frame={{ w: 1228, h: 624 }}
             className="max-md:!py-0 max-md:mt-[12px]"
           >
-            {renderVideoFill(ASSETS.suppliers, "Zhongshan logo animation", { rootMargin: "650px 0px", mediaClassName: "!object-cover" })}
+            {renderVideoFill(ASSETS.suppliers, "Zhongshan logo animation", { rootMargin: "650px 0px", mediaClassName: "!object-cover", parallax: !isMobile })}
           </CenteredInset>
 
           {/* 3. TECHNICAL BY NATURE */}
@@ -682,7 +682,7 @@ export default function ZhongshanCaseStudy() {
             mobileAspect="max-md:!aspect-[816/480]"
             className="max-md:!py-0 max-md:mt-[12px]"
           >
-            {renderVideoFill(ASSETS.floorplan, "3D render, wide view")}
+            {renderVideoFill(ASSETS.floorplan, "3D render, wide view", { parallax: !isMobile })}
           </CenteredInset>
 
           {/* 13. FULL-WIDTH DOORS SHOWCASE */}

@@ -498,8 +498,16 @@ export default function WeyraCaseStudy() {
                 })}
               </div>
 
-              <div className="relative w-full aspect-[602/548] max-md:aspect-[4/3] max-md:col-span-2 max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-5 lg:col-span-5 overflow-hidden">
-                <Fill src={ASSETS.type} alt="Acumin Variable Concept Specimen" parallax={false} />
+              <div className="relative w-full aspect-[602/548] max-md:!aspect-auto max-md:col-span-2 max-md:order-3 md:col-span-2 md:order-last lg:order-none lg:col-start-5 lg:col-span-5 overflow-hidden">
+                {/* Mobile: natural image height, no cropping */}
+                <img
+                  src={ASSETS.type}
+                  alt="Acumin Variable Concept Specimen"
+                  loading="lazy"
+                  decoding="async"
+                  className="md:hidden block w-full h-auto"
+                />
+                <Fill src={ASSETS.type} alt="Acumin Variable Concept Specimen" parallax={false} className="max-md:!hidden" />
               </div>
 
               <div className="flex flex-col gap-[16px] max-md:order-2 lg:col-start-10 lg:col-span-3 lg:gap-[32px]">
@@ -583,7 +591,7 @@ export default function WeyraCaseStudy() {
             mobileAspect="max-md:!aspect-[1212/609]"
             ratio={1212 / 609}
             frame={{ w: 1212, h: 609 }}
-            className="max-md:!py-0 max-md:mt-[144px]"
+            className="max-md:!py-0 max-md:mt-[12px]"
           >
             <Fill src={ASSETS.banner} alt="Voices That Build Outdoor Banners" imgClassName="max-md:object-[50%_50%]" />
           </CenteredInset>
@@ -594,10 +602,10 @@ export default function WeyraCaseStudy() {
             className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-center"
           >
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] items-start">
-              <div className="relative w-full aspect-[334/242] lg:col-start-1 lg:col-span-6 overflow-hidden">
+              <div className="relative w-full aspect-[334/242] max-md:aspect-[4/5] lg:col-start-1 lg:col-span-6 overflow-hidden">
                 <Fill src={ASSETS.magazine} alt="Empowering Youth For Peace Report" />
               </div>
-              <div className="relative w-full aspect-[275/409] lg:col-start-8 lg:col-span-5 overflow-hidden">
+              <div className="relative w-full aspect-[275/409] max-md:aspect-[4/5] lg:col-start-8 lg:col-span-5 overflow-hidden">
                 <Fill src={ASSETS.profile} alt="Weyra Social Media Layout" />
               </div>
             </div>
@@ -620,10 +628,10 @@ export default function WeyraCaseStudy() {
             className="w-full pt-[88px] max-md:!pt-0 max-md:mt-[12px] lg:pt-[100px] lg:pb-[20px] lg:min-h-[100dvh] lg:flex lg:flex-col lg:justify-center"
           >
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-[12px] md:gap-[16px] lg:gap-x-[20px] lg:items-start">
-              <div className="relative w-full aspect-square lg:col-start-1 lg:col-span-4 overflow-hidden">
+              <div className="relative w-full aspect-square max-md:aspect-square lg:col-start-1 lg:col-span-4 overflow-hidden">
                 <Fill src={ASSETS.poster} alt="Youth holding Weyra Poster" />
               </div>
-              <div className="relative w-full aspect-[509/450] lg:col-start-6 lg:col-span-7 overflow-hidden">
+              <div className="relative w-full aspect-[509/450] max-md:aspect-square lg:col-start-6 lg:col-span-7 overflow-hidden">
                 <Fill src={ASSETS.board} alt="Branded Basketball Backboard" />
               </div>
             </div>
